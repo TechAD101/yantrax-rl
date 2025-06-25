@@ -1,1 +1,10 @@
 # requirements.txt - Placeholder content for RL-enhanced Yantra X
+Flask==2.3.3
+requests==2.31.0
+python-dotenv==1.0.1
+numpy==1.26.4
+pandas==2.2.2
+scikit-learn==1.5.0
+gym==0.26.2
+Flask==2.3.2
+python-dotenv==1.0.1
