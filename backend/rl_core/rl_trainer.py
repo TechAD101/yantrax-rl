@@ -1,9 +1,10 @@
 # rl_core/rl_trainer.py - Placeholder content for RL-enhanced Yantra X
-from backend.ai_agents.data_whisperer import analyze_data
-from backend.ai_agents.macro_monk import macro_monk_decision
-from backend.ai_agents.the_ghost import ghost_signal_handler
-from backend.ai_agents.degen_auditor import audit_trade
-from backend.rl_core.reward_function import calculate_reward
+from ai_agents.data_whisperer import analyze_data
+from ai_agents.macro_monk import macro_monk_decision
+from ai_agents.data_whisperer import analyze_data
+from ai_agents.degen_auditor import audit_risk
+from rl_core.reward_function import calculate_reward
+
 
 def run_rl_cycle():
     data = analyze_data()
