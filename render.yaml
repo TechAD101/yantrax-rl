@@ -1,1 +1,4 @@
 # render.yaml - Placeholder content for RL-enhanced Yantra X
+build:
+  environment:
+    python: 3.10.13
