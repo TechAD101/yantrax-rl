@@ -46,7 +46,7 @@ def run_cycle():
     logger.info(f"Degen Auditor Result: {audit}")
 
     env = MarketSimEnv()
-    reward = calculate_reward(env)
+    reward = calculate_reward(env, market_data["price"])  # ✅ FIXED
     logger.info(f"Calculated Reward: {reward}")
 
     train_model()

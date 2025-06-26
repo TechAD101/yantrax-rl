@@ -1,0 +1,8 @@
+2025-06-26 22:21:37,165 — INFO — Market Data: {'price': 22774.14, 'volume': 5297, 'trend': 'bearish'}
+2025-06-26 22:21:37,165 — INFO — Macro Monk Strategy: SELL
+2025-06-26 22:21:37,166 — INFO — The Ghost Signal: CAUTIOUS SELL
+2025-06-26 22:21:37,166 — INFO — Degen Auditor Result: Warning
+2025-06-26 22:24:17,191 — INFO — Market Data: {'price': 45325.09, 'volume': 7296, 'trend': 'bearish'}
+2025-06-26 22:24:17,192 — INFO — Macro Monk Strategy: SELL
+2025-06-26 22:24:17,193 — INFO — The Ghost Signal: CAUTIOUS SELL
+2025-06-26 22:24:17,193 — INFO — Degen Auditor Result: Warning
