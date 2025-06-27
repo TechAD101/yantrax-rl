@@ -1,0 +1,25 @@
+2025-06-27 03:29:21,815 — INFO — Market Data: {'price': 42374.51, 'volume': 3135, 'trend': 'sideways'}
+2025-06-27 03:29:21,816 — INFO — Macro Monk Strategy: HOLD
+2025-06-27 03:29:21,816 — INFO — The Ghost Signal: WAIT
+2025-06-27 03:29:21,816 — INFO — Degen Auditor Result: Neutral
+2025-06-27 03:29:21,817 — INFO — Calculated Reward: -1
+2025-06-27 03:29:25,724 — INFO — Notification sent successfully.
+2025-06-27 14:45:32,070 — INFO — Market Data: {'price': 28181.49, 'volume': 4171, 'trend': 'sideways'}
+2025-06-27 14:45:32,070 — INFO — Macro Monk Strategy: HOLD
+2025-06-27 14:45:32,071 — INFO — The Ghost Signal: WAIT
+2025-06-27 14:45:32,072 — INFO — Degen Auditor Result: Neutral
+2025-06-27 14:45:32,072 — INFO — Calculated Reward: -1
+2025-06-27 14:45:37,298 — INFO — Notification sent successfully.
+2025-06-27 14:52:28,007 — INFO — Market Data: {'price': 28884.45, 'volume': 1968, 'trend': 'bullish'}
+2025-06-27 14:52:28,007 — INFO — Macro Monk Strategy: BUY
+2025-06-27 14:52:28,007 — INFO — The Ghost Signal: CONFIDENT BUY
+2025-06-27 14:52:28,007 — INFO — Degen Auditor Result: Approved
+2025-06-27 14:52:28,008 — INFO — Calculated Reward: -1
+2025-06-27 14:52:32,014 — INFO — Notification sent successfully.
+2025-06-27 14:52:38,938 — INFO — [REPLAY] 2025-06-27T14:52:32.015243 | Signal: CONFIDENT BUY | Audit: Approved | Reward: -1.0
+2025-06-27 15:25:12,171 — INFO — Market Data: {'price': 54277.82, 'volume': 5246, 'trend': 'bearish'}
+2025-06-27 15:25:12,171 — INFO — Macro Monk Strategy: SELL
+2025-06-27 15:25:12,172 — INFO — The Ghost Signal: CAUTIOUS SELL
+2025-06-27 15:25:12,172 — INFO — Degen Auditor Result: Warning
+2025-06-27 15:25:12,172 — INFO — Calculated Reward: -1
+2025-06-27 15:25:16,235 — INFO — Notification sent successfully.

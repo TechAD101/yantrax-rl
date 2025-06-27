@@ -1,60 +1,68 @@
-# rl_core/env_market_sim.py - Placeholder content for RL-enhanced Yantra X
-import gym
-from gym import spaces
+# env_market_sim.py — God Mode Market Simulator (Emotionally Adaptive)
+
+import random
 import numpy as np
-import random
 
-class MarketSimEnv(gym.Env):
+class MarketSimEnv:
     def __init__(self):
-        super(MarketSimEnv, self).__init__()
-        self.action_space = spaces.Discrete(3)  # BUY, SELL, HOLD
-        self.observation_space = spaces.Box(low=0, high=1, shape=(3,), dtype=np.float32)
-        self.reset()
+        self.price = random.uniform(20000, 30000)
+        self.volatility = 0.02
+        self.mood = "neutral"
+        self.curiosity = 0.0
+        self.reward_trace = []
+        self.trade_history = []
+        self.cycle = 0
+
+    def update_mood(self):
+        recent_rewards = self.reward_trace[-5:]
+        avg_reward = sum(recent_rewards) / len(recent_rewards) if recent_rewards else 0
+
+        if avg_reward > 1:
+            self.mood = "euphoric"
+        elif avg_reward < -1:
+            self.mood = "panic"
+        elif len(self.trade_history) >= 3 and self.trade_history[-1] == self.trade_history[-2] == self.trade_history[-3]:
+            self.mood = "bored"
+        else:
+            self.mood = "neutral"
+
+    def simulate_step(self, action):
+        self.cycle += 1
+        base_price_change = random.gauss(0, self.volatility)
+
+        # Mood-driven price dynamics
+        if self.mood == "euphoric":
+            base_price_change += abs(base_price_change) * 0.5
+        elif self.mood == "panic":
+            base_price_change -= abs(base_price_change) * 0.5
+        elif self.mood == "bored":
+            base_price_change *= 0.1
+
+        # Crisis drills (5% chance)
+        if random.random() < 0.05:
+            base_price_change += random.choice([-1, 1]) * random.uniform(0.1, 0.3)
+            self.mood = "crisis"
+
+        # Curiosity reward signal
+        exploration_bonus = 0
+        if len(self.trade_history) > 2:
+            if action != self.trade_history[-1]:
+                exploration_bonus = 0.5
+
+        # Update internal state
+        self.price += self.price * base_price_change
+        self.price = max(1000, self.price)  # floor
+        self.volatility = min(0.05, self.volatility * random.uniform(0.95, 1.05))
+        self.curiosity += exploration_bonus
+        self.trade_history.append(action)
+        self.update_mood()
+
+        return {
+            "price": round(self.price, 2),
+            "volatility": round(self.volatility, 4),
+            "mood": self.mood,
+            "curiosity": round(self.curiosity, 2)
+        }
 
     def reset(self):
-        self.price = random.uniform(0.3, 0.7)
-        self.volume = random.uniform(0.1, 0.9)
-        self.trend = random.uniform(0.1, 0.9)
-        return np.array([self.price, self.volume, self.trend])
-
-    def step(self, action):
-        reward = 0
-        done = False
-        info = {}
-
-        if action == 0:  # BUY
-            reward = self.price * self.volume * 1.5
-        elif action == 1:  # SELL
-            reward = self.price * (1 - self.volume)
-        elif action == 2:  # HOLD
-            reward = 0.01
-
-        obs = self.reset()
-        return obs, reward, done, info
-import random
-
-class MarketEnv:
-    def __init__(self):
-        self.price = 100.0
-        self.step_count = 0
-
-    def reset(self):
-        self.price = 100.0
-        self.step_count = 0
-        return self.price
-
-    def step(self, action):
-        self.step_count += 1
-        change = random.uniform(-1, 1)
-
-        if action == "buy":
-            self.price += change
-        elif action == "sell":
-            self.price -= change
-
-        reward = change
-        done = self.step_count >= 10
-        return self.price, reward, done
-
-    def get_action_space(self):
-        return ["buy", "sell", "hold"]
+        self.__init__()
