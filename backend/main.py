@@ -1,4 +1,4 @@
-# main.py — RL-enhanced Yantra X Backend Core with Journal Logging
+# main.py — RL-enhanced Yantra X Backend Core with Journal Logging & Replay Mode
 
 from flask import Flask, jsonify, request
 from services.notification_service import send_notification
@@ -82,6 +82,44 @@ def run_cycle():
         "audit": audit,
         "reward": reward
     })
+
+@app.route("/journal", methods=["GET"])
+def view_journal():
+    conn = sqlite3.connect("trade_journal.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM journal_entries ORDER BY timestamp DESC LIMIT 100")
+    entries = cursor.fetchall()
+    conn.close()
+
+    journal_list = [{
+        "timestamp": row[0],
+        "signal": row[1],
+        "audit": row[2],
+        "reward": row[3]
+    } for row in entries]
+
+    return jsonify(journal_list)
+
+@app.route("/replay", methods=["GET"])
+def replay_journal():
+    conn = sqlite3.connect("trade_journal.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM journal_entries ORDER BY timestamp ASC")
+    entries = cursor.fetchall()
+    conn.close()
+
+    replay = []
+    for row in entries:
+        timestamp, signal, audit, reward = row
+        logger.info(f"[REPLAY] {timestamp} | Signal: {signal} | Audit: {audit} | Reward: {reward}")
+        replay.append({
+            "timestamp": timestamp,
+            "signal": signal,
+            "audit": audit,
+            "reward": reward
+        })
+
+    return jsonify({"replay": replay})
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0")
