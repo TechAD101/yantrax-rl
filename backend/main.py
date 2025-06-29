@@ -1,6 +1,6 @@
-# main.py — RL-enhanced Yantra X Backend Core with Journal Logging & Replay Mode
+# main.py — Final Patched Yantra X Backend (Frontend-Compatible)
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 from services.notification_service import send_notification
 from services.logger_service import logger
 from ai_agents.macro_monk import macro_monk_decision
@@ -13,10 +13,15 @@ from rl_core.reward_function import calculate_reward
 import sqlite3
 import os
 from datetime import datetime
+import logging
+import sys
 
 app = Flask(__name__)
+env = MarketSimEnv()
 
-# 🔹 Log trade to local SQLite journal
+# 🛠 Patch Windows logging issue (emoji-safe)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, encoding='utf-8')
+
 def log_to_journal(signal, audit, reward):
     conn = sqlite3.connect("trade_journal.db")
     cursor = conn.cursor()
@@ -29,16 +34,16 @@ def log_to_journal(signal, audit, reward):
 
 @app.route("/")
 def index():
-    return jsonify({"message": "🚀 Yantra X RL Backend is Live!"})
+    return jsonify({"message": "Yantra X RL Backend is Live"})
 
 @app.route("/ping")
 def ping():
-    return jsonify({"status": "✅ Healthy"})
+    return jsonify({"status": "healthy"})
 
 @app.route("/notify")
 def test_notify():
     sent = send_notification(
-        subject="🧠 Yantra X System Test",
+        subject="Yantra X System Test",
         message="Hello from your AI trading backend.",
         to_email=os.getenv("SMTP_USER", "")
     )
@@ -46,42 +51,50 @@ def test_notify():
 
 @app.route("/run-cycle", methods=["POST"])
 def run_cycle():
-    market_data = analyze_data()
-    logger.info(f"Market Data: {market_data}")
+    try:
+        market_data = analyze_data()
+        logger.info(f"[Data Whisperer] Market data: {market_data}")
 
-    strategy = macro_monk_decision(market_data)
-    logger.info(f"Macro Monk Strategy: {strategy}")
+        strategy = macro_monk_decision(market_data)
+        logger.info(f"[Macro Monk] Strategy: {strategy}")
 
-    signal = ghost_signal_handler(strategy)
-    logger.info(f"The Ghost Signal: {signal}")
+        signal = ghost_signal_handler(strategy)
+        logger.info(f"[The Ghost] Signal: {signal}")
 
-    audit = audit_trade(signal)
-    logger.info(f"Degen Auditor Result: {audit}")
+        audit = audit_trade(signal)
+        logger.info(f"[Degen Auditor] Audit: {audit}")
 
-    env = MarketSimEnv()
-    price_change = market_data.get("price", 0) * (1 if audit == "Approved" else -1)
-    reward = calculate_reward(env, price_change)
-    logger.info(f"Calculated Reward: {reward}")
+        state, reward, done = env.step(signal)
 
-    train_model()
+        train_model()
 
-    send_notification(
-        subject="Yantra X Trade Cycle",
-        message=f"Signal: {signal} | Audit: {audit} | Reward: {reward}",
-        to_email=os.getenv("SMTP_USER", "")
-    )
+        send_notification(
+            subject="Yantra X Trade Cycle",
+            message=f"Signal: {signal} | Audit: {audit} | Reward: {reward}",
+            to_email=os.getenv("SMTP_USER", "")
+        )
+        logger.info(f"Notification sent to {os.getenv('SMTP_USER', '')}")
 
-    logger.info("Notification sent successfully.")
+        log_to_journal(signal, audit, reward)
 
-    # 🔹 Save to journal
-    log_to_journal(signal, audit, reward)
+        logger.info(f"[Journal] Ep {state['cycle']}: Signal={signal}, Audit={audit}, Reward={reward}")
 
-    return jsonify({
-        "status": "success",
-        "signal": signal,
-        "audit": audit,
-        "reward": reward
-    })
+        return jsonify({
+            "status": "success",
+            "signal": signal,
+            "audit": audit,
+            "reward": reward,
+            "state": state
+        })
+
+    except Exception as e:
+        logger.error(f"Error during cycle: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/train", methods=["POST"])
+def trigger_training():
+    result = train_model()
+    return jsonify(result)
 
 @app.route("/journal", methods=["GET"])
 def view_journal():
@@ -91,12 +104,12 @@ def view_journal():
     entries = cursor.fetchall()
     conn.close()
 
-    journal_list = [{
-        "timestamp": row[0],
-        "signal": row[1],
-        "audit": row[2],
-        "reward": row[3]
-    } for row in entries]
+    journal_list = [dict(
+        timestamp=row[0],
+        signal=row[1],
+        audit=row[2],
+        reward=row[3]
+    ) for row in entries]
 
     return jsonify(journal_list)
 
