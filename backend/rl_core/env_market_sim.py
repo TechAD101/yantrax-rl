@@ -101,3 +101,13 @@ class MarketSimEnv:
 
     def reset(self):
         self.__init__()
+        return {
+            "price": round(self.price, 2),
+            "volatility": round(self.volatility, 4),
+            "mood": self.mood,
+            "curiosity": round(self.curiosity, 2),
+            "balance": round(self.balance, 2),
+            "position": self.position or "none",
+            "cycle": self.cycle,
+            "reward": 0.0
+        }
