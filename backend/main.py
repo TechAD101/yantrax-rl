@@ -52,10 +52,6 @@ def test_notify():
     )
     return jsonify({"notification_sent": sent})
 
-@app.route("/run_rl", methods=["POST"])
-def run_rl_alias():
-    return run_cycle()
-
 
 @app.route("/run-cycle", methods=["POST"])
 def run_cycle():
@@ -94,6 +90,47 @@ def run_cycle():
 
     except Exception as e:
         logger.error(f"Error during cycle: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ✅ NEW: GET /run_rl for frontend support
+@app.route("/run_rl", methods=["GET"])
+def run_rl_get():
+    try:
+        market_data = analyze_data()
+        logger.info(f"[Data Whisperer] Market data: {market_data}")
+
+        strategy = macro_monk_decision(market_data)
+        logger.info(f"[Macro Monk] Strategy: {strategy}")
+
+        signal = ghost_signal_handler(strategy)
+        logger.info(f"[The Ghost] Signal: {signal}")
+
+        audit = audit_trade(signal)
+        logger.info(f"[Degen Auditor] Audit: {audit}")
+
+        env = MarketSimEnv()
+        state, reward, done = env.step(signal)
+
+        send_notification(
+            subject="Yantra X Trade Cycle",
+            message=f"Signal: {signal} | Audit: {audit} | Reward: {reward}",
+            to_email=os.getenv("SMTP_USER", "")
+        )
+
+        log_to_journal(signal, audit, reward)
+        logger.info(f"[Journal] Ep {state['cycle']}: Signal={signal}, Audit={audit}, Reward={reward}")
+
+        return jsonify({
+            "status": "success",
+            "signal": signal,
+            "audit": audit,
+            "reward": reward,
+            "state": state
+        })
+
+    except Exception as e:
+        logger.error(f"Error during RL GET cycle: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
