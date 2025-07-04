@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import MarketStats from "../components/MarketStats";
 import JournalCard from "../components/JournalCard";
 
-const BASE_URL = import.meta.env.VITE_API_URL;
+const BASE_URL = "https://yantrax-backend.onrender.com";
 
 const YantraDashboard = () => {
   const [data, setData] = useState(null);
