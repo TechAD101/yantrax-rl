@@ -52,6 +52,10 @@ def test_notify():
     )
     return jsonify({"notification_sent": sent})
 
+@app.route("/run_rl", methods=["POST"])
+def run_rl_alias():
+    return run_cycle()
+
 
 @app.route("/run-cycle", methods=["POST"])
 def run_cycle():
