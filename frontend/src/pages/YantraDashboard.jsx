@@ -10,26 +10,11 @@ const YantraDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [journal, setJournal] = useState([]);
 
-  const runCycle = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${BASE_URL}/run-cycle`, {
-        method: "POST",
-      });
-      const result = await res.json();
-      setData(result);
-    } catch (error) {
-      console.error("❌ Error running manual cycle:", error);
-      alert("❌ Error running manual cycle");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const runGodCycle = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/god-cycle`); // 👈 God Mode is GET
+      console.log("🔁 Fetching from:", `${BASE_URL}/god-cycle`);
+      const res = await fetch(`${BASE_URL}/god-cycle`);
       const result = await res.json();
       setData(result);
     } catch (error) {
@@ -56,23 +41,15 @@ const YantraDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white p-6">
-      <h1 className="text-4xl font-extrabold mb-6 text-center">🧠 Yantra X God Mode</h1>
-      
-      <div className="flex gap-4 justify-center">
-        <button
-          onClick={runCycle}
-          className="bg-purple-700 hover:bg-purple-800 px-5 py-3 text-md rounded-xl shadow-xl"
-          disabled={loading}
-        >
-          {loading ? "⏳ Running..." : "⚙️ Run Manual Cycle"}
-        </button>
+      <h1 className="text-4xl font-extrabold mb-6 text-center">🧠 Yantra X — RL God Mode</h1>
 
+      <div className="flex justify-center">
         <button
           onClick={runGodCycle}
-          className="bg-indigo-600 hover:bg-indigo-700 px-5 py-3 text-md rounded-xl shadow-xl"
+          className="bg-indigo-600 hover:bg-indigo-700 px-6 py-3 text-lg rounded-xl shadow-xl"
           disabled={loading}
         >
-          {loading ? "⏳ Running..." : "🧠 Run God Mode"}
+          {loading ? "⏳ Running..." : "🚀 Run RL Cycle"}
         </button>
       </div>
 
