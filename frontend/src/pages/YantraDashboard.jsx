@@ -19,10 +19,25 @@ const YantraDashboard = () => {
       const result = await res.json();
       setData(result);
     } catch (error) {
-      console.error("Error running cycle:", error);
-      alert("❌ Error running cycle");
+      console.error("❌ Error running manual cycle:", error);
+      alert("❌ Error running manual cycle");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
+  };
+
+  const runGodCycle = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/god-cycle`); // 👈 God Mode is GET
+      const result = await res.json();
+      setData(result);
+    } catch (error) {
+      console.error("❌ Error running god cycle:", error);
+      alert("❌ Error running god cycle");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchJournal = async () => {
@@ -42,13 +57,22 @@ const YantraDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white p-6">
       <h1 className="text-4xl font-extrabold mb-6 text-center">🧠 Yantra X God Mode</h1>
-      <div className="flex justify-center">
+      
+      <div className="flex gap-4 justify-center">
         <button
           onClick={runCycle}
-          className="bg-indigo-600 hover:bg-indigo-700 px-6 py-3 text-lg rounded-xl shadow-xl"
+          className="bg-purple-700 hover:bg-purple-800 px-5 py-3 text-md rounded-xl shadow-xl"
           disabled={loading}
         >
-          {loading ? "⏳ Running..." : "🚀 Run RL Cycle"}
+          {loading ? "⏳ Running..." : "⚙️ Run Manual Cycle"}
+        </button>
+
+        <button
+          onClick={runGodCycle}
+          className="bg-indigo-600 hover:bg-indigo-700 px-5 py-3 text-md rounded-xl shadow-xl"
+          disabled={loading}
+        >
+          {loading ? "⏳ Running..." : "🧠 Run God Mode"}
         </button>
       </div>
 
