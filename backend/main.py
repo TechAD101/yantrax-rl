@@ -1,6 +1,7 @@
-# main.py — Final Unified Yantra X Backend (RL + Agents + Frontend Ready)
+# main.py — Final Unified Yantra X Backend (with CORS enabled)
 
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from services.notification_service import send_notification
 from services.logger_service import logger
 from ai_agents.macro_monk import macro_monk_decision
@@ -17,6 +18,7 @@ import logging
 import sys
 
 app = Flask(__name__)
+CORS(app)  # 🛡️ Allow frontend access from any origin
 
 # 🛠 Patch Windows logging issue (emoji-safe)
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, encoding='utf-8')
@@ -90,47 +92,6 @@ def run_cycle():
 
     except Exception as e:
         logger.error(f"Error during cycle: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-# ✅ NEW: GET /run_rl for frontend support
-@app.route("/run_rl", methods=["GET"])
-def run_rl_get():
-    try:
-        market_data = analyze_data()
-        logger.info(f"[Data Whisperer] Market data: {market_data}")
-
-        strategy = macro_monk_decision(market_data)
-        logger.info(f"[Macro Monk] Strategy: {strategy}")
-
-        signal = ghost_signal_handler(strategy)
-        logger.info(f"[The Ghost] Signal: {signal}")
-
-        audit = audit_trade(signal)
-        logger.info(f"[Degen Auditor] Audit: {audit}")
-
-        env = MarketSimEnv()
-        state, reward, done = env.step(signal)
-
-        send_notification(
-            subject="Yantra X Trade Cycle",
-            message=f"Signal: {signal} | Audit: {audit} | Reward: {reward}",
-            to_email=os.getenv("SMTP_USER", "")
-        )
-
-        log_to_journal(signal, audit, reward)
-        logger.info(f"[Journal] Ep {state['cycle']}: Signal={signal}, Audit={audit}, Reward={reward}")
-
-        return jsonify({
-            "status": "success",
-            "signal": signal,
-            "audit": audit,
-            "reward": reward,
-            "state": state
-        })
-
-    except Exception as e:
-        logger.error(f"Error during RL GET cycle: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
