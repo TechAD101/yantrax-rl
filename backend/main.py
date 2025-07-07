@@ -1,4 +1,4 @@
-# main.py — Final Unified Yantra X Backend (with CORS enabled)
+# main.py — Final Unified Yantra X Backend (with Commentary Route + CORS)
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -20,7 +20,7 @@ import sys
 app = Flask(__name__)
 CORS(app)  # 🛡️ Allow frontend access from any origin
 
-# 🛠 Patch Windows logging issue (emoji-safe)
+# Patch for Windows logging issue (emoji-safe)
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, encoding='utf-8')
 
 
@@ -149,6 +149,26 @@ def replay_journal():
         })
 
     return jsonify({"replay": replay})
+
+
+# ✅ NEW: Agent Commentary Route
+@app.route("/commentary", methods=["GET"])
+def get_agent_commentary():
+    conn = sqlite3.connect("trade_journal.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM agent_commentary ORDER BY timestamp DESC LIMIT 50")
+    rows = cursor.fetchall()
+    conn.close()
+
+    result = []
+    for row in rows:
+        result.append({
+            "timestamp": row[0],
+            "agent": row[1],
+            "comment": row[2]
+        })
+
+    return jsonify(result)
 
 
 if __name__ == "__main__":
