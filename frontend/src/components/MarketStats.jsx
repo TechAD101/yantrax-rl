@@ -1,3 +1,4 @@
+// src/components/MarketStats.jsx
 import React from "react";
 
 const MarketStats = ({ data }) => {
