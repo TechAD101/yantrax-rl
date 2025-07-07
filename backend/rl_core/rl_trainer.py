@@ -1,3 +1,14 @@
+# backend/rl_core/rl_trainer.py
+
+import random
+import numpy as np
+from rl_core.env_market_sim import MarketSimEnv
+
+def train_model():
+    print("🚀 [Train] Placeholder training started...")
+    # You can replace this with actual model training logic later
+    return {"status": "training completed", "timestamp": "N/A"}
+
 def run_rl_cycle():
     print("🧠 [RL] Initializing MarketSimEnv...")
     try:
