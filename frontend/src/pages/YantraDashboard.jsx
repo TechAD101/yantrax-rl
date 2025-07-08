@@ -1,69 +1,74 @@
 // src/pages/YantraDashboard.jsx
-import React, { useState, useEffect } from "react";
-import MarketStats from "../components/MarketStats";
+import React, { useEffect, useState } from "react";
 import JournalCard from "../components/JournalCard";
 
 const YantraDashboard = () => {
-  const [stats, setStats] = useState(null);
+  const [godCycle, setGodCycle] = useState(null);
   const [journal, setJournal] = useState([]);
-  const [commentary, setCommentary] = useState("");
+  const [commentary, setCommentary] = useState([]);
 
+  // Fetch God Mode Cycle
   useEffect(() => {
     fetch("https://yantrax-backend.onrender.com/god-cycle")
       .then((res) => res.json())
-      .then((data) => setStats(data));
+      .then((data) => setGodCycle(data))
+      .catch((err) => console.error("God Cycle Fetch Error:", err));
+  }, []);
 
+  // Fetch Journal Logs
+  useEffect(() => {
     fetch("https://yantrax-backend.onrender.com/journal")
       .then((res) => res.json())
-      .then((data) => setJournal(data));
+      .then((data) => setJournal(data))
+      .catch((err) => console.error("Journal Fetch Error:", err));
+  }, []);
 
+  // Fetch Commentary Logs
+  useEffect(() => {
     fetch("https://yantrax-backend.onrender.com/commentary")
-      .then((res) => res.text())
-      .then((data) => setCommentary(data));
+      .then((res) => res.json())
+      .then((data) => setCommentary(data))
+      .catch((err) => console.error("Commentary Fetch Error:", err));
   }, []);
 
   return (
-    <div className="p-6 space-y-6 bg-gray-950 text-white min-h-screen">
-      <h1 className="text-3xl font-bold">🧠 Yantra X — RL God Mode</h1>
-      <button
-        onClick={() => {
-          fetch("https://yantrax-backend.onrender.com/god-cycle")
-            .then((res) => res.json())
-            .then((data) => setStats(data));
-        }}
-        className="bg-blue-600 hover:bg-blue-800 text-white px-4 py-2 rounded-xl shadow"
-      >
-        🚀 Run RL Cycle
-      </button>
+    <div className="min-h-screen bg-black text-white p-4 space-y-6">
+      <h1 className="text-2xl font-bold">🧠 Yantra X — RL God Mode</h1>
 
-      {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {Object.entries(stats).map(([key, value]) => (
-            <div
-              key={key}
-              className="bg-gray-900 p-4 rounded-xl border border-gray-700 shadow-lg"
-            >
-              <p className="text-sm text-gray-400">{key}</p>
-              <p className="text-xl font-bold">{value}</p>
-            </div>
-          ))}
+      {/* God Mode Block */}
+      {godCycle && (
+        <div className="bg-gray-900 p-4 rounded-xl shadow-lg border border-gray-800">
+          <h2 className="text-lg font-semibold mb-2">⚙️ God Mode Decision</h2>
+          <p><span className="text-blue-400">Action:</span> {godCycle.action}</p>
+          <p><span className="text-green-400">Reward:</span> {godCycle.reward}</p>
+          <p><span className="text-yellow-400">State:</span> {godCycle.state}</p>
         </div>
       )}
 
+      {/* Journal Log Cards */}
       <div>
-        <h2 className="text-2xl font-semibold mb-2">🧾 Journal Logs</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <h2 className="text-lg font-semibold mb-2">📘 Journal Logs</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {journal.map((entry, index) => (
-            <JournalCard key={index} {...entry} />
+            <JournalCard
+              key={index}
+              timestamp={entry.timestamp}
+              signal={entry.signal}
+              audit={entry.audit}
+              reward={entry.reward}
+            />
           ))}
         </div>
       </div>
 
+      {/* Commentary Block */}
       <div>
-        <h2 className="text-2xl font-semibold mt-4">🧠 Agent Commentary</h2>
-        <pre className="bg-gray-900 p-4 rounded-xl border border-gray-700 whitespace-pre-wrap">
-          {commentary}
-        </pre>
+        <h2 className="text-lg font-semibold mb-2">🗣️ Agent Commentary</h2>
+        <div className="space-y-2">
+          {commentary.map((line, index) => (
+            <p key={index} className="text-gray-300">💬 {line}</p>
+          ))}
+        </div>
       </div>
     </div>
   );
