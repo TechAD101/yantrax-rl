@@ -1,98 +1,69 @@
 // src/pages/YantraDashboard.jsx
-// 🔁 Trigger rebuild for case-sensitive JournalCard fix
-
-// 🚀 Trigger build
-
-
-// src/pages/YantraDashboard.jsx
 import React, { useState, useEffect } from "react";
 import MarketStats from "../components/MarketStats";
 import JournalCard from "../components/JournalCard";
-import AgentCommentary from "../components/AgentCommentary";
-
-const BASE_URL = "https://yantrax-backend.onrender.com";
 
 const YantraDashboard = () => {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [stats, setStats] = useState(null);
   const [journal, setJournal] = useState([]);
-  const [commentary, setCommentary] = useState([]);
-
-  const runGodCycle = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${BASE_URL}/god-cycle`);
-      if (!res.ok) throw new Error("Backend error");
-      const result = await res.json();
-      setData(result);
-      await fetchJournal();
-      await fetchCommentary();
-    } catch (error) {
-      console.error("❌ Error running god cycle:", error);
-      setError("Backend might be unreachable or returned bad data.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchJournal = async () => {
-    try {
-      const res = await fetch(`${BASE_URL}/journal`);
-      const result = await res.json();
-      setJournal(result);
-    } catch (err) {
-      console.error("Failed to fetch journal:", err);
-    }
-  };
-
-  const fetchCommentary = async () => {
-    try {
-      const res = await fetch(`${BASE_URL}/commentary`);
-      const result = await res.json();
-      setCommentary(result);
-    } catch (err) {
-      console.error("Failed to fetch commentary:", err);
-    }
-  };
+  const [commentary, setCommentary] = useState("");
 
   useEffect(() => {
-    fetchJournal();
-    fetchCommentary();
+    fetch("https://yantrax-backend.onrender.com/god-cycle")
+      .then((res) => res.json())
+      .then((data) => setStats(data));
+
+    fetch("https://yantrax-backend.onrender.com/journal")
+      .then((res) => res.json())
+      .then((data) => setJournal(data));
+
+    fetch("https://yantrax-backend.onrender.com/commentary")
+      .then((res) => res.text())
+      .then((data) => setCommentary(data));
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white p-6">
-      <h1 className="text-4xl font-extrabold mb-6 text-center">🧠 Yantra X — RL God Mode</h1>
+    <div className="p-6 space-y-6 bg-gray-950 text-white min-h-screen">
+      <h1 className="text-3xl font-bold">🧠 Yantra X — RL God Mode</h1>
+      <button
+        onClick={() => {
+          fetch("https://yantrax-backend.onrender.com/god-cycle")
+            .then((res) => res.json())
+            .then((data) => setStats(data));
+        }}
+        className="bg-blue-600 hover:bg-blue-800 text-white px-4 py-2 rounded-xl shadow"
+      >
+        🚀 Run RL Cycle
+      </button>
 
-      <div className="flex justify-center mb-6">
-        <button
-          onClick={runGodCycle}
-          className={`px-6 py-3 text-lg rounded-xl font-semibold shadow-xl transition-all ${
-            loading ? "bg-gray-700 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"
-          }`}
-          disabled={loading}
-        >
-          {loading ? "⏳ Running..." : "🚀 Run RL Cycle"}
-        </button>
-      </div>
-
-      {error && <p className="text-center text-red-500 text-lg mb-4">❌ {error}</p>}
-
-      {data && (
-        <div className="mb-6">
-          <MarketStats data={data} />
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Object.entries(stats).map(([key, value]) => (
+            <div
+              key={key}
+              className="bg-gray-900 p-4 rounded-xl border border-gray-700 shadow-lg"
+            >
+              <p className="text-sm text-gray-400">{key}</p>
+              <p className="text-xl font-bold">{value}</p>
+            </div>
+          ))}
         </div>
       )}
 
-      <AgentCommentary commentary={commentary} />
+      <div>
+        <h2 className="text-2xl font-semibold mb-2">🧾 Journal Logs</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {journal.map((entry, index) => (
+            <JournalCard key={index} {...entry} />
+          ))}
+        </div>
+      </div>
 
-      <h2 className="text-2xl font-bold my-8 text-indigo-400">📜 Cycle History</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {journal.map((entry, i) => (
-          <JournalCard key={i} {...entry} />
-        ))}
+      <div>
+        <h2 className="text-2xl font-semibold mt-4">🧠 Agent Commentary</h2>
+        <pre className="bg-gray-900 p-4 rounded-xl border border-gray-700 whitespace-pre-wrap">
+          {commentary}
+        </pre>
       </div>
     </div>
   );
