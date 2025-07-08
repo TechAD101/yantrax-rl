@@ -7,7 +7,6 @@ const YantraDashboard = () => {
   const [journal, setJournal] = useState([]);
   const [commentary, setCommentary] = useState([]);
 
-  // Fetch God Mode Cycle
   useEffect(() => {
     fetch("https://yantrax-backend.onrender.com/god-cycle")
       .then((res) => res.json())
@@ -15,7 +14,6 @@ const YantraDashboard = () => {
       .catch((err) => console.error("God Cycle Fetch Error:", err));
   }, []);
 
-  // Fetch Journal Logs
   useEffect(() => {
     fetch("https://yantrax-backend.onrender.com/journal")
       .then((res) => res.json())
@@ -23,7 +21,6 @@ const YantraDashboard = () => {
       .catch((err) => console.error("Journal Fetch Error:", err));
   }, []);
 
-  // Fetch Commentary Logs
   useEffect(() => {
     fetch("https://yantrax-backend.onrender.com/commentary")
       .then((res) => res.json())
@@ -35,17 +32,22 @@ const YantraDashboard = () => {
     <div className="min-h-screen bg-black text-white p-4 space-y-6">
       <h1 className="text-2xl font-bold">🧠 Yantra X — RL God Mode</h1>
 
-      {/* God Mode Block */}
-      {godCycle && (
+      {/* ✅ Safely render object */}
+      {godCycle && typeof godCycle === "object" && (
         <div className="bg-gray-900 p-4 rounded-xl shadow-lg border border-gray-800">
           <h2 className="text-lg font-semibold mb-2">⚙️ God Mode Decision</h2>
-          <p><span className="text-blue-400">Action:</span> {godCycle.action}</p>
-          <p><span className="text-green-400">Reward:</span> {godCycle.reward}</p>
-          <p><span className="text-yellow-400">State:</span> {godCycle.state}</p>
+          <p><strong>Action:</strong> {godCycle.action ?? "N/A"}</p>
+          <p><strong>Reward:</strong> {godCycle.reward ?? "N/A"}</p>
+          <p><strong>State:</strong> {godCycle.state ?? "N/A"}</p>
         </div>
       )}
 
-      {/* Journal Log Cards */}
+      {/* ✅ Debug fallback if object fails */}
+      {!godCycle && (
+        <div className="text-red-500">⚠️ No God Mode data returned</div>
+      )}
+
+      {/* 📘 Journal logs */}
       <div>
         <h2 className="text-lg font-semibold mb-2">📘 Journal Logs</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -61,7 +63,7 @@ const YantraDashboard = () => {
         </div>
       </div>
 
-      {/* Commentary Block */}
+      {/* 🧠 Commentary block */}
       <div>
         <h2 className="text-lg font-semibold mb-2">🗣️ Agent Commentary</h2>
         <div className="space-y-2">
