@@ -1,4 +1,5 @@
 // src/pages/YantraDashboard.jsx
+// 🔁 Trigger rebuild for case-sensitive JournalCard fix
 
 // 🚀 Trigger build
 
