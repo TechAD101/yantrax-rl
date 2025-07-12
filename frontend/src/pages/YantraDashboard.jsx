@@ -1,31 +1,32 @@
 // src/pages/YantraDashboard.jsx
 import React, { useEffect, useState } from "react";
 import JournalCard from "../components/JournalCard";
-import CommentaryCard from "../components/CommentaryCard"; // If you plan to use cards instead of raw <pre>
+import CommentaryCard from "../components/CommentaryCard";
 
 const YantraDashboard = () => {
-  const [godCycle, setGodCycle] = useState(null);
+  const [stats, setStats] = useState(null);
   const [journal, setJournal] = useState([]);
   const [commentary, setCommentary] = useState([]);
-  const [commentary, setCommentary] = useState([]);
 
+  // Fetch God Cycle stats
   useEffect(() => {
     fetch("https://yantrax-backend.onrender.com/god-cycle")
       .then((res) => res.json())
       .then((data) => setStats(data))
       .catch((err) => console.error("God Cycle Fetch Error:", err));
+  }, []);
 
+  // Fetch Journal entries
   useEffect(() => {
     fetch("https://yantrax-backend.onrender.com/journal")
       .then((res) => res.json())
       .then((data) => setJournal(data))
       .catch((err) => console.error("Journal Fetch Error:", err));
+  }, []);
 
+  // Fetch Commentary logs
   useEffect(() => {
     fetch("https://yantrax-backend.onrender.com/commentary")
-      .then((res) => res.json())
-      .then((data) => setCommentary(data))
-      .catch((err) => console.error("Commentary Fetch Error:", err));
       .then((res) => res.json())
       .then((data) => setCommentary(data))
       .catch((err) => console.error("Commentary Fetch Error:", err));
