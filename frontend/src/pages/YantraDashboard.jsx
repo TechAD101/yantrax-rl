@@ -1,105 +1,127 @@
 // src/pages/YantraDashboard.jsx
-import React, { useEffect, useState } from "react";
-import JournalCard from "../components/JournalCard";
-import CommentaryCard from "../components/CommentaryCard";
+import React, { useState, useEffect } from "react";
 
 const YantraDashboard = () => {
-  const [stats, setStats] = useState(null);
+  const [data, setData] = useState(null);
   const [journal, setJournal] = useState([]);
-  const [commentary, setCommentary] = useState([]);
+  const [commentary, setCommentary] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  // Fetch God Cycle stats
-  useEffect(() => {
-    fetch("https://yantrax-backend.onrender.com/god-cycle")
-      .then((res) => res.json())
-      .then((data) => setStats(data))
-      .catch((err) => console.error("God Cycle Fetch Error:", err));
-  }, []);
+  const runCycle = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("https://yantrax-backend.onrender.com/god-cycle");
+      const json = await res.json();
+      setData(json);
+      setLoading(false);
+    } catch (err) {
+      console.error("❌ Run cycle failed:", err);
+      setError("Run cycle failed. Backend might be down.");
+      setLoading(false);
+    }
+  };
 
-  // Fetch Journal entries
   useEffect(() => {
-    fetch("https://yantrax-backend.onrender.com/journal")
-      .then((res) => res.json())
-      .then((data) => setJournal(data))
-      .catch((err) => console.error("Journal Fetch Error:", err));
-  }, []);
-
-  // Fetch Commentary logs
-  useEffect(() => {
-    fetch("https://yantrax-backend.onrender.com/commentary")
-      .then((res) => res.json())
-      .then((data) => setCommentary(data))
-      .catch((err) => console.error("Commentary Fetch Error:", err));
+    const fetchLogs = async () => {
+      try {
+        const [journalRes, commentaryRes] = await Promise.all([
+          fetch("https://yantrax-backend.onrender.com/journal"),
+          fetch("https://yantrax-backend.onrender.com/commentary"),
+        ]);
+        const journalData = await journalRes.json();
+        const commentaryData = await commentaryRes.text();
+        setJournal(journalData);
+        setCommentary(commentaryData);
+      } catch (err) {
+        console.error("❌ Error loading logs:", err);
+      }
+    };
+    fetchLogs();
   }, []);
 
   return (
-    <div className="p-6 space-y-6 bg-gray-950 text-white min-h-screen">
-      <h1 className="text-3xl font-bold">🧠 Yantra X — RL God Mode</h1>
+    <div className="min-h-screen bg-gray-950 text-white p-6 space-y-8">
+      <header className="text-center">
+        <h1 className="text-4xl font-bold mb-2">🧠 Yantra X — RL God Mode</h1>
+        <button
+          onClick={runCycle}
+          disabled={loading}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded shadow mt-4"
+        >
+          🚀 {loading ? "Running..." : "Run RL Cycle"}
+        </button>
+        {error && <p className="text-red-400 mt-2">{error}</p>}
+      </header>
 
-      <button
-        onClick={() => {
-          fetch("https://yantrax-backend.onrender.com/god-cycle")
-            .then((res) => res.json())
-            .then((data) => setStats(data))
-            .catch((err) => console.error("RL Cycle Error:", err));
-        }}
-        className="bg-blue-600 hover:bg-blue-800 text-white px-4 py-2 rounded-xl shadow"
-      >
-        🚀 Run RL Cycle
-      </button>
+      {data && (
+        <>
+          {/* Metrics */}
+          <section className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <Card label="Curiosity" value={data.curiosity} />
+            <Card label="Final Balance" value={data.final_balance} />
+            <Card label="Cycle" value={data.final_cycle} />
+            <Card label="Mood" value={data.final_mood} />
+            <Card label="Total Reward" value={data.total_reward} />
+          </section>
 
-      {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {Object.entries(stats).map(([key, value]) => (
-            <div
-              key={key}
-              className="bg-gray-900 p-4 rounded-xl border border-gray-700 shadow-lg"
-            >
-              <p className="text-sm text-gray-400">{key}</p>
-              <p className="text-xl font-bold">{value}</p>
+          {/* RL Steps Table */}
+          <section className="bg-gray-900 p-4 rounded-xl shadow mt-4">
+            <h2 className="text-xl font-semibold mb-2">📊 RL Steps</h2>
+            <div className="overflow-auto max-h-[300px]">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-800">
+                  <tr>
+                    <th className="p-2 text-left">#</th>
+                    <th className="p-2 text-left">Action</th>
+                    <th className="p-2 text-left">Reward</th>
+                    <th className="p-2 text-left">State Summary</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.steps.map((step, index) => (
+                    <tr key={index} className="border-b border-gray-700">
+                      <td className="p-2">{index + 1}</td>
+                      <td className="p-2">{step.action}</td>
+                      <td className="p-2">{step.reward.toFixed(3)}</td>
+                      <td className="p-2 text-xs text-gray-300">
+                        Position: {step.state.position}, Price: {step.state.price}, Volatility: {step.state.volatility}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
-        </div>
+          </section>
+        </>
       )}
 
       {/* Journal Logs */}
-      <div>
-        <h2 className="text-2xl font-semibold mb-2">🧾 Journal Logs</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Array.isArray(journal) &&
-            journal.map((entry, index) =>
-              entry && entry.timestamp && entry.signal && entry.audit !== undefined ? (
-                <JournalCard
-                  key={index}
-                  timestamp={entry.timestamp}
-                  signal={entry.signal}
-                  audit={entry.audit}
-                  reward={entry.reward}
-                />
-              ) : null
-            )}
-        </div>
-      </div>
+      <section className="bg-gray-900 p-4 rounded-xl shadow">
+        <h2 className="text-xl font-semibold mb-2">🧾 Journal Logs</h2>
+        <ul className="space-y-2 max-h-[200px] overflow-y-auto">
+          {journal.map((entry, index) => (
+            <li key={index} className="bg-gray-800 p-3 rounded">
+              {entry}
+            </li>
+          ))}
+        </ul>
+      </section>
 
       {/* Agent Commentary */}
-      <div>
-        <h2 className="text-2xl font-semibold mt-4">🧠 Agent Commentary</h2>
-        <div className="space-y-2">
-          {Array.isArray(commentary) &&
-            commentary.map((entry, index) =>
-              entry && entry.agent && entry.comment ? (
-                <CommentaryCard
-                  key={index}
-                  agent={entry.agent}
-                  comment={entry.comment}
-                  timestamp={entry.timestamp}
-                />
-              ) : null
-            )}
-        </div>
-      </div>
+      <section className="bg-gray-900 p-4 rounded-xl shadow">
+        <h2 className="text-xl font-semibold mb-2">🧠 Agent Commentary</h2>
+        <div className="text-sm text-gray-300 whitespace-pre-wrap">{commentary}</div>
+      </section>
     </div>
   );
 };
+
+const Card = ({ label, value }) => (
+  <div className="bg-gray-900 p-4 rounded-xl shadow">
+    <h3 className="text-gray-400 text-sm">{label}</h3>
+    <p className="text-xl font-semibold text-emerald-400">{value}</p>
+  </div>
+);
 
 export default YantraDashboard;
