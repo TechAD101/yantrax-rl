@@ -1,9 +1,8 @@
-# main.py — Final Unified Yantra X Backend (with Commentary Route + CORS)
-
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from services.notification_service import send_notification
 from services.logger_service import logger
+from services.market_data_service import get_latest_price  # NEW import
 from ai_agents.macro_monk import macro_monk_decision
 from ai_agents.the_ghost import ghost_signal_handler
 from ai_agents.data_whisperer import analyze_data
@@ -18,11 +17,9 @@ import logging
 import sys
 
 app = Flask(__name__)
-CORS(app)  # 🛡️ Allow frontend access from any origin
+CORS(app)
 
-# Patch for Windows logging issue (emoji-safe)
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, encoding='utf-8')
-
 
 def log_to_journal(signal, audit, reward):
     conn = sqlite3.connect("trade_journal.db")
@@ -34,16 +31,13 @@ def log_to_journal(signal, audit, reward):
     conn.commit()
     conn.close()
 
-
 @app.route("/")
 def index():
     return jsonify({"message": "Yantra X RL Backend is Live"})
 
-
 @app.route("/ping")
 def ping():
     return jsonify({"status": "healthy"})
-
 
 @app.route("/notify")
 def test_notify():
@@ -54,6 +48,14 @@ def test_notify():
     )
     return jsonify({"notification_sent": sent})
 
+@app.route("/market-price")
+def market_price():
+    symbol = request.args.get("symbol", "AAPL")
+    price = get_latest_price(symbol)
+    if price is not None:
+        return jsonify({"symbol": symbol, "price": price})
+    else:
+        return jsonify({"error": "Could not get price"}), 500
 
 @app.route("/run-cycle", methods=["POST"])
 def run_cycle():
@@ -94,12 +96,10 @@ def run_cycle():
         logger.error(f"Error during cycle: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 @app.route("/train", methods=["POST"])
 def trigger_training():
     result = train_model()
     return jsonify(result)
-
 
 @app.route("/god-cycle", methods=["GET"])
 def run_god_cycle():
@@ -109,7 +109,6 @@ def run_god_cycle():
     except Exception as e:
         logger.error(f"RL Cycle error: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
-
 
 @app.route("/journal", methods=["GET"])
 def view_journal():
@@ -127,7 +126,6 @@ def view_journal():
     ) for row in entries]
 
     return jsonify(journal_list)
-
 
 @app.route("/replay", methods=["GET"])
 def replay_journal():
@@ -150,8 +148,6 @@ def replay_journal():
 
     return jsonify({"replay": replay})
 
-
-# ✅ NEW: Agent Commentary Route
 @app.route("/commentary", methods=["GET"])
 def get_agent_commentary():
     conn = sqlite3.connect("trade_journal.db")
@@ -169,7 +165,6 @@ def get_agent_commentary():
         })
 
     return jsonify(result)
-
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0")

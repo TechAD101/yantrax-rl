@@ -1,19 +1,26 @@
 // src/pages/YantraDashboard.jsx
 import React, { useState, useEffect } from "react";
+import {
+  getGodCycle,
+  getJournal,
+  getCommentary,
+  runRLCycle,
+  getMarketPrice,
+} from "../api/api";
 
 const YantraDashboard = () => {
   const [data, setData] = useState(null);
   const [journal, setJournal] = useState([]);
-  const [commentary, setCommentary] = useState("");
+  const [commentary, setCommentary] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [livePrice, setLivePrice] = useState(null);
 
-  const runCycle = async () => {
+  const handleRunCycle = async () => {
     try {
       setLoading(true);
-      const res = await fetch("https://yantrax-backend.onrender.com/god-cycle");
-      const json = await res.json();
-      setData(json);
+      const res = await getGodCycle();
+      setData(res);
       setLoading(false);
     } catch (err) {
       console.error("❌ Run cycle failed:", err);
@@ -23,29 +30,36 @@ const YantraDashboard = () => {
   };
 
   useEffect(() => {
-    const fetchLogs = async () => {
-      try {
-        const [journalRes, commentaryRes] = await Promise.all([
-          fetch("https://yantrax-backend.onrender.com/journal"),
-          fetch("https://yantrax-backend.onrender.com/commentary"),
-        ]);
-        const journalData = await journalRes.json();
-        const commentaryData = await commentaryRes.text();
+    setLoading(true);
+    // Load all API data in parallel
+    Promise.all([
+      getJournal(),
+      getCommentary(),
+      getMarketPrice("AAPL"),
+    ])
+      .then(([journalData, commentaryData, priceData]) => {
         setJournal(journalData);
         setCommentary(commentaryData);
-      } catch (err) {
-        console.error("❌ Error loading logs:", err);
-      }
-    };
-    fetchLogs();
+        setLivePrice(
+          priceData && priceData.price
+            ? "$" + Number(priceData.price).toLocaleString()
+            : "N/A"
+        );
+        setLoading(false);
+        setError("");
+      })
+      .catch((err) => {
+        setError("Failed to fetch data. Backend might be down.");
+        setLoading(false);
+      });
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-6 space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-indigo-900/90 to-black text-white p-6 space-y-8">
       <header className="text-center">
         <h1 className="text-4xl font-bold mb-2">🧠 Yantra X — RL God Mode</h1>
         <button
-          onClick={runCycle}
+          onClick={handleRunCycle}
           disabled={loading}
           className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded shadow mt-4"
         >
@@ -53,6 +67,12 @@ const YantraDashboard = () => {
         </button>
         {error && <p className="text-red-400 mt-2">{error}</p>}
       </header>
+
+      {livePrice && (
+        <div className="text-2xl my-4 text-emerald-300 font-bold shadow rounded bg-indigo-950/80 w-fit px-6 py-2 mx-auto">
+          💰 AAPL Live Price: {livePrice}
+        </div>
+      )}
 
       {data && (
         <>
@@ -79,16 +99,17 @@ const YantraDashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.steps.map((step, index) => (
-                    <tr key={index} className="border-b border-gray-700">
-                      <td className="p-2">{index + 1}</td>
-                      <td className="p-2">{step.action}</td>
-                      <td className="p-2">{step.reward.toFixed(3)}</td>
-                      <td className="p-2 text-xs text-gray-300">
-                        Position: {step.state.position}, Price: {step.state.price}, Volatility: {step.state.volatility}
-                      </td>
-                    </tr>
-                  ))}
+                  {data.steps &&
+                    data.steps.map((step, index) => (
+                      <tr key={index} className="border-b border-gray-700">
+                        <td className="p-2">{index + 1}</td>
+                        <td className="p-2">{step.action}</td>
+                        <td className="p-2">{step.reward.toFixed(3)}</td>
+                        <td className="p-2 text-xs text-gray-300">
+                          Position: {step.state.position}, Price: {step.state.price}, Volatility: {step.state.volatility}
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -100,18 +121,35 @@ const YantraDashboard = () => {
       <section className="bg-gray-900 p-4 rounded-xl shadow">
         <h2 className="text-xl font-semibold mb-2">🧾 Journal Logs</h2>
         <ul className="space-y-2 max-h-[200px] overflow-y-auto">
-          {journal.map((entry, index) => (
-            <li key={index} className="bg-gray-800 p-3 rounded">
-              {entry}
-            </li>
-          ))}
+          {Array.isArray(journal) && journal.length > 0
+            ? journal.map((entry, index) => (
+                <li key={index} className="bg-gray-800 p-3 rounded">
+                  {typeof entry === "object"
+                    ? `${entry.timestamp} | ${entry.signal} | ${entry.audit} | Reward: ${entry.reward}`
+                    : entry}
+                </li>
+              ))
+            : <li className="text-gray-400">No journal entries found.</li>}
         </ul>
       </section>
 
       {/* Agent Commentary */}
       <section className="bg-gray-900 p-4 rounded-xl shadow">
         <h2 className="text-xl font-semibold mb-2">🧠 Agent Commentary</h2>
-        <div className="text-sm text-gray-300 whitespace-pre-wrap">{commentary}</div>
+        <div className="text-sm text-gray-300 whitespace-pre-wrap">
+          {Array.isArray(commentary)
+            ? commentary.map((entry, idx) =>
+                typeof entry === "object"
+                  ? (
+                    <div key={idx}>
+                      <span className="font-bold text-indigo-300">{entry.agent}:</span> {entry.comment}
+                      <span className="block text-xs text-gray-500 ml-2">{entry.timestamp}</span>
+                    </div>
+                    )
+                  : <div key={idx}>{entry}</div>
+              )
+            : commentary}
+        </div>
       </section>
     </div>
   );
