@@ -1,15 +1,16 @@
 @echo off
+REM ---- Move to the frontend directory ----
+cd /d "%~dp0frontend"
+
+REM ---- Add Node.js portable path (if not already set for this session) ----
+set PATH=C:\Users\ABhati\Documents\yantrax_node\node-v20.12.2-win-x64;%PATH%
+
 echo.
 echo 📦 Installing dependencies...
-call "C:\Users\ABhati\Documents\yantrax_node\node-v20.12.2-win-x64\npm.cmd" install
+call npm install
 
 echo.
 echo 🚀 Starting Yantra X frontend with Vite...
-
-REM Set local Node path
-set PATH=C:\Users\ABhati\Documents\yantrax_node\node-v20.12.2-win-x64;%PATH%
-
-REM Run dev server
-call "C:\Users\ABhati\Documents\yantrax_node\node-v20.12.2-win-x64\npx.cmd" vite
+call npx vite
 
 pause

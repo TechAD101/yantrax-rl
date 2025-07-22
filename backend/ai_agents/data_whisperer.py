@@ -1,10 +1,12 @@
-# ai_agents/data_whisperer.py - Placeholder content for RL-enhanced Yantra X
 import random
+from services.market_data_service import get_latest_price
 
-def analyze_data():
-    # Simulate fetching and analyzing market data
+def analyze_data(symbol="AAPL"):
+    price = get_latest_price(symbol)
+    if price is None:
+        price = round(random.uniform(10000, 60000), 2)
     market_data = {
-        "price": round(random.uniform(10000, 60000), 2),
+        "price": price,
         "volume": random.randint(100, 10000),
         "trend": random.choice(["bullish", "bearish", "sideways"])
     }

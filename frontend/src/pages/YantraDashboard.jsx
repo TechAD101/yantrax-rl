@@ -1,4 +1,3 @@
-// src/pages/YantraDashboard.jsx
 import React, { useState, useEffect } from "react";
 import {
   getGodCycle,
@@ -16,10 +15,11 @@ const YantraDashboard = () => {
   const [error, setError] = useState("");
   const [livePrice, setLivePrice] = useState(null);
 
+  // 🚀 THIS BUTTON NOW USES POST /run-cycle instead of GET /god-cycle!
   const handleRunCycle = async () => {
     try {
       setLoading(true);
-      const res = await getGodCycle();
+      const res = await runRLCycle();
       setData(res);
       setLoading(false);
     } catch (err) {
@@ -31,7 +31,6 @@ const YantraDashboard = () => {
 
   useEffect(() => {
     setLoading(true);
-    // Load all API data in parallel
     Promise.all([
       getJournal(),
       getCommentary(),
