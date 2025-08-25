@@ -1,0 +1,117 @@
+2025-08-18 05:54:26,044 - WARNING -  * Debugger is active!
+2025-08-18 05:54:26,047 - INFO -  * Debugger PIN: 960-326-448
+2025-08-18 05:54:26,256 - WARNING -  * Debugger is active!
+2025-08-18 05:54:26,260 - INFO -  * Debugger PIN: 479-243-327
+2025-08-18 05:56:27,420 - INFO -  * Detected change in 'C:\\Users\\ABhati\\Documents\\yantrax_rl_final\\backend\\app.py', reloading
+2025-08-18 05:56:27,421 - INFO -  * Detected change in 'C:\\Users\\ABhati\\Documents\\yantrax_rl_final\\backend\\app.py', reloading
+2025-08-18 05:56:27,421 - INFO -  * Detected change in 'C:\\Users\\ABhati\\Documents\\yantrax_rl_final\\backend\\app.py', reloading
+2025-08-18 05:56:28,222 - INFO -  * Detected change in 'C:\\Users\\ABhati\\Documents\\yantrax_rl_final\\backend\\app.py', reloading
+2025-08-18 05:56:29,263 - WARNING -  * Debugger is active!
+2025-08-18 05:56:29,266 - INFO -  * Debugger PIN: 479-243-327
+2025-08-18 05:56:29,815 - WARNING -  * Debugger is active!
+2025-08-18 05:56:29,818 - INFO -  * Debugger PIN: 960-326-448
+2025-08-18 05:56:43,541 - INFO -  * Detected change in 'C:\\Users\\ABhati\\Documents\\yantrax_rl_final\\backend\\main.py', reloading
+2025-08-18 05:56:43,541 - INFO -  * Detected change in 'C:\\Users\\ABhati\\Documents\\yantrax_rl_final\\backend\\main.py', reloading
+2025-08-18 05:56:43,541 - INFO -  * Detected change in 'C:\\Users\\ABhati\\Documents\\yantrax_rl_final\\backend\\main.py', reloading
+2025-08-18 05:56:44,135 - INFO -  * Detected change in 'C:\\Users\\ABhati\\Documents\\yantrax_rl_final\\backend\\main.py', reloading
+2025-08-18 05:56:45,201 - INFO - Yantra X RL backend started \u2705
+2025-08-18 05:56:45,222 - WARNING -  * Debugger is active!
+2025-08-18 05:56:45,226 - INFO -  * Debugger PIN: 479-243-327
+2025-08-18 05:56:45,313 - INFO - Yantra X RL backend started \u2705
+2025-08-18 05:56:45,329 - WARNING -  * Debugger is active!
+2025-08-18 05:56:45,332 - INFO -  * Debugger PIN: 960-326-448
+2025-08-18 05:57:26,861 - INFO - Yantra X RL backend started \u2705
+2025-08-18 05:57:26,893 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.0.0.5:5001
+2025-08-18 05:57:26,893 - INFO - [33mPress CTRL+C to quit[0m
+2025-08-18 05:57:26,894 - INFO -  * Restarting with stat
+2025-08-18 05:57:27,616 - INFO - Yantra X RL backend started \u2705
+2025-08-18 05:57:27,627 - WARNING -  * Debugger is active!
+2025-08-18 05:57:27,630 - INFO -  * Debugger PIN: 479-243-327
+2025-08-18 05:58:08,295 - INFO - App API server started \u2705
+2025-08-18 05:58:08,319 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.0.0.5:5000
+2025-08-18 05:58:08,320 - INFO - [33mPress CTRL+C to quit[0m
+2025-08-18 05:58:08,326 - INFO -  * Restarting with watchdog (windowsapi)
+2025-08-18 05:58:09,456 - INFO - App API server started \u2705
+2025-08-18 05:58:09,468 - WARNING -  * Debugger is active!
+2025-08-18 05:58:09,470 - INFO -  * Debugger PIN: 960-326-448
+2025-08-18 06:02:38,691 - INFO - Yantra X RL backend started \u2705
+2025-08-18 06:02:38,716 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.0.0.5:5001
+2025-08-18 06:02:38,716 - INFO - [33mPress CTRL+C to quit[0m
+2025-08-18 06:02:38,717 - INFO -  * Restarting with stat
+2025-08-18 06:02:39,500 - INFO - Yantra X RL backend started \u2705
+2025-08-18 06:02:39,514 - WARNING -  * Debugger is active!
+2025-08-18 06:02:39,517 - INFO -  * Debugger PIN: 479-243-327
+2025-08-18 06:03:12,595 - INFO - App API server started \u2705
+2025-08-18 06:03:12,625 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.0.0.5:5000
+2025-08-18 06:03:12,625 - INFO - [33mPress CTRL+C to quit[0m
+2025-08-18 06:03:12,631 - INFO -  * Restarting with watchdog (windowsapi)
+2025-08-18 06:03:13,745 - INFO - App API server started \u2705
+2025-08-18 06:03:13,760 - WARNING -  * Debugger is active!
+2025-08-18 06:03:13,763 - INFO -  * Debugger PIN: 960-326-448
+2025-08-18 06:03:42,047 - INFO - App API server started \u2705
+2025-08-18 06:03:42,085 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.0.0.5:5000
+2025-08-18 06:03:42,085 - INFO - [33mPress CTRL+C to quit[0m
+2025-08-18 06:03:42,086 - INFO -  * Restarting with stat
+2025-08-18 06:03:42,847 - INFO - App API server started \u2705
+2025-08-18 06:03:42,859 - WARNING -  * Debugger is active!
+2025-08-18 06:03:42,862 - INFO -  * Debugger PIN: 479-243-327
+2025-08-18 06:15:52,319 - INFO -  * Detected change in 'C:\\Users\\ABhati\\Documents\\yantrax_rl_final\\backend\\main.py', reloading
+2025-08-18 06:15:52,461 - INFO -  * Restarting with stat
+2025-08-18 06:16:06,127 - INFO - Yantra X RL backend started \u2705
+2025-08-18 06:16:06,156 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.0.0.5:5000
+2025-08-18 06:16:06,156 - INFO - [33mPress CTRL+C to quit[0m
+2025-08-18 06:16:06,157 - INFO -  * Restarting with stat
+2025-08-18 06:16:06,917 - INFO - Yantra X RL backend started \u2705
+2025-08-18 06:16:06,932 - WARNING -  * Debugger is active!
+2025-08-18 06:16:06,935 - INFO -  * Debugger PIN: 479-243-327
+2025-08-18 06:17:00,189 - INFO - 127.0.0.1 - - [18/Aug/2025 06:17:00] "GET / HTTP/1.1" 200 -
+2025-08-18 06:17:05,739 - INFO - 127.0.0.1 - - [18/Aug/2025 06:17:05] "GET / HTTP/1.1" 200 -
+2025-08-18 06:17:05,988 - INFO - 127.0.0.1 - - [18/Aug/2025 06:17:05] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-08-18 06:17:11,388 - INFO - 127.0.0.1 - - [18/Aug/2025 06:17:11] "[33mGET /run_rl_cycle HTTP/1.1[0m" 404 -
+2025-08-18 06:17:48,441 - INFO - 127.0.0.1 - - [18/Aug/2025 06:17:48] "[33mGET /run_rl_cycle HTTP/1.1[0m" 404 -
+2025-08-18 06:19:14,354 - INFO - 127.0.0.1 - - [18/Aug/2025 06:19:14] "GET /god-cycle HTTP/1.1" 200 -
+2025-08-18 06:19:48,601 - INFO -  * Detected change in 'C:\\Users\\ABhati\\Documents\\yantrax_rl_final\\backend\\main.py', reloading
+2025-08-18 06:19:48,730 - INFO -  * Restarting with stat
+2025-08-18 06:19:49,637 - INFO - Yantra X RL backend started \u2705
+2025-08-18 06:19:49,655 - WARNING -  * Debugger is active!
+2025-08-18 06:19:49,658 - INFO -  * Debugger PIN: 479-243-327
+2025-08-18 06:19:50,924 - INFO - 127.0.0.1 - - [18/Aug/2025 06:19:50] "GET / HTTP/1.1" 200 -
+2025-08-18 06:19:58,948 - INFO - 127.0.0.1 - - [18/Aug/2025 06:19:58] "GET /health HTTP/1.1" 200 -
+2025-08-18 06:20:04,911 - INFO - 127.0.0.1 - - [18/Aug/2025 06:20:04] "GET /god-cycle HTTP/1.1" 200 -
+2025-08-18 06:27:33,402 - INFO -  * Detected change in 'C:\\Users\\ABhati\\Documents\\yantrax_rl_final\\backend\\main.py', reloading
+2025-08-18 06:27:33,542 - INFO -  * Restarting with stat
+2025-08-18 06:27:34,269 - INFO - Yantra X RL backend started \u2705
+2025-08-18 06:27:34,282 - WARNING -  * Debugger is active!
+2025-08-18 06:27:34,284 - INFO -  * Debugger PIN: 479-243-327
+2025-08-18 06:28:26,327 - INFO - 127.0.0.1 - - [18/Aug/2025 06:28:26] "GET / HTTP/1.1" 200 -
+2025-08-18 06:28:31,884 - INFO - 127.0.0.1 - - [18/Aug/2025 06:28:31] "[33mGET /run_rl_cycle HTTP/1.1[0m" 404 -
+2025-08-18 06:28:36,239 - INFO - 127.0.0.1 - - [18/Aug/2025 06:28:36] "GET /logs HTTP/1.1" 200 -
+2025-08-18 06:30:31,935 - INFO -  * Detected change in 'C:\\Users\\ABhati\\Documents\\yantrax_rl_final\\backend\\main.py', reloading
+2025-08-18 06:30:32,057 - INFO -  * Restarting with stat
+2025-08-18 06:30:32,783 - INFO - Yantra X RL backend started \u2705
+2025-08-18 06:30:32,795 - WARNING -  * Debugger is active!
+2025-08-18 06:30:32,798 - INFO -  * Debugger PIN: 479-243-327
+2025-08-18 06:30:33,945 - INFO -  * Detected change in 'C:\\Users\\ABhati\\Documents\\yantrax_rl_final\\backend\\main.py', reloading
+2025-08-18 06:30:34,090 - INFO -  * Restarting with stat
+2025-08-18 06:30:34,936 - INFO - Yantra X RL backend started \u2705
+2025-08-18 06:30:34,952 - WARNING -  * Debugger is active!
+2025-08-18 06:30:34,956 - INFO -  * Debugger PIN: 479-243-327
+2025-08-18 06:30:40,569 - INFO - 127.0.0.1 - - [18/Aug/2025 06:30:40] "GET /god-cycle HTTP/1.1" 200 -

@@ -1,12 +1,17 @@
-# ai_agents/data_whisperer.py - Placeholder content for RL-enhanced Yantra X
-import random
+# ai_agents/data_whisperer.py
+from services.market_data_service import get_latest_price
 
-def analyze_data():
-    # Simulate fetching and analyzing market data
-    market_data = {
-        "price": round(random.uniform(10000, 60000), 2),
-        "volume": random.randint(100, 10000),
-        "trend": random.choice(["bullish", "bearish", "sideways"])
+def analyze_data(symbol="AAPL"):
+    price = get_latest_price(symbol)
+    if price is None:
+        # fallback: return fake/random market data for RL simulation
+        return {
+            "price": 21000,
+            "volatility": 0.02,
+            "sentiment": "neutral"
+        }
+    return {
+        "price": price,
+        "volatility": 0.02,  # can enhance later with real volatility
+        "sentiment": "neutral"
     }
-    print(f"[Data Whisperer] Market data: {market_data}")
-    return market_data

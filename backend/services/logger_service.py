@@ -1,33 +1,36 @@
-# services/logger_service.py
-
 import logging
 import os
-from datetime import datetime
 
-LOGS_DIR = "logs"
-os.makedirs(LOGS_DIR, exist_ok=True)
+# Ensure logs directory exists
+LOG_DIR = "logs"
+if not os.path.exists(LOG_DIR):
+    os.makedirs(LOG_DIR)
 
-def setup_logger(name="yantra_logger"):
-    timestamp = datetime.now().strftime("%Y-%m-%d")
-    log_file = os.path.join(LOGS_DIR, f"{timestamp}.log")
+# Configure logger
+logging.basicConfig(
+    filename=os.path.join(LOG_DIR, "yantrax.log"),
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+logger = logging.getLogger("YantraX")
 
-    if not logger.handlers:
-        fh = logging.FileHandler(log_file)
-        fh.setLevel(logging.DEBUG)
+def log_message(message: str, level: str = "info"):
+    """Log a message to file and console."""
+    if level == "info":
+        logger.info(message)
+    elif level == "warning":
+        logger.warning(message)
+    elif level == "error":
+        logger.error(message)
+    else:
+        logger.debug(message)
 
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
-
-        formatter = logging.Formatter('%(asctime)s — %(levelname)s — %(message)s')
-        fh.setFormatter(formatter)
-        ch.setFormatter(formatter)
-
-        logger.addHandler(fh)
-        logger.addHandler(ch)
-
-    return logger
-
-logger = setup_logger()
+def get_logs(n: int = 50):
+    """Return last n log lines for dashboard/monitoring."""
+    log_file = os.path.join(LOG_DIR, "yantrax.log")
+    if not os.path.exists(log_file):
+        return ["No logs yet."]
+    with open(log_file, "r") as f:
+        lines = f.readlines()
+        return lines[-n:]

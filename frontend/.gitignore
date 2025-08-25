@@ -22,3 +22,19 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# .gitignore
+
+# Ignore node, platform, and logs
+node_modules/
+npm/
+frontend/nodejs/
+*.log
+
+# VS Code & system files
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Env
+.env*

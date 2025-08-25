@@ -1,8 +1,8 @@
 // src/pages/YantraDashboard.jsx
+// 🔁 Force Vercel redeploy
+// 🔁 Trigger rebuild for case-sensitive JournalCard fix
 
 // 🚀 Trigger build
-
-
 // src/pages/YantraDashboard.jsx
 import React, { useState, useEffect } from "react";
 import MarketStats from "../components/MarketStats";

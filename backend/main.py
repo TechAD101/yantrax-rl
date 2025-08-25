@@ -1,28 +1,46 @@
-# main.py — Final Unified Yantra X Backend (with Commentary Route + CORS)
-
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from services.notification_service import send_notification
-from services.logger_service import logger
+from services.logger_service import logger, get_logs, log_message
 from ai_agents.macro_monk import macro_monk_decision
 from ai_agents.the_ghost import ghost_signal_handler
 from ai_agents.data_whisperer import analyze_data
 from ai_agents.degen_auditor import audit_trade
 from rl_core.rl_trainer import train_model, run_rl_cycle
 from rl_core.env_market_sim import MarketSimEnv
-from rl_core.reward_function import calculate_reward
 import sqlite3
 import os
 from datetime import datetime
-import logging
-import sys
 
+# -----------------------------
+# Flask App Setup
+# -----------------------------
 app = Flask(__name__)
-CORS(app)  # 🛡️ Allow frontend access from any origin
+CORS(app)  # Allow frontend access
 
-# Patch for Windows logging issue (emoji-safe)
-logging.basicConfig(stream=sys.stdout, level=logging.INFO, encoding='utf-8')
-
+# -----------------------------
+# DB Helper
+# -----------------------------
+def init_db():
+    conn = sqlite3.connect("trade_journal.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS journal_entries (
+            timestamp TEXT,
+            signal TEXT,
+            audit TEXT,
+            reward REAL
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS agent_commentary (
+            timestamp TEXT,
+            agent TEXT,
+            comment TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
 
 def log_to_journal(signal, audit, reward):
     conn = sqlite3.connect("trade_journal.db")
@@ -34,27 +52,33 @@ def log_to_journal(signal, audit, reward):
     conn.commit()
     conn.close()
 
-
+# -----------------------------
+# Endpoints
+# -----------------------------
 @app.route("/")
 def index():
-    return jsonify({"message": "Yantra X RL Backend is Live"})
+    return jsonify({"message": "Yantra X RL Backend is Live 🚀"})
 
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok", "message": "Backend is alive"}), 200
 
-@app.route("/ping")
-def ping():
-    return jsonify({"status": "healthy"})
+@app.route("/logs", methods=["GET"])
+def logs():
+    return jsonify({"logs": get_logs()}), 200
 
+@app.route("/notify", methods=["POST"])
+def notify():
+    data = request.get_json(force=True)
+    message = data.get("message", "No message")
+    subject = data.get("subject", "Yantra X Notification")
+    to_email = data.get("to_email", os.getenv("SMTP_USER", ""))
 
-@app.route("/notify")
-def test_notify():
-    sent = send_notification(
-        subject="Yantra X System Test",
-        message="Hello from your AI trading backend.",
-        to_email=os.getenv("SMTP_USER", "")
-    )
-    return jsonify({"notification_sent": sent})
+    send_notification(subject, message, to_email)
+    log_message(f"[Notify] {message}")
+    return jsonify({"status": "sent", "message": message}), 200
 
-
+# ---- Agent Cycle ----
 @app.route("/run-cycle", methods=["POST"])
 def run_cycle():
     try:
@@ -94,13 +118,13 @@ def run_cycle():
         logger.error(f"Error during cycle: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
+# ---- RL Training ----
 @app.route("/train", methods=["POST"])
 def trigger_training():
     result = train_model()
     return jsonify(result)
 
-
+# ---- RL GOD Cycle ----
 @app.route("/god-cycle", methods=["GET"])
 def run_god_cycle():
     try:
@@ -110,7 +134,7 @@ def run_god_cycle():
         logger.error(f"RL Cycle error: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
+# ---- Journal ----
 @app.route("/journal", methods=["GET"])
 def view_journal():
     conn = sqlite3.connect("trade_journal.db")
@@ -119,15 +143,11 @@ def view_journal():
     entries = cursor.fetchall()
     conn.close()
 
-    journal_list = [dict(
-        timestamp=row[0],
-        signal=row[1],
-        audit=row[2],
-        reward=row[3]
-    ) for row in entries]
-
+    journal_list = [
+        {"timestamp": row[0], "signal": row[1], "audit": row[2], "reward": row[3]}
+        for row in entries
+    ]
     return jsonify(journal_list)
-
 
 @app.route("/replay", methods=["GET"])
 def replay_journal():
@@ -147,11 +167,8 @@ def replay_journal():
             "audit": audit,
             "reward": reward
         })
-
     return jsonify({"replay": replay})
 
-
-# ✅ NEW: Agent Commentary Route
 @app.route("/commentary", methods=["GET"])
 def get_agent_commentary():
     conn = sqlite3.connect("trade_journal.db")
@@ -159,17 +176,22 @@ def get_agent_commentary():
     cursor.execute("SELECT * FROM agent_commentary ORDER BY timestamp DESC LIMIT 50")
     rows = cursor.fetchall()
     conn.close()
+    return jsonify([
+        {"timestamp": row[0], "agent": row[1], "comment": row[2]}
+        for row in rows
+    ])
 
-    result = []
-    for row in rows:
-        result.append({
-            "timestamp": row[0],
-            "agent": row[1],
-            "comment": row[2]
-        })
+# ---- Market Stats ----
+@app.route("/market_stats", methods=["GET"])
+def market_stats():
+    symbol = request.args.get("symbol", "AAPL")
+    market_data = analyze_data(symbol)
+    return jsonify({"symbol": symbol, "market_data": market_data})
 
-    return jsonify(result)
-
-
+# -----------------------------
+# Run App
+# -----------------------------
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0")
+    init_db()
+    logger.info("Yantra X RL backend started ✅")
+    app.run(debug=True, host="0.0.0.0", port=5000)

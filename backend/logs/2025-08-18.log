@@ -1,0 +1,8 @@
+2025-08-18 05:04:55,436 — INFO — [Data Whisperer] Market data: {'price': 25673.7, 'volume': 6063, 'trend': 'bullish'}
+2025-08-18 05:04:55,436 — INFO — [Macro Monk] Strategy: BUY
+2025-08-18 05:04:55,436 — INFO — [The Ghost] Signal: CONFIDENT BUY
+2025-08-18 05:04:55,437 — INFO — [Degen Auditor] Audit: Approved
+2025-08-18 05:04:59,422 — INFO — [Journal] Ep 1: Signal=CONFIDENT BUY, Audit=Approved, Reward=-0.05
+2025-08-18 05:04:59,566 — INFO — [REPLAY] 2025-08-18T05:04:59.412370 | Signal: CONFIDENT BUY | Audit: Approved | Reward: -0.05
+2025-08-18 05:23:04,114 — INFO — [Data Whisperer] Market data: {'price': 21000, 'volatility': 0.02, 'sentiment': 'neutral'}
+2025-08-18 05:23:04,124 — ERROR — Error during cycle: 'trend'
