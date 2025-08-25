@@ -1,12 +1,16 @@
-# requirements.txt - Placeholder content for RL-enhanced Yantra X
 Flask==2.3.3
 requests==2.31.0
 python-dotenv==1.0.1
+<<<<<<< HEAD
 numpy==2.1.1
 pandas>=2.2.2,<3.0
 scikit-learn>=1.5.2,<1.6
+=======
+numpy==1.24.4
+pandas==1.5.3
+scikit-learn==1.5.0
+>>>>>>> a77fc5118146028486e59aa4c855b92fa20c9563
 gym==0.26.2
 gunicorn==21.2.0
-
 flask-cors==4.0.0
 alpaca-py>=0.42.0,<1.0.0

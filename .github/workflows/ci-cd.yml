@@ -1,1 +1,11 @@
-# ci-cd.yml - Placeholder content for RL-enhanced Yantra X
+name: placeholder
+
+on:
+  workflow_dispatch:
+
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder step
+        run: echo "CI/CD not set up yet"
