@@ -453,3 +453,4 @@ const AnalyticsCard = ({ title, value, indicator, subtext }) => {
 };
 
 export default YantraDashboard;
+

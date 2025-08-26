@@ -162,3 +162,4 @@ export const getMarketPrice = async (symbol = "AAPL") => {
     return { symbol, price: null, error: error.message };
   }
 };
+
