@@ -1,39 +1,4 @@
-<<<<<<< HEAD
-// src/pages/YantraDashboard.jsx
-// 🔁 Force Vercel redeploy
-// 🔁 Trigger rebuild for case-sensitive JournalCard fix
-
-// 🚀 Trigger build
-// src/pages/YantraDashboard.jsx
-import React, { useState, useEffect } from "react";
-import MarketStats from "../components/MarketStats";
-import JournalCard from "../components/JournalCard";
-import AgentCommentary from "../components/AgentCommentary";
-
-const BASE_URL = "https://yantrax-backend.onrender.com";
-
-const YantraDashboard = () => {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [journal, setJournal] = useState([]);
-  const [commentary, setCommentary] = useState([]);
-
-  const runGodCycle = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${BASE_URL}/god-cycle`);
-      if (!res.ok) throw new Error("Backend error");
-      const result = await res.json();
-      setData(result);
-      await fetchJournal();
-      await fetchCommentary();
-    } catch (error) {
-      console.error("❌ Error running god cycle:", error);
-      setError("Backend might be unreachable or returned bad data.");
-    } finally {
-=======
+// src/pages/YantraDashboard.jsx - Enhanced Trading Dashboard
 import React, { useState, useEffect } from "react";
 import {
   getGodCycle,
@@ -44,221 +9,274 @@ import {
 } from "../api/api";
 
 const YantraDashboard = () => {
+  // State management
   const [data, setData] = useState(null);
   const [journal, setJournal] = useState([]);
   const [commentary, setCommentary] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [livePrice, setLivePrice] = useState(null);
+  const [systemStatus, setSystemStatus] = useState("idle");
+  const [autoRefresh, setAutoRefresh] = useState(false);
 
-  // 🚀 THIS BUTTON NOW USES POST /run-cycle instead of GET /god-cycle!
+  // Auto-refresh functionality
+  useEffect(() => {
+    const interval = autoRefresh ? setInterval(fetchAllData, 10000) : null;
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [autoRefresh]);
+
+  // Initial data load
+  useEffect(() => {
+    fetchAllData();
+  }, []);
+
+  const fetchAllData = async () => {
+    setLoading(true);
+    setError("");
+    
+    try {
+      const [journalData, commentaryData, priceData] = await Promise.all([
+        getJournal().catch(() => []),
+        getCommentary().catch(() => []),
+        getMarketPrice("AAPL").catch(() => null),
+      ]);
+
+      setJournal(journalData);
+      setCommentary(commentaryData);
+      setLivePrice(
+        priceData && priceData.price
+          ? "$" + Number(priceData.price).toLocaleString()
+          : "N/A"
+      );
+      setSystemStatus("ready");
+    } catch (err) {
+      console.error("Failed to fetch data:", err);
+      setError("Failed to fetch data. Backend might be down.");
+      setSystemStatus("error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRunCycle = async () => {
     try {
       setLoading(true);
+      setSystemStatus("running");
+      setError("");
+      
       const res = await runRLCycle();
       setData(res);
-      setLoading(false);
+      
+      // Refresh data after successful cycle
+      await fetchAllData();
+      setSystemStatus("completed");
+      
+      // Auto-reset status after 3 seconds
+      setTimeout(() => setSystemStatus("ready"), 3000);
     } catch (err) {
       console.error("❌ Run cycle failed:", err);
       setError("Run cycle failed. Backend might be down.");
->>>>>>> a77fc5118146028486e59aa4c855b92fa20c9563
+      setSystemStatus("error");
+    } finally {
       setLoading(false);
     }
   };
 
-<<<<<<< HEAD
-  const fetchJournal = async () => {
-    try {
-      const res = await fetch(`${BASE_URL}/journal`);
-      const result = await res.json();
-      setJournal(result);
-    } catch (err) {
-      console.error("Failed to fetch journal:", err);
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "running": return "text-yellow-400";
+      case "completed": return "text-green-400";
+      case "error": return "text-red-400";
+      case "ready": return "text-blue-400";
+      default: return "text-gray-400";
     }
   };
 
-  const fetchCommentary = async () => {
-    try {
-      const res = await fetch(`${BASE_URL}/commentary`);
-      const result = await res.json();
-      setCommentary(result);
-    } catch (err) {
-      console.error("Failed to fetch commentary:", err);
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case "running": return "🔄";
+      case "completed": return "✅";
+      case "error": return "❌";
+      case "ready": return "🚀";
+      default: return "⚪";
     }
   };
-
-  useEffect(() => {
-    fetchJournal();
-    fetchCommentary();
-  }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white p-6">
-      <h1 className="text-4xl font-extrabold mb-6 text-center">🧠 Yantra X — RL God Mode</h1>
-
-      <div className="flex justify-center mb-6">
-        <button
-          onClick={runGodCycle}
-          className={`px-6 py-3 text-lg rounded-xl font-semibold shadow-xl transition-all ${
-            loading ? "bg-gray-700 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"
-          }`}
-          disabled={loading}
-        >
-          {loading ? "⏳ Running..." : "🚀 Run RL Cycle"}
-        </button>
-      </div>
-
-      {error && <p className="text-center text-red-500 text-lg mb-4">❌ {error}</p>}
-
-      {data && (
-        <div className="mb-6">
-          <MarketStats data={data} />
+    <div className="min-h-screen bg-gray-900 text-white p-6">
+      {/* Header Section */}
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-600 bg-clip-text text-transparent">
+          🧠 YantraX RL — AI Trading Intelligence
+        </h1>
+        <div className="flex items-center gap-4 text-lg">
+          <span className={`flex items-center gap-2 ${getStatusColor(systemStatus)}`}>
+            {getStatusIcon(systemStatus)} System Status: {systemStatus.toUpperCase()}
+          </span>
+          {livePrice && (
+            <span className="text-green-400">💰 AAPL Live: {livePrice}</span>
+          )}
         </div>
-      )}
-
-      <AgentCommentary commentary={commentary} />
-
-      <h2 className="text-2xl font-bold my-8 text-indigo-400">📜 Cycle History</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {journal.map((entry, i) => (
-          <JournalCard key={i} {...entry} />
-        ))}
       </div>
-=======
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      getJournal(),
-      getCommentary(),
-      getMarketPrice("AAPL"),
-    ])
-      .then(([journalData, commentaryData, priceData]) => {
-        setJournal(journalData);
-        setCommentary(commentaryData);
-        setLivePrice(
-          priceData && priceData.price
-            ? "$" + Number(priceData.price).toLocaleString()
-            : "N/A"
-        );
-        setLoading(false);
-        setError("");
-      })
-      .catch((err) => {
-        setError("Failed to fetch data. Backend might be down.");
-        setLoading(false);
-      });
-  }, []);
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-indigo-900/90 to-black text-white p-6 space-y-8">
-      <header className="text-center">
-        <h1 className="text-4xl font-bold mb-2">🧠 Yantra X — RL God Mode</h1>
+      {/* Control Panel */}
+      <div className="mb-8 flex gap-4 items-center">
         <button
           onClick={handleRunCycle}
-          disabled={loading}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded shadow mt-4"
+          disabled={loading || systemStatus === "running"}
+          className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+            loading || systemStatus === "running"
+              ? "bg-gray-600 cursor-not-allowed"
+              : "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 active:scale-95"
+          }`}
         >
-          🚀 {loading ? "Running..." : "Run RL Cycle"}
+          {loading ? "🔄 Processing..." : "🚀 Run RL God Cycle"}
         </button>
-        {error && <p className="text-red-400 mt-2">{error}</p>}
-      </header>
+        
+        <button
+          onClick={() => setAutoRefresh(!autoRefresh)}
+          className={`px-4 py-2 rounded transition-all ${
+            autoRefresh
+              ? "bg-green-600 hover:bg-green-700"
+              : "bg-gray-600 hover:bg-gray-700"
+          }`}
+        >
+          {autoRefresh ? "⏹️ Stop Auto-Refresh" : "🔄 Auto-Refresh (10s)"}
+        </button>
+        
+        <button
+          onClick={fetchAllData}
+          disabled={loading}
+          className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded transition-all disabled:opacity-50"
+        >
+          🔃 Refresh Data
+        </button>
+      </div>
 
-      {livePrice && (
-        <div className="text-2xl my-4 text-emerald-300 font-bold shadow rounded bg-indigo-950/80 w-fit px-6 py-2 mx-auto">
-          💰 AAPL Live Price: {livePrice}
+      {/* Error Display */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg">
+          ❌ {error}
         </div>
       )}
 
+      {/* RL Cycle Results */}
       {data && (
-        <>
-          {/* Metrics */}
-          <section className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <Card label="Curiosity" value={data.curiosity} />
-            <Card label="Final Balance" value={data.final_balance} />
-            <Card label="Cycle" value={data.final_cycle} />
-            <Card label="Mood" value={data.final_mood} />
-            <Card label="Total Reward" value={data.total_reward} />
-          </section>
+        <div className="mb-8 p-6 bg-gray-800 rounded-lg border border-gray-700">
+          <h2 className="text-2xl font-bold mb-4 text-blue-400">📊 Latest RL Cycle Results</h2>
+          
+          {/* Metrics Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <MetricCard label="Final Balance" value={`$${data.final_balance?.toLocaleString()}`} />
+            <MetricCard label="Total Reward" value={data.total_reward?.toFixed(3)} />
+            <MetricCard label="Market Mood" value={data.final_mood} />
+            <MetricCard label="Curiosity Level" value={data.curiosity?.toFixed(2)} />
+          </div>
 
           {/* RL Steps Table */}
-          <section className="bg-gray-900 p-4 rounded-xl shadow mt-4">
-            <h2 className="text-xl font-semibold mb-2">📊 RL Steps</h2>
-            <div className="overflow-auto max-h-[300px]">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-800">
+          {data.steps && data.steps.length > 0 && (
+            <div className="overflow-x-auto">
+              <h3 className="text-xl font-semibold mb-3 text-purple-400">🎯 RL Training Steps</h3>
+              <table className="w-full border border-gray-600 rounded">
+                <thead className="bg-gray-700">
                   <tr>
-                    <th className="p-2 text-left">#</th>
-                    <th className="p-2 text-left">Action</th>
-                    <th className="p-2 text-left">Reward</th>
-                    <th className="p-2 text-left">State Summary</th>
+                    <th className="p-3 text-left">#</th>
+                    <th className="p-3 text-left">Action</th>
+                    <th className="p-3 text-left">Reward</th>
+                    <th className="p-3 text-left">Price</th>
+                    <th className="p-3 text-left">Position</th>
+                    <th className="p-3 text-left">Mood</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.steps &&
-                    data.steps.map((step, index) => (
-                      <tr key={index} className="border-b border-gray-700">
-                        <td className="p-2">{index + 1}</td>
-                        <td className="p-2">{step.action}</td>
-                        <td className="p-2">{step.reward.toFixed(3)}</td>
-                        <td className="p-2 text-xs text-gray-300">
-                          Position: {step.state.position}, Price: {step.state.price}, Volatility: {step.state.volatility}
-                        </td>
-                      </tr>
-                    ))}
+                  {data.steps.map((step, index) => (
+                    <tr key={index} className="border-t border-gray-600 hover:bg-gray-750">
+                      <td className="p-3">{index + 1}</td>
+                      <td className="p-3 font-mono">{step.action}</td>
+                      <td className={`p-3 ${step.reward > 0 ? 'text-green-400' : step.reward < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                        {step.reward.toFixed(3)}
+                      </td>
+                      <td className="p-3">${step.state?.price?.toLocaleString()}</td>
+                      <td className="p-3">{step.state?.position || 'none'}</td>
+                      <td className="p-3">{step.state?.mood}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-          </section>
-        </>
+          )}
+        </div>
       )}
 
-      {/* Journal Logs */}
-      <section className="bg-gray-900 p-4 rounded-xl shadow">
-        <h2 className="text-xl font-semibold mb-2">🧾 Journal Logs</h2>
-        <ul className="space-y-2 max-h-[200px] overflow-y-auto">
-          {Array.isArray(journal) && journal.length > 0
-            ? journal.map((entry, index) => (
-                <li key={index} className="bg-gray-800 p-3 rounded">
-                  {typeof entry === "object"
-                    ? `${entry.timestamp} | ${entry.signal} | ${entry.audit} | Reward: ${entry.reward}`
-                    : entry}
-                </li>
-              ))
-            : <li className="text-gray-400">No journal entries found.</li>}
-        </ul>
-      </section>
-
-      {/* Agent Commentary */}
-      <section className="bg-gray-900 p-4 rounded-xl shadow">
-        <h2 className="text-xl font-semibold mb-2">🧠 Agent Commentary</h2>
-        <div className="text-sm text-gray-300 whitespace-pre-wrap">
-          {Array.isArray(commentary)
-            ? commentary.map((entry, idx) =>
-                typeof entry === "object"
-                  ? (
-                    <div key={idx}>
-                      <span className="font-bold text-indigo-300">{entry.agent}:</span> {entry.comment}
-                      <span className="block text-xs text-gray-500 ml-2">{entry.timestamp}</span>
+      {/* Dashboard Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Journal Logs */}
+        <div className="p-6 bg-gray-800 rounded-lg border border-gray-700">
+          <h2 className="text-2xl font-bold mb-4 text-green-400">🧾 Trading Journal</h2>
+          <div className="max-h-96 overflow-y-auto space-y-2">
+            {Array.isArray(journal) && journal.length > 0 ? (
+              journal.map((entry, index) => (
+                <div key={index} className="p-3 bg-gray-900 rounded border border-gray-600">
+                  {typeof entry === "object" ? (
+                    <div>
+                      <div className="text-sm text-gray-400 mb-1">{entry.timestamp}</div>
+                      <div className="flex gap-4 text-sm">
+                        <span className="text-blue-400">Signal: {entry.signal}</span>
+                        <span className="text-purple-400">Audit: {entry.audit}</span>
+                        <span className={entry.reward > 0 ? 'text-green-400' : 'text-red-400'}>
+                          Reward: {entry.reward}
+                        </span>
+                      </div>
                     </div>
-                    )
-                  : <div key={idx}>{entry}</div>
-              )
-            : commentary}
+                  ) : (
+                    <div className="text-sm">{entry}</div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="text-gray-400 italic">No journal entries found.</div>
+            )}
+          </div>
         </div>
-      </section>
->>>>>>> a77fc5118146028486e59aa4c855b92fa20c9563
+
+        {/* Agent Commentary */}
+        <div className="p-6 bg-gray-800 rounded-lg border border-gray-700">
+          <h2 className="text-2xl font-bold mb-4 text-orange-400">🧠 Agent Commentary</h2>
+          <div className="max-h-96 overflow-y-auto space-y-2">
+            {Array.isArray(commentary) && commentary.length > 0 ? (
+              commentary.map((entry, idx) =>
+                typeof entry === "object" ? (
+                  <div key={idx} className="p-3 bg-gray-900 rounded border border-gray-600">
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="font-semibold text-blue-400">{entry.agent}:</span>
+                      <span className="text-xs text-gray-400">{entry.timestamp}</span>
+                    </div>
+                    <div className="text-sm">{entry.comment}</div>
+                  </div>
+                ) : (
+                  <div key={idx} className="p-3 bg-gray-900 rounded border border-gray-600 text-sm">
+                    {entry}
+                  </div>
+                )
+              )
+            ) : (
+              <div className="text-gray-400 italic">No agent commentary available.</div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
 
-<<<<<<< HEAD
-=======
-const Card = ({ label, value }) => (
-  <div className="bg-gray-900 p-4 rounded-xl shadow">
-    <h3 className="text-gray-400 text-sm">{label}</h3>
-    <p className="text-xl font-semibold text-emerald-400">{value}</p>
+// Reusable MetricCard component
+const MetricCard = ({ label, value }) => (
+  <div className="p-4 bg-gray-900 rounded border border-gray-600">
+    <div className="text-sm text-gray-400 mb-1">{label}</div>
+    <div className="text-xl font-bold text-white">{value || 'N/A'}</div>
   </div>
 );
 
->>>>>>> a77fc5118146028486e59aa4c855b92fa20c9563
 export default YantraDashboard;
