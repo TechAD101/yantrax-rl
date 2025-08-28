@@ -36,7 +36,7 @@ class EnhancedSentimentAnalyzer:
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
         
-    def preprocess_text(self, text: str) -> str:
+def preprocess_text(self, text: str) -> str:
         """
         Advanced text preprocessing with domain-specific optimization
         """
@@ -284,3 +284,10 @@ if __name__ == "__main__":
     # Save model
     analyzer.save_model('yantrax_sentiment_model.pkl')
     print("\nModel saved successfully!")
+
+# Add this at the VERY END of enhanced_sentiment_analyzer.py
+
+_analyzer_instance = EnhancedSentimentAnalyzer()
+
+def analyze(text):
+    return _analyzer_instance.ensemble_analysis(text)
