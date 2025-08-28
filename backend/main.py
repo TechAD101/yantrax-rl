@@ -337,6 +337,47 @@ ai_agents = AIAgentManager()
 
 # ==================== API ENDPOINTS ====================
 
+@app.route('/api/sentiment', methods=['POST'])
+def analyze_sentiment():
+    data = request.get_json()
+    text = data.get('text', '')
+    # Use enhanced_sentiment_analyzer.py
+    from enhanced_sentiment_analyzer import analyze
+    result = analyze(text)
+    return jsonify({
+        'sentiment': result['sentiment'],
+        'confidence': result['confidence'],
+        'timestamp': datetime.now().isoformat()
+    })
+
+@app.route('/api/payment', methods=['POST'])
+def process_payment():
+    # Use payment_system.py
+    from payment_system import process
+    data = request.get_json()
+    result = process(data)
+    return jsonify(result)
+
+@app.route('/api/subscriptions', methods=['GET', 'POST'])
+def manage_subscriptions():
+    # Use api_monetization.py
+    from services.api_monetization import handle_subscription
+    if request.method == 'POST':
+        data = request.get_json()
+        result = handle_subscription('create', data)
+    else:
+        result = handle_subscription('list', None)
+    return jsonify(result)
+
+@app.route('/api/leads', methods=['POST'])
+def capture_leads():
+    # Use marketing_automation.py
+    from services.marketing_automation import capture_lead
+    data = request.get_json()
+    result = capture_lead(data)
+    return jsonify(result)
+
+
 @app.route('/', methods=['GET'])
 @handle_errors
 def health_check():
