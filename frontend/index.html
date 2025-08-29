@@ -1,13 +1,170 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YantraX RL - Enhanced Sentiment Analysis</title>
+  <style>
+    .rl-banner {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      text-align: center;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .rl-banner h1 {
+      margin: 0;
+      font-size: 2.5em;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    .api-test-section {
+      margin: 30px 0;
+      padding: 20px;
+      border: 2px solid #667eea;
+      border-radius: 8px;
+      background-color: #f8f9ff;
+    }
+    .test-button {
+      background-color: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    .test-button:hover {
+      background-color: #5a67d8;
+    }
+    .test-button:disabled {
+      background-color: #a0aec0;
+      cursor: not-allowed;
+    }
+    .results-area {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #1a202c;
+      color: #e2e8f0;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      white-space: pre-wrap;
+      max-height: 400px;
+      overflow-y: auto;
+      border: 1px solid #4a5568;
+    }
+    .loading {
+      color: #667eea;
+      font-style: italic;
+    }
+    .error {
+      color: #e53e3e;
+    }
+    .success {
+      color: #38a169;
+    }
+  </style>
+</head>
+<body>
+  <!-- YantraX RL Integration Banner -->
+  <div class="rl-banner">
+    <h1>✨ YantraX RL Integrated! ✨</h1>
+    <p>Enhanced sentiment analysis powered by reinforcement learning</p>
+  </div>
+
+  <div id="root"></div>
+  
+  <!-- API Test Section -->
+  <div class="api-test-section">
+    <h2>🧪 Sentiment API Testing</h2>
+    <p>Test the YantraX RL sentiment analysis endpoint:</p>
+    
+    <button id="testSentimentBtn" class="test-button">Test Sentiment API</button>
+    
+    <!-- Results Display Area -->
+    <div id="resultsArea" class="results-area" style="display: none;">
+      <strong>API Response:</strong>
+      <div id="jsonResults"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.jsx"></script>
+  
+  <!-- YantraX RL API Testing Script -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const testBtn = document.getElementById('testSentimentBtn');
+      const resultsArea = document.getElementById('resultsArea');
+      const jsonResults = document.getElementById('jsonResults');
+      
+      testBtn.addEventListener('click', async function() {
+        // Disable button during request
+        testBtn.disabled = true;
+        testBtn.textContent = 'Testing...';
+        
+        // Show results area
+        resultsArea.style.display = 'block';
+        jsonResults.innerHTML = '<span class="loading">🔄 Making API call to /api/v1/sentiment...</span>';
+        
+        try {
+          // Sample text for sentiment analysis
+          const sampleData = {
+            text: "YantraX RL integration is working perfectly! This is an amazing enhancement to our sentiment analysis capabilities.",
+            timestamp: new Date().toISOString(),
+            version: "RL-enhanced-v1.0"
+          };
+          
+          const response = await fetch('/api/v1/sentiment', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify(sampleData)
+          });
+          
+          let result;
+          if (response.ok) {
+            result = await response.json();
+            jsonResults.innerHTML = `<span class="success">✅ Success! Status: ${response.status}</span>\n\n` + 
+                                  JSON.stringify(result, null, 2);
+          } else {
+            // Handle HTTP errors
+            const errorText = await response.text();
+            result = {
+              error: true,
+              status: response.status,
+              statusText: response.statusText,
+              message: errorText || 'API request failed',
+              timestamp: new Date().toISOString()
+            };
+            jsonResults.innerHTML = `<span class="error">❌ Error! Status: ${response.status}</span>\n\n` + 
+                                  JSON.stringify(result, null, 2);
+          }
+          
+        } catch (error) {
+          // Handle network/fetch errors
+          const errorResult = {
+            error: true,
+            type: 'NetworkError',
+            message: error.message,
+            timestamp: new Date().toISOString(),
+            note: 'This may be expected if the backend is not running locally'
+          };
+          
+          jsonResults.innerHTML = `<span class="error">❌ Network Error</span>\n\n` + 
+                                JSON.stringify(errorResult, null, 2);
+        } finally {
+          // Re-enable button
+          testBtn.disabled = false;
+          testBtn.textContent = 'Test Sentiment API';
+        }
+      });
+    });
+  </script>
+</body>
 </html>
