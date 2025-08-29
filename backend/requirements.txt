@@ -15,7 +15,7 @@ python-dotenv==1.0.0
 
 # API Framework & Utilities
 fastapi-limiter==0.1.6
-starlette==0.36.3
+starlette==0.35.2         # COMPATIBLE with FastAPI 0.109.0
 pydantic==2.5.3
 httpx==0.26.0
 aiohttp==3.9.3
@@ -25,7 +25,6 @@ jsonschema==4.21.1
 stripe==8.2.0
 paypalrestsdk==1.13.3
 squareup==43.0.2.20250820
-# (Removed "payment" package -- not available on PyPI)
 
 # API Monetization
 apikey==0.2.4
