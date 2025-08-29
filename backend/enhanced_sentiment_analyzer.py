@@ -1,7 +1,4 @@
-# Content of enhanced_sentiment_analyzer.py
-# Assuming this is the content of the file that needs to be moved.
-
-# Your Python code goes here...#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 YantraX RL Enhanced Sentiment Analyzer
 Advanced sentiment analysis with reinforcement learning optimization
@@ -35,200 +32,215 @@ class EnhancedSentimentAnalyzer:
         # Setup logging
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
-        
-def preprocess_text(self, text: str) -> str:
+    
+    def preprocess_text(self, text: str) -> str:
         """
-        Advanced text preprocessing with domain-specific optimization
+        Clean and preprocess text for sentiment analysis
         """
         if not isinstance(text, str):
             return ""
-            
-        # Remove URLs, mentions, hashtags for cleaner analysis
+        
+        # Remove URLs
         text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
-        text = re.sub(r'@[A-Za-z0-9_]+', '', text)
-        text = re.sub(r'#[A-Za-z0-9_]+', '', text)
         
-        # Handle negations and intensifiers
-        text = re.sub(r"n't", " not", text)
-        text = re.sub(r"'re", " are", text)
-        text = re.sub(r"'ll", " will", text)
-        text = re.sub(r"'ve", " have", text)
+        # Remove special characters but keep emoticons
+        text = re.sub(r'[^\w\s\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF]', ' ', text)
         
-        # Clean whitespace
-        text = ' '.join(text.split())
+        # Handle repeated characters
+        text = re.sub(r'(.)\1{2,}', r'\1\1', text)
         
-        return text.strip()
+        # Remove extra whitespace
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        return text
     
-    def textblob_analysis(self, text: str) -> Dict[str, float]:
+    def textblob_sentiment(self, text: str) -> Dict[str, float]:
         """
-        TextBlob-based sentiment analysis
+        Get sentiment using TextBlob
         """
-        blob = TextBlob(text)
-        polarity = blob.sentiment.polarity
-        subjectivity = blob.sentiment.subjectivity
-        
-        return {
-            'polarity': polarity,
-            'subjectivity': subjectivity,
-            'confidence': abs(polarity)
-        }
+        try:
+            blob = TextBlob(text)
+            polarity = blob.sentiment.polarity  # -1 to 1
+            subjectivity = blob.sentiment.subjectivity  # 0 to 1
+            
+            # Convert polarity to confidence
+            confidence = abs(polarity) * subjectivity
+            
+            return {
+                'polarity': polarity,
+                'confidence': confidence,
+                'subjectivity': subjectivity
+            }
+        except Exception as e:
+            self.logger.error(f"TextBlob error: {e}")
+            return {'polarity': 0.0, 'confidence': 0.0, 'subjectivity': 0.0}
     
-    def vader_analysis(self, text: str) -> Dict[str, float]:
+    def vader_sentiment(self, text: str) -> Dict[str, float]:
         """
-        VADER sentiment analysis
+        Get sentiment using VADER
         """
-        scores = self.vader_analyzer.polarity_scores(text)
-        return {
-            'compound': scores['compound'],
-            'positive': scores['pos'],
-            'neutral': scores['neu'],
-            'negative': scores['neg'],
-            'confidence': abs(scores['compound'])
-        }
+        try:
+            scores = self.vader_analyzer.polarity_scores(text)
+            return {
+                'polarity': scores['compound'],
+                'confidence': abs(scores['compound']),
+                'positive': scores['pos'],
+                'negative': scores['neg'],
+                'neutral': scores['neu']
+            }
+        except Exception as e:
+            self.logger.error(f"VADER error: {e}")
+            return {'polarity': 0.0, 'confidence': 0.0, 'positive': 0.0, 'negative': 0.0, 'neutral': 1.0}
     
-    def custom_sentiment_analysis(self, text: str) -> Dict[str, float]:
+    def custom_sentiment(self, text: str) -> Dict[str, float]:
         """
-        Custom rule-based sentiment analysis with domain-specific keywords
+        Custom rule-based sentiment analysis
         """
-        positive_words = ['excellent', 'amazing', 'outstanding', 'fantastic', 'love', 'perfect', 'wonderful']
-        negative_words = ['terrible', 'awful', 'horrible', 'hate', 'worst', 'disgusting', 'pathetic']
+        positive_words = ['good', 'great', 'excellent', 'amazing', 'awesome', 'fantastic', 'wonderful', 'love', 'best']
+        negative_words = ['bad', 'terrible', 'awful', 'horrible', 'worst', 'hate', 'disgusting', 'disappointing']
         
         text_lower = text.lower()
         words = text_lower.split()
         
         positive_count = sum(1 for word in words if word in positive_words)
         negative_count = sum(1 for word in words if word in negative_words)
-        
         total_words = len(words)
+        
         if total_words == 0:
             return {'polarity': 0.0, 'confidence': 0.0}
         
+        # Calculate polarity
         polarity = (positive_count - negative_count) / total_words
-        confidence = (positive_count + negative_count) / total_words
+        polarity = max(-1.0, min(1.0, polarity * 5))  # Scale and bound
+        
+        # Calculate confidence based on sentiment word density
+        sentiment_density = (positive_count + negative_count) / total_words
+        confidence = min(1.0, sentiment_density * 2)
         
         return {
-            'polarity': np.clip(polarity, -1, 1),
-            'confidence': min(confidence, 1.0)
+            'polarity': polarity,
+            'confidence': confidence,
+            'positive_words': positive_count,
+            'negative_words': negative_count
         }
     
     def ensemble_analysis(self, text: str) -> Dict[str, Any]:
         """
-        Ensemble sentiment analysis combining multiple models with RL optimization
+        Perform ensemble sentiment analysis with RL-weighted combination
         """
-        preprocessed_text = self.preprocess_text(text)
+        if not text or not text.strip():
+            return {
+                'sentiment': 'neutral',
+                'polarity': 0.0,
+                'confidence': 0.0,
+                'models': {}
+            }
         
-        # Get predictions from all models
-        textblob_result = self.textblob_analysis(preprocessed_text)
-        vader_result = self.vader_analysis(preprocessed_text)
-        custom_result = self.custom_sentiment_analysis(preprocessed_text)
+        # Preprocess text
+        clean_text = self.preprocess_text(text)
         
-        # Extract polarities and confidences
-        polarities = np.array([
-            textblob_result['polarity'],
-            vader_result['compound'],
-            custom_result['polarity']
-        ])
+        # Get individual model predictions
+        textblob_result = self.textblob_sentiment(clean_text)
+        vader_result = self.vader_sentiment(clean_text)
+        custom_result = self.custom_sentiment(clean_text)
         
-        confidences = np.array([
-            textblob_result['confidence'],
-            vader_result['confidence'],
-            custom_result['confidence']
-        ])
+        # Store individual results
+        models = {
+            'textblob': textblob_result,
+            'vader': vader_result,
+            'custom': custom_result
+        }
         
-        # RL-optimized weighted ensemble
-        weighted_polarity = np.sum(self.rl_weights * polarities)
-        weighted_confidence = np.sum(self.rl_weights * confidences)
+        # Calculate weighted ensemble
+        polarities = [textblob_result['polarity'], vader_result['polarity'], custom_result['polarity']]
+        confidences = [textblob_result['confidence'], vader_result['confidence'], custom_result['confidence']]
         
-        # Classify sentiment
-        if weighted_polarity > 0.1:
+        # Weighted average
+        ensemble_polarity = np.average(polarities, weights=self.rl_weights)
+        ensemble_confidence = np.average(confidences, weights=self.rl_weights)
+        
+        # Determine sentiment label
+        if ensemble_polarity > 0.1:
             sentiment = 'positive'
-        elif weighted_polarity < -0.1:
+        elif ensemble_polarity < -0.1:
             sentiment = 'negative'
         else:
             sentiment = 'neutral'
         
         result = {
+            'text': text,
             'sentiment': sentiment,
-            'polarity': float(weighted_polarity),
-            'confidence': float(weighted_confidence),
-            'individual_results': {
-                'textblob': textblob_result,
-                'vader': vader_result,
-                'custom': custom_result
-            },
-            'timestamp': datetime.now().isoformat(),
-            'processed_text': preprocessed_text
+            'polarity': float(ensemble_polarity),
+            'confidence': float(ensemble_confidence),
+            'models': models,
+            'weights': self.rl_weights.tolist(),
+            'timestamp': datetime.now().isoformat()
         }
         
+        # Store in history for RL learning
         self.sentiment_history.append(result)
+        if len(self.sentiment_history) > 1000:  # Keep only recent history
+            self.sentiment_history = self.sentiment_history[-1000:]
+        
         return result
     
-    def update_rl_weights(self, feedback_score: float, prediction_accuracy: float):
+    def update_weights(self, feedback: Dict[str, float]):
         """
-        Update RL weights based on feedback and prediction accuracy
+        Update RL weights based on feedback
         """
         learning_rate = 0.01
         
-        # Simple reward-based weight adjustment
-        reward = feedback_score * prediction_accuracy
-        
-        if reward > 0.8:
-            # Successful prediction, slightly increase current weights
-            self.rl_weights += learning_rate * reward
-        else:
-            # Poor prediction, adjust weights
-            self.rl_weights -= learning_rate * (1 - reward)
+        # Simple gradient update based on performance feedback
+        for i, model in enumerate(['textblob', 'vader', 'custom']):
+            if model in feedback:
+                performance = feedback[model]
+                # Update weight based on performance (0-1 scale)
+                self.rl_weights[i] += learning_rate * (performance - 0.5)
         
         # Normalize weights
-        self.rl_weights = np.clip(self.rl_weights, 0.1, 0.8)
-        self.rl_weights = self.rl_weights / np.sum(self.rl_weights)
+        self.rl_weights = np.abs(self.rl_weights)  # Ensure positive
+        self.rl_weights = self.rl_weights / np.sum(self.rl_weights)  # Normalize
         
-        self.logger.info(f"Updated RL weights: {self.rl_weights}")
+        self.logger.info(f"Updated weights: {self.rl_weights}")
     
-    def batch_analyze(self, texts: List[str]) -> List[Dict[str, Any]]:
+    def get_sentiment_trends(self) -> Dict[str, Any]:
         """
-        Analyze multiple texts efficiently
+        Analyze sentiment trends from history
         """
-        return [self.ensemble_analysis(text) for text in texts]
-    
-    def get_sentiment_trends(self, window_size: int = 10) -> Dict[str, Any]:
-        """
-        Analyze sentiment trends from recent history
-        """
-        if len(self.sentiment_history) < window_size:
-            return {'error': 'Insufficient data for trend analysis'}
+        if not self.sentiment_history:
+            return {'error': 'No sentiment history available'}
         
-        recent_sentiments = self.sentiment_history[-window_size:]
-        polarities = [s['polarity'] for s in recent_sentiments]
+        df = pd.DataFrame(self.sentiment_history)
         
-        trend = {
-            'average_polarity': np.mean(polarities),
-            'polarity_std': np.std(polarities),
-            'trend_direction': 'increasing' if polarities[-1] > polarities[0] else 'decreasing',
-            'sentiment_distribution': {
-                'positive': sum(1 for s in recent_sentiments if s['sentiment'] == 'positive'),
-                'neutral': sum(1 for s in recent_sentiments if s['sentiment'] == 'neutral'),
-                'negative': sum(1 for s in recent_sentiments if s['sentiment'] == 'negative')
-            }
+        trends = {
+            'total_analyses': len(df),
+            'sentiment_distribution': df['sentiment'].value_counts().to_dict(),
+            'average_polarity': df['polarity'].mean(),
+            'polarity_std': df['polarity'].std(),
+            'confidence_avg': df['confidence'].mean(),
+            'recent_trend': df.tail(10)['sentiment'].tolist()
         }
         
-        return trend
+        return trends
     
     def save_model(self, filepath: str):
         """
-        Save the trained model and weights
+        Save the trained model
         """
-        model_data = {
-            'rl_weights': self.rl_weights,
-            'sentiment_history': self.sentiment_history[-1000:],  # Keep last 1000 records
-            'model_performance': self.model_performance,
-            'confidence_threshold': self.confidence_threshold
-        }
-        
-        with open(filepath, 'wb') as f:
-            pickle.dump(model_data, f)
-        
-        self.logger.info(f"Model saved to {filepath}")
+        try:
+            model_data = {
+                'rl_weights': self.rl_weights,
+                'sentiment_history': self.sentiment_history,
+                'model_performance': self.model_performance,
+                'confidence_threshold': self.confidence_threshold
+            }
+            
+            with open(filepath, 'wb') as f:
+                pickle.dump(model_data, f)
+            
+            self.logger.info(f"Model saved to {filepath}")
+        except Exception as e:
+            self.logger.error(f"Error saving model: {e}")
     
     def load_model(self, filepath: str):
         """
@@ -286,7 +298,6 @@ if __name__ == "__main__":
     print("\nModel saved successfully!")
 
 # Add this at the VERY END of enhanced_sentiment_analyzer.py
-
 _analyzer_instance = EnhancedSentimentAnalyzer()
 
 def analyze(text):
