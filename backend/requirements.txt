@@ -15,7 +15,7 @@ python-dotenv==1.0.0
 
 # API Framework & Utilities
 fastapi-limiter==0.1.6
-pydantic==2.5.3
+pydantic==2.7.1          # Updated for Squareup compatibility
 httpx==0.26.0
 aiohttp==3.9.3
 jsonschema==4.21.1
