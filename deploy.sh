@@ -321,7 +321,7 @@ EOF
     echo ""
     echo -e "${GREEN}✅ YantraX RL is now running!${NC}"
     echo -e "${BLUE}Access the services at:${NC}"
-    echo -e "${BLUE}├── Backend (Port 5000): http://localhost:5000${NC}"
+    echo -e "${BLUE}├── Backend (Port 5000): http://https://symmetrical-zebra-x5xjjpjr79q5fp4g6-5000.app.github.dev${NC}"
     echo -e "${BLUE}├── API Service (Port 5001): http://localhost:5001${NC}"
     echo -e "${BLUE}└── Frontend (Port 5002): http://localhost:5002${NC}"
     
