@@ -12,7 +12,7 @@ services:
       pip install gunicorn
     startCommand: |
       cd backend &&
-      gunicorn main_enhanced:app -b 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+      gunicorn app:app -b 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
     healthCheckPath: /health
     envVars:
       - key: FLASK_ENV
