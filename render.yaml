@@ -1,4 +1,4 @@
-# render.yaml - YantraX RL Enhanced AI Firm Deployment Configuration
+# render.yaml - YantraX RL Enhanced AI Firm Deployment
 services:
   - type: web
     name: yantrax-rl-backend
@@ -16,17 +16,9 @@ services:
     envVars:
       - key: FLASK_ENV
         value: production
-      - key: PORT
-        value: 5000
       - key: AI_FIRM_ENABLED
         value: true
-      - key: PYTHON_VERSION
-        value: 3.10.13
-    disk:
-      name: yantrax-data
-      sizeGB: 1
-      mountPath: /opt/render/project/data
-    
+        
 build:
   environment:
     python: 3.10.13
