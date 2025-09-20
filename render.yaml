@@ -1,4 +1,32 @@
-# render.yaml - Placeholder content for RL-enhanced Yantra X
+# render.yaml - YantraX RL Enhanced AI Firm Deployment Configuration
+services:
+  - type: web
+    name: yantrax-rl-backend
+    env: python
+    region: oregon
+    branch: supernatural-recovery-ai-firm
+    buildCommand: |
+      cd backend &&
+      pip install --upgrade pip &&
+      pip install -r requirements.txt
+    startCommand: |
+      cd backend &&
+      python main_enhanced.py
+    healthCheckPath: /health
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: AI_FIRM_ENABLED
+        value: true
+      - key: PYTHON_VERSION
+        value: 3.10.13
+    disk:
+      name: yantrax-data
+      sizeGB: 1
+      mountPath: /opt/render/project/data
+    
 build:
   environment:
     python: 3.10.13
