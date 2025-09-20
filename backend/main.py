@@ -102,12 +102,13 @@ class YantraXEnhancedSystem:
             'timestamp': datetime.now().isoformat()
         }
         
-        voting_result = agent_manager.coordinate_decision_making(context)
+        # Use the correct method from agent_manager
+        voting_result = agent_manager.conduct_agent_voting(context)
         
         # CEO strategic oversight
         ceo_context = {
             'type': 'strategic_trading_decision',
-            'agent_recommendation': voting_result['winning_recommendation'],
+            'agent_recommendation': voting_result['winning_signal'],
             'consensus_strength': voting_result['consensus_strength'],
             'market_trend': 'bullish'
         }
@@ -115,7 +116,7 @@ class YantraXEnhancedSystem:
         ceo_decision = ceo.make_strategic_decision(ceo_context)
         
         # Execute trade
-        final_signal = voting_result['winning_recommendation']
+        final_signal = voting_result['winning_signal']
         reward = np.random.normal(850, 400)  # Enhanced AI firm performance
         
         self.portfolio_balance += reward
@@ -123,12 +124,12 @@ class YantraXEnhancedSystem:
         return {
             'status': 'success',
             'signal': final_signal,
-            'strategy': 'ENHANCED_AI_FIRM_20_AGENTS',
+            'strategy': 'ENHANCED_AI_FIRM_24_AGENTS',
             'audit': 'CEO_APPROVED',
             'final_balance': round(self.portfolio_balance, 2),
             'total_reward': round(reward, 2),
             'enhanced_coordination': {
-                'total_agents_coordinated': voting_result['total_votes'],
+                'total_agents_coordinated': voting_result['participating_agents'],
                 'consensus_strength': voting_result['consensus_strength'],
                 'ceo_confidence': ceo_decision.confidence,
                 'ceo_reasoning': ceo_decision.reasoning
@@ -187,16 +188,16 @@ class YantraXEnhancedSystem:
             }
         
         # Enhanced agents from agent manager
-        agent_status = agent_manager.get_agent_status()
-        for dept_name, dept_agents in agent_status.items():
-            for agent in dept_agents:
-                all_agents[agent['name']] = {
-                    'confidence': agent['confidence_level'],
-                    'performance': agent['performance_score'],
-                    'department': dept_name,
-                    'role': agent['role'],
-                    'status': 'active' if agent['active'] else 'inactive'
-                }
+        for name, data in agent_manager.enhanced_agents.items():
+            all_agents[name] = {
+                'confidence': round(data['confidence'], 3),
+                'performance': data['performance'],
+                'department': data['department'],
+                'role': data['role'],
+                'specialty': data['specialty'],
+                'persona': data.get('persona', False),
+                'status': 'operational'
+            }
         
         return all_agents
 
@@ -255,8 +256,7 @@ market_data = MarketDataManager()
 def health_check():
     total_agents = len(yantrax_system.legacy_agents)
     if AI_FIRM_READY:
-        agent_status = agent_manager.get_agent_status()
-        total_agents += sum(len(dept_agents) for dept_agents in agent_status.values())
+        total_agents += len(agent_manager.enhanced_agents)
     
     return jsonify({
         'message': 'YantraX RL Backend - Enhanced AI Firm Architecture v4.0',
@@ -277,8 +277,7 @@ def health_check():
 def detailed_health():
     total_agents = len(yantrax_system.legacy_agents)
     if AI_FIRM_READY:
-        agent_status = agent_manager.get_agent_status()
-        total_agents += sum(len(dept_agents) for dept_agents in agent_status.values())
+        total_agents += len(agent_manager.enhanced_agents)
         
     return jsonify({
         'status': 'healthy',
@@ -337,16 +336,16 @@ def ai_firm_status():
     agent_status = agent_manager.get_agent_status()
     ceo_status = ceo.get_ceo_status()
     
-    total_agents = len(yantrax_system.legacy_agents) + sum(len(dept_agents) for dept_agents in agent_status.values())
+    total_agents = len(yantrax_system.legacy_agents) + agent_status['total_agents']
     
     return jsonify({
         'status': 'fully_operational',
         'ai_firm': {
             'total_agents': total_agents,
-            'departments': agent_status,
+            'departments': agent_status['departments'],
             'ceo_metrics': ceo_status,
-            'personas_active': True,
-            'recent_coordination_sessions': len(agent_manager.voting_sessions)
+            'personas_active': agent_status['personas_active'],
+            'recent_coordination_sessions': agent_status['recent_voting_sessions']
         },
         'system_performance': {
             'portfolio_balance': yantrax_system.portfolio_balance,
