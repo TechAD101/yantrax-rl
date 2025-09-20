@@ -19,6 +19,13 @@ except ImportError as e:
     print(f"❌ Import error: {e}")
     sys.exit(1)
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # AI Firm imports with fallback
 try:
     from ai_firm.ceo import AutonomousCEO, CEOPersonality
@@ -47,7 +54,8 @@ def handle_errors(func):
             return result
         except Exception as e:
             error_counts['api_call_errors'] += 1
-            return jsonify({'error': str(e), 'timestamp': datetime.now().isoformat()}), 500
+            logger.exception("API error")
+            return jsonify({'error': 'internal_server_error', 'timestamp': datetime.now().isoformat()}), 500
     return wrapper
 
 # Initialize AI Firm
@@ -245,13 +253,17 @@ market_data = MarketDataManager()
 @app.route('/', methods=['GET'])
 @handle_errors
 def health_check():
+    total_agents = len(yantrax_system.legacy_agents)
+    if AI_FIRM_READY:
+        total_agents += len(agent_manager.enhanced_agents)
+    
     return jsonify({
         'message': 'YantraX RL Backend - Enhanced AI Firm Architecture v4.0',
         'status': 'operational',
         'version': '4.0.0',
         'ai_firm': {
             'enabled': AI_FIRM_READY,
-            'total_agents': len(yantrax_system.legacy_agents) + (len(agent_manager.enhanced_agents) if AI_FIRM_READY else 0),
+            'total_agents': total_agents,
             'ceo_active': AI_FIRM_READY,
             'personas_active': AI_FIRM_READY
         },
@@ -262,6 +274,10 @@ def health_check():
 @app.route('/health', methods=['GET'])
 @handle_errors
 def detailed_health():
+    total_agents = len(yantrax_system.legacy_agents)
+    if AI_FIRM_READY:
+        total_agents += len(agent_manager.enhanced_agents)
+        
     return jsonify({
         'status': 'healthy',
         'services': {
@@ -275,7 +291,7 @@ def detailed_health():
             'warren_persona': AI_FIRM_READY,
             'cathie_persona': AI_FIRM_READY,
             'agent_manager': AI_FIRM_READY,
-            'total_system_agents': len(yantrax_system.legacy_agents) + (len(agent_manager.enhanced_agents) if AI_FIRM_READY else 0)
+            'total_system_agents': total_agents
         },
         'performance': error_counts,
         'timestamp': datetime.now().isoformat()
@@ -313,10 +329,12 @@ def ai_firm_status():
     agent_status = agent_manager.get_agent_status()
     ceo_status = ceo.get_ceo_status()
     
+    total_agents = agent_status['total_agents'] + len(yantrax_system.legacy_agents)
+    
     return jsonify({
         'status': 'fully_operational',
         'ai_firm': {
-            'total_agents': agent_status['total_agents'],
+            'total_agents': total_agents,
             'departments': agent_status['departments'],
             'ceo_metrics': ceo_status,
             'personas_active': agent_status['personas_active'],
