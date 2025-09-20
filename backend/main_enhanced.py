@@ -32,6 +32,10 @@ try:
     from ai_agents.personas.warren import WarrenAgent
     from ai_agents.personas.cathie import CathieAgent
     from ai_firm.agent_manager import AgentManager
+    from ai_firm.department_manager import DepartmentManager
+    from ai_firm.shift_manager import ShiftManager
+    from ai_firm.memory_system import FirmMemorySystem
+    from ai_firm.report_generation import AdvancedReportGenerator
     AI_FIRM_READY = True
     print("✅ AI Firm architecture loaded successfully!")
 except ImportError as e:
@@ -65,6 +69,10 @@ if AI_FIRM_READY:
         warren = WarrenAgent()
         cathie = CathieAgent()
         agent_manager = AgentManager()
+        department_manager = DepartmentManager()
+        shift_manager = ShiftManager()
+        memory_system = FirmMemorySystem()
+        report_generator = AdvancedReportGenerator()
         print("🏢 AI Firm fully operational!")
     except Exception as e:
         print(f"⚠️ AI Firm init error: {e}")
@@ -291,6 +299,10 @@ def detailed_health():
             'warren_persona': AI_FIRM_READY,
             'cathie_persona': AI_FIRM_READY,
             'agent_manager': AI_FIRM_READY,
+            'department_manager': AI_FIRM_READY,
+            'shift_manager': AI_FIRM_READY,
+            'memory_system': AI_FIRM_READY,
+            'report_generator': AI_FIRM_READY,
             'total_system_agents': total_agents
         },
         'performance': error_counts,
@@ -346,6 +358,87 @@ def ai_firm_status():
             'success_rate': round(error_counts['successful_requests'] / max(error_counts['total_requests'], 1) * 100, 2)
         },
         'timestamp': datetime.now().isoformat()
+    })
+
+@app.route('/api/ai-firm/departments', methods=['GET'])
+@handle_errors
+def get_departments_status():
+    """Get 5-department structure status"""
+    
+    if not AI_FIRM_READY:
+        return jsonify({'error': 'AI Firm not operational', 'fallback_mode': True})
+    
+    return jsonify(department_manager.get_department_status())
+
+@app.route('/api/ai-firm/shifts', methods=['GET'])
+@handle_errors
+def get_shift_status():
+    """Get 24/7 shift operation status"""
+    
+    if not AI_FIRM_READY:
+        return jsonify({'error': 'AI Firm not operational', 'fallback_mode': True})
+    
+    return jsonify(shift_manager.get_current_shift_status())
+
+@app.route('/api/ai-firm/shifts/schedule', methods=['GET'])
+@handle_errors
+def get_24h_schedule():
+    """Get complete 24-hour shift schedule"""
+    
+    if not AI_FIRM_READY:
+        return jsonify({'error': 'AI Firm not operational', 'fallback_mode': True})
+    
+    return jsonify(shift_manager.get_24h_schedule())
+
+@app.route('/api/ai-firm/memory/analytics', methods=['GET'])
+@handle_errors
+def get_memory_analytics():
+    """Get memory system analytics"""
+    
+    if not AI_FIRM_READY:
+        return jsonify({'error': 'AI Firm not operational', 'fallback_mode': True})
+    
+    return jsonify(memory_system.get_memory_analytics())
+
+@app.route('/api/ai-firm/reports/daily', methods=['POST'])
+@handle_errors
+def generate_daily_report():
+    """Generate daily AI firm report"""
+    
+    if not AI_FIRM_READY:
+        return jsonify({'error': 'AI Firm not operational', 'fallback_mode': True})
+    
+    date = datetime.now()
+    report = report_generator.generate_daily_report(date)
+    
+    return jsonify({
+        'report_id': report.id,
+        'title': report.title,
+        'generated_at': report.generated_at.isoformat(),
+        'word_count': report.word_count,
+        'key_insights': report.key_insights,
+        'recommendations': report.recommendations,
+        'download_url': f'/api/ai-firm/reports/{report.id}/download'
+    })
+
+@app.route('/api/ai-firm/reports/ceo-briefing', methods=['POST'])
+@handle_errors
+def generate_ceo_briefing():
+    """Generate CEO strategic briefing"""
+    
+    if not AI_FIRM_READY:
+        return jsonify({'error': 'AI Firm not operational', 'fallback_mode': True})
+    
+    report = report_generator.generate_ceo_briefing()
+    
+    return jsonify({
+        'report_id': report.id,
+        'title': report.title,
+        'generated_at': report.generated_at.isoformat(),
+        'word_count': report.word_count,
+        'key_insights': report.key_insights,
+        'recommendations': report.recommendations,
+        'download_url': f'/api/ai-firm/reports/{report.id}/download'
     })
 
 @app.route('/api/ai-firm/personas/warren', methods=['POST'])
@@ -458,19 +551,31 @@ def get_commentary():
 # Error handlers
 @app.errorhandler(404)
 def not_found(error):
+    available_endpoints = [
+        '/', '/health', '/god-cycle', '/market-price', '/journal', '/commentary',
+        '/api/ai-firm/status', '/api/ai-firm/departments', '/api/ai-firm/shifts',
+        '/api/ai-firm/shifts/schedule', '/api/ai-firm/memory/analytics',
+        '/api/ai-firm/reports/daily', '/api/ai-firm/reports/ceo-briefing',
+        '/api/ai-firm/personas/warren', '/api/ai-firm/personas/cathie'
+    ]
+    
     return jsonify({
         'error': 'Endpoint not found',
-        'available_endpoints': [
-            '/', '/health', '/god-cycle', '/market-price', '/journal',
-            '/api/ai-firm/status', '/api/ai-firm/personas/warren', '/api/ai-firm/personas/cathie'
-        ],
+        'available_endpoints': available_endpoints,
         'timestamp': datetime.now().isoformat()
     }), 404
 
 if __name__ == '__main__':
     print("🚀 YantraX RL v4.0 - Enhanced AI Firm Starting")
     print(f"🤖 AI Firm Ready: {AI_FIRM_READY}")
-    print(f"📊 Total Agents: {len(yantrax_system.legacy_agents) + (len(agent_manager.enhanced_agents) if AI_FIRM_READY else 0)}")
+    
+    if AI_FIRM_READY:
+        total_agents = len(yantrax_system.legacy_agents) + len(agent_manager.enhanced_agents)
+        print(f"📊 Total Agents: {total_agents}")
+        print("🏢 Components: CEO, Departments, Shifts, Memory, Reports")
+        print("🤵 Personas: Warren (Value), Cathie (Growth)")
+    else:
+        print("🔄 Running in compatibility mode")
     
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
