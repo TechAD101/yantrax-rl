@@ -4,7 +4,7 @@ services:
     name: yantrax-rl-backend
     env: python
     region: oregon
-    branch: supernatural-recovery-ai-firm
+    branch: main
     buildCommand: |
       cd backend &&
       pip install --upgrade pip &&
