@@ -1,0 +1,28 @@
+FORCE REDEPLOY TRIGGER: 2025-09-20T05:20:15Z
+
+CRITICAL: AI FIRM NOT ACTIVATED IN PRODUCTION
+
+CURRENT PRODUCTION STATUS (WRONG):
+- Version: 4.0.0
+- AI Firm Enabled: FALSE
+- Total Agents: 4
+- CEO Active: FALSE
+- Personas Active: FALSE
+
+FIXES APPLIED TO MAIN BRANCH:
+- main.py updated with v4.1.0
+- Import path resolution added
+- Python path configuration
+- Enhanced error handling
+
+RENDER.COM MUST DEPLOY THE NEW VERSION NOW!
+
+Expected after deployment:
+- Version: 4.1.0
+- AI Firm Enabled: TRUE
+- Total Agents: 24
+- CEO Active: TRUE
+- Personas Active: TRUE
+
+This file is in backend/ to ensure build detection.
+Timestamp: 2025-09-20T05:20:15Z
