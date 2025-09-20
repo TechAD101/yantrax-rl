@@ -1,5 +1,6 @@
 // YantraDashboard.jsx - Revolutionary AI Trading Intelligence Interface
 import React, { useState, useEffect, useMemo } from "react";
+import AIFirmDashboard from '../components/AIFirmDashboard';
 import {
   getGodCycle,
   getJournal,
@@ -20,6 +21,7 @@ const YantraDashboard = () => {
   const [timeframe, setTimeframe] = useState("1D");
   const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [activeTab, setActiveTab] = useState("overview"); // New tab state
 
   // Multi-Asset Market Data
   const ASSET_UNIVERSE = {
@@ -117,7 +119,7 @@ const YantraDashboard = () => {
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
                   YantraX RL
                 </h1>
-                <span className="text-xs text-gray-400 font-mono">v2.0.0</span>
+                <span className="text-xs text-gray-400 font-mono">v4.0.0</span>
               </div>
               <div className="flex items-center space-x-1">
                 <span className="text-xs text-gray-400">System:</span>
@@ -172,21 +174,29 @@ const YantraDashboard = () => {
       </header>
 
       <div className="p-6 space-y-6">
-        {/* Asset Selection & Controls */}
+        {/* Navigation Tabs */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <h2 className="text-lg font-semibold text-gray-300">Market Intelligence</h2>
-            <div className="flex space-x-2">
-              {Object.entries(ASSET_UNIVERSE).map(([category, assets]) => (
-                <button
-                  key={category}
-                  className="px-3 py-1 text-xs rounded-md bg-gray-700/50 hover:bg-gray-600/50 transition-colors border border-gray-600/30"
-                  onClick={() => setSelectedAssets(assets.slice(0, 4))}
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === 'overview' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50'
+              }`}
+            >
+              📊 Market Overview
+            </button>
+            <button
+              onClick={() => setActiveTab('aifirm')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === 'aifirm' 
+                  ? 'bg-cyan-600 text-white' 
+                  : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50'
+              }`}
+            >
+              🏢 AI Firm
+            </button>
           </div>
 
           <div className="flex items-center space-x-3">
@@ -204,134 +214,162 @@ const YantraDashboard = () => {
           </div>
         </div>
 
-        {/* Main Intelligence Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* AI Agent Status Matrix */}
-          <div className="lg:col-span-2">
+        {/* Tab Content */}
+        {activeTab === 'overview' && (
+          <>
+            {/* Asset Selection & Controls */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <h2 className="text-lg font-semibold text-gray-300">Market Intelligence</h2>
+                <div className="flex space-x-2">
+                  {Object.entries(ASSET_UNIVERSE).map(([category, assets]) => (
+                    <button
+                      key={category}
+                      className="px-3 py-1 text-xs rounded-md bg-gray-700/50 hover:bg-gray-600/50 transition-colors border border-gray-600/30"
+                      onClick={() => setSelectedAssets(assets.slice(0, 4))}
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Main Intelligence Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* AI Agent Status Matrix */}
+              <div className="lg:col-span-2">
+                <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 rounded-xl border border-gray-700/50 p-6 backdrop-blur-sm">
+                  <h3 className="text-xl font-bold mb-4 text-cyan-400 flex items-center">
+                    <span className="w-2 h-2 bg-cyan-400 rounded-full mr-2 animate-pulse"></span>
+                    AI Agent Coordination Matrix
+                  </h3>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {Object.entries(agentStatus).map(([agent, status]) => (
+                      <AgentCard key={agent} agent={agent} status={status} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Risk Analytics */}
+              <div className="space-y-6">
+                {/* Risk Metrics */}
+                <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 rounded-xl border border-gray-700/50 p-6 backdrop-blur-sm">
+                  <h3 className="text-lg font-bold mb-4 text-orange-400">Risk Analytics</h3>
+                  <div className="space-y-3">
+                    <RiskMetric 
+                      label="Volatility" 
+                      value={`${(riskAnalytics.volatility * 100)?.toFixed(1)}%`}
+                      level={riskAnalytics.volatility > 0.3 ? "high" : riskAnalytics.volatility > 0.2 ? "medium" : "low"}
+                    />
+                    <RiskMetric 
+                      label="VaR (95%)" 
+                      value={`${(riskAnalytics.var95 * 100)?.toFixed(1)}%`}
+                      level="medium"
+                    />
+                    <RiskMetric 
+                      label="Correlation" 
+                      value={riskAnalytics.correlation?.toFixed(2)}
+                      level="low"
+                    />
+                    <RiskMetric 
+                      label="Risk Score" 
+                      value={`${(riskAnalytics.riskScore * 100)?.toFixed(0)}/100`}
+                      level={riskAnalytics.riskScore > 0.7 ? "high" : riskAnalytics.riskScore > 0.4 ? "medium" : "low"}
+                    />
+                  </div>
+                </div>
+
+                {/* Performance Metrics */}
+                <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 rounded-xl border border-gray-700/50 p-6 backdrop-blur-sm">
+                  <h3 className="text-lg font-bold mb-4 text-green-400">Performance</h3>
+                  <div className="space-y-3">
+                    <PerformanceMetric 
+                      label="Win Rate" 
+                      value={`${(portfolioMetrics.winRate * 100)?.toFixed(0)}%`}
+                      positive={portfolioMetrics.winRate > 0.5}
+                    />
+                    <PerformanceMetric 
+                      label="Max Drawdown" 
+                      value={`${(portfolioMetrics.maxDrawdown * 100)?.toFixed(1)}%`}
+                      positive={portfolioMetrics.maxDrawdown > -0.1}
+                    />
+                    <PerformanceMetric 
+                      label="Sharpe Ratio" 
+                      value={portfolioMetrics.sharpeRatio?.toFixed(2)}
+                      positive={portfolioMetrics.sharpeRatio > 1.0}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Live Trading Signals */}
             <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 rounded-xl border border-gray-700/50 p-6 backdrop-blur-sm">
-              <h3 className="text-xl font-bold mb-4 text-cyan-400 flex items-center">
-                <span className="w-2 h-2 bg-cyan-400 rounded-full mr-2 animate-pulse"></span>
-                AI Agent Coordination Matrix
+              <h3 className="text-xl font-bold mb-4 text-purple-400 flex items-center">
+                <span className="w-2 h-2 bg-purple-400 rounded-full mr-2 animate-pulse"></span>
+                Live Trading Intelligence
               </h3>
 
-              <div className="grid grid-cols-2 gap-4">
-                {Object.entries(agentStatus).map(([agent, status]) => (
-                  <AgentCard key={agent} agent={agent} status={status} />
-                ))}
-              </div>
-            </div>
-          </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Recent Signals */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-300 mb-3">Recent Signals</h4>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {tradingSignals.slice(0, 6).map((signal) => (
+                      <SignalCard key={signal.id} signal={signal} />
+                    ))}
+                  </div>
+                </div>
 
-          {/* Risk Analytics */}
-          <div className="space-y-6">
-            {/* Risk Metrics */}
-            <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 rounded-xl border border-gray-700/50 p-6 backdrop-blur-sm">
-              <h3 className="text-lg font-bold mb-4 text-orange-400">Risk Analytics</h3>
-              <div className="space-y-3">
-                <RiskMetric 
-                  label="Volatility" 
-                  value={`${(riskAnalytics.volatility * 100)?.toFixed(1)}%`}
-                  level={riskAnalytics.volatility > 0.3 ? "high" : riskAnalytics.volatility > 0.2 ? "medium" : "low"}
-                />
-                <RiskMetric 
-                  label="VaR (95%)" 
-                  value={`${(riskAnalytics.var95 * 100)?.toFixed(1)}%`}
-                  level="medium"
-                />
-                <RiskMetric 
-                  label="Correlation" 
-                  value={riskAnalytics.correlation?.toFixed(2)}
-                  level="low"
-                />
-                <RiskMetric 
-                  label="Risk Score" 
-                  value={`${(riskAnalytics.riskScore * 100)?.toFixed(0)}/100`}
-                  level={riskAnalytics.riskScore > 0.7 ? "high" : riskAnalytics.riskScore > 0.4 ? "medium" : "low"}
-                />
+                {/* Multi-Asset Overview */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-300 mb-3">Asset Monitor</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    {selectedAssets.map((asset) => (
+                      <AssetCard key={asset} symbol={asset} />
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Performance Metrics */}
-            <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 rounded-xl border border-gray-700/50 p-6 backdrop-blur-sm">
-              <h3 className="text-lg font-bold mb-4 text-green-400">Performance</h3>
-              <div className="space-y-3">
-                <PerformanceMetric 
-                  label="Win Rate" 
-                  value={`${(portfolioMetrics.winRate * 100)?.toFixed(0)}%`}
-                  positive={portfolioMetrics.winRate > 0.5}
-                />
-                <PerformanceMetric 
-                  label="Max Drawdown" 
-                  value={`${(portfolioMetrics.maxDrawdown * 100)?.toFixed(1)}%`}
-                  positive={portfolioMetrics.maxDrawdown > -0.1}
-                />
-                <PerformanceMetric 
-                  label="Sharpe Ratio" 
-                  value={portfolioMetrics.sharpeRatio?.toFixed(2)}
-                  positive={portfolioMetrics.sharpeRatio > 1.0}
-                />
-              </div>
+            {/* Advanced Analytics Footer */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <AnalyticsCard
+                title="Market Sentiment"
+                value="Cautiously Optimistic"
+                indicator="neutral"
+                subtext="Fear & Greed Index: 45/100"
+              />
+              <AnalyticsCard
+                title="System Learning"
+                value="Adaptive Mode"
+                indicator="positive"
+                subtext="Model confidence: 89%"
+              />
+              <AnalyticsCard
+                title="Next Analysis"
+                value={`${15 - (Date.now() % 15000) / 1000 | 0}s`}
+                indicator="info"
+                subtext="Real-time cycle monitoring"
+              />
             </div>
-          </div>
-        </div>
+          </>
+        )}
 
-        {/* Live Trading Signals */}
-        <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 rounded-xl border border-gray-700/50 p-6 backdrop-blur-sm">
-          <h3 className="text-xl font-bold mb-4 text-purple-400 flex items-center">
-            <span className="w-2 h-2 bg-purple-400 rounded-full mr-2 animate-pulse"></span>
-            Live Trading Intelligence
-          </h3>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Recent Signals */}
-            <div>
-              <h4 className="text-sm font-semibold text-gray-300 mb-3">Recent Signals</h4>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {tradingSignals.slice(0, 6).map((signal) => (
-                  <SignalCard key={signal.id} signal={signal} />
-                ))}
-              </div>
-            </div>
-
-            {/* Multi-Asset Overview */}
-            <div>
-              <h4 className="text-sm font-semibold text-gray-300 mb-3">Asset Monitor</h4>
-              <div className="grid grid-cols-2 gap-3">
-                {selectedAssets.map((asset) => (
-                  <AssetCard key={asset} symbol={asset} />
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Advanced Analytics Footer */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <AnalyticsCard
-            title="Market Sentiment"
-            value="Cautiously Optimistic"
-            indicator="neutral"
-            subtext="Fear & Greed Index: 45/100"
-          />
-          <AnalyticsCard
-            title="System Learning"
-            value="Adaptive Mode"
-            indicator="positive"
-            subtext="Model confidence: 89%"
-          />
-          <AnalyticsCard
-            title="Next Analysis"
-            value={`${15 - (Date.now() % 15000) / 1000 | 0}s`}
-            indicator="info"
-            subtext="Real-time cycle monitoring"
-          />
-        </div>
+        {/* AI Firm Tab */}
+        {activeTab === 'aifirm' && (
+          <AIFirmDashboard />
+        )}
       </div>
     </div>
   );
 };
 
-// Sophisticated Component Library
+// Component Library (preserved from original)
 const AgentCard = ({ agent, status }) => {
   const agentNames = {
     macroMonk: "Macro Monk",
@@ -453,4 +491,3 @@ const AnalyticsCard = ({ title, value, indicator, subtext }) => {
 };
 
 export default YantraDashboard;
-
