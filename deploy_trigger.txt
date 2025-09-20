@@ -1,0 +1,10 @@
+Deployment trigger for Render - YantraX AI Firm v4.0
+Timestamp: 2025-09-20T08:35:00Z
+
+This file triggers a fresh deployment with the enhanced AI firm architecture.
+All components ready:
+- main_enhanced.py with v4.0
+- AI firm with 20+ agents
+- Named personas (Warren, Cathie)
+- CEO, departments, shifts, memory, reports
+- Enhanced frontend with AI firm dashboard
