@@ -123,7 +123,7 @@ class YantraXEnhancedSystem:
         return {
             'status': 'success',
             'signal': final_signal,
-            'strategy': 'ENHANCED_AI_FIRM_20_AGENTS',
+            'strategy': 'ENHANCED_AI_FIRM_24_AGENTS',
             'audit': 'CEO_APPROVED',
             'final_balance': round(self.portfolio_balance, 2),
             'total_reward': round(reward, 2),
@@ -470,6 +470,7 @@ def not_found(error):
 if __name__ == '__main__':
     print("🚀 YantraX RL v4.0 - Enhanced AI Firm Starting")
     print(f"🤖 AI Firm Ready: {AI_FIRM_READY}")
+    print(f"📊 Total Agents: {len(yantrax_system.legacy_agents) + (len(agent_manager.enhanced_agents) if AI_FIRM_READY else 0)}")
     
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
