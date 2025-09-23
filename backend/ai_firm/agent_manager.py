@@ -8,6 +8,48 @@ import uuid
 import numpy as np
 from datetime import datetime
 from typing import Dict, List, Any
+from dataclasses import dataclass
+from enum import Enum
+
+class DecisionType(Enum):
+    """Types of decisions an agent can make"""
+    BUY = "buy"
+    SELL = "sell"
+    HOLD = "hold"
+    STRONG_BUY = "strong_buy"
+    HIGH_CONVICTION_BUY = "high_conviction_buy"
+    APPROVED = "approved"
+    CAUTION = "caution"
+    
+@dataclass
+class AgentDecision:
+    """Individual agent decision with reasoning and confidence"""
+    agent_id: str
+    agent_name: str
+    decision_type: DecisionType
+    confidence: float
+    reasoning: str
+    timestamp: datetime
+    context: Dict[str, Any]
+    performance_score: float = 0.0
+    risk_assessment: str = "medium"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert decision to dictionary"""
+        return {
+            'agent_id': self.agent_id,
+            'agent_name': self.agent_name,
+            'decision_type': self.decision_type.value,
+            'confidence': self.confidence,
+            'reasoning': self.reasoning,
+            'timestamp': self.timestamp.isoformat(),
+            'context': self.context,
+            'performance_score': self.performance_score,
+            'risk_assessment': self.risk_assessment
+        }
+    
+    def __str__(self) -> str:
+        return f"AgentDecision({self.agent_name}: {self.decision_type.value}, confidence={self.confidence:.2f})"
 
 class Agent:
     """Individual agent class for the AI firm"""
@@ -22,6 +64,30 @@ class Agent:
         self.role = role
         self.persona = persona
         self.id = str(uuid.uuid4())
+        
+    def make_decision(self, context: Dict[str, Any]) -> AgentDecision:
+        """Make a trading decision based on context"""
+        
+        # Generate decision type based on agent specialty
+        decision_type = self._determine_decision_type()
+        
+        # Generate reasoning
+        reasoning = self._generate_reasoning(context)
+        
+        # Create decision
+        decision = AgentDecision(
+            agent_id=self.id,
+            agent_name=self.name,
+            decision_type=decision_type,
+            confidence=self.confidence,
+            reasoning=reasoning,
+            timestamp=datetime.now(),
+            context=context,
+            performance_score=self.performance,
+            risk_assessment=self._assess_risk()
+        )
+        
+        return decision
         
     def generate_signal(self) -> str:
         """Generate trading signal based on agent specialty"""
@@ -41,6 +107,67 @@ class Agent:
                 return np.random.choice(['BUY', 'HOLD'], p=[0.7, 0.3])
             else:
                 return 'HOLD'
+    
+    def _determine_decision_type(self) -> DecisionType:
+        """Determine decision type based on specialty and confidence"""
+        
+        if 'Value' in self.specialty or self.name == 'warren':
+            return DecisionType.BUY if self.confidence > 0.8 else DecisionType.HOLD
+        elif 'Innovation' in self.specialty or self.name == 'cathie':
+            return DecisionType.HIGH_CONVICTION_BUY if self.confidence > 0.85 else DecisionType.BUY
+        elif 'Risk' in self.specialty:
+            return DecisionType.APPROVED if self.confidence > 0.8 else DecisionType.CAUTION
+        else:
+            # Default decision logic
+            if self.confidence > 0.8:
+                return DecisionType.STRONG_BUY
+            elif self.confidence > 0.6:
+                return DecisionType.BUY
+            else:
+                return DecisionType.HOLD
+    
+    def _generate_reasoning(self, context: Dict[str, Any]) -> str:
+        """Generate reasoning for the decision"""
+        
+        reasoning_parts = []
+        
+        # Specialty-based reasoning
+        if 'Value' in self.specialty:
+            reasoning_parts.append(f"Value analysis shows {self.specialty.lower()} metrics are favorable")
+        elif 'Innovation' in self.specialty:
+            reasoning_parts.append(f"Innovation indicators suggest strong disruption potential")
+        elif 'Risk' in self.specialty:
+            reasoning_parts.append(f"Risk assessment indicates {self.specialty.lower()} within acceptable parameters")
+        else:
+            reasoning_parts.append(f"Analysis of {self.specialty.lower()} shows positive signals")
+        
+        # Confidence-based reasoning
+        if self.confidence > 0.8:
+            reasoning_parts.append("High confidence in analysis")
+        elif self.confidence > 0.6:
+            reasoning_parts.append("Moderate confidence with acceptable risk")
+        else:
+            reasoning_parts.append("Lower confidence suggests cautious approach")
+        
+        # Market context
+        if context.get('market_trend') == 'bullish':
+            reasoning_parts.append("Market conditions support positive positioning")
+        elif context.get('market_trend') == 'bearish':
+            reasoning_parts.append("Market headwinds suggest defensive positioning")
+        
+        return ". ".join(reasoning_parts) + "."
+    
+    def _assess_risk(self) -> str:
+        """Assess risk level based on agent characteristics"""
+        
+        if 'Risk' in self.specialty:
+            return 'low'  # Risk specialists are conservative
+        elif self.confidence > 0.85:
+            return 'low'
+        elif self.confidence > 0.65:
+            return 'medium'
+        else:
+            return 'high'
     
     def get_vote_weight(self) -> float:
         """Get voting weight based on agent role"""
@@ -71,6 +198,7 @@ class AgentManager:
     def __init__(self):
         self.enhanced_agents = self._initialize_20_plus_agents()
         self.voting_sessions = []
+        self.decision_history = []
         
     def _initialize_20_plus_agents(self) -> Dict[str, Agent]:
         """Initialize 20+ agent ecosystem"""
@@ -150,15 +278,20 @@ class AgentManager:
         return agents
     
     def conduct_agent_voting(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Conduct weighted voting across all agents"""
+        """Conduct weighted voting across all agents with detailed decisions"""
         
         vote_tally = {}
         total_weight = 0
         participating_agents = []
+        agent_decisions = []
         
         # Include all enhanced agents in voting
         for agent_name, agent in self.enhanced_agents.items():
-            # Generate signal based on agent specialty and confidence
+            # Generate decision
+            decision = agent.make_decision(context)
+            agent_decisions.append(decision)
+            
+            # Generate signal for voting
             signal = agent.generate_signal()
             weight = agent.get_vote_weight() * agent.confidence
             
@@ -173,7 +306,8 @@ class AgentManager:
                 'signal': signal,
                 'confidence': agent.confidence,
                 'weight': weight,
-                'department': agent.department
+                'department': agent.department,
+                'decision': decision.to_dict()
             })
         
         # Determine winning signal
@@ -191,10 +325,15 @@ class AgentManager:
             'participating_agents': len(participating_agents),
             'total_weight': round(total_weight, 2),
             'session_id': str(uuid.uuid4()),
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'agent_decisions': agent_decisions,
+            'detailed_votes': participating_agents
         }
         
+        # Store voting session
         self.voting_sessions.append(voting_result)
+        self.decision_history.extend(agent_decisions)
+        
         return voting_result
     
     def get_agent_status(self) -> Dict[str, Any]:
@@ -218,7 +357,9 @@ class AgentManager:
             'total_agents': len(self.enhanced_agents),
             'departments': department_breakdown,
             'recent_voting_sessions': len(self.voting_sessions),
-            'personas_active': len([a for a in self.enhanced_agents.values() if a.persona])
+            'personas_active': len([a for a in self.enhanced_agents.values() if a.persona]),
+            'total_decisions_made': len(self.decision_history),
+            'operational_status': 'fully_active'
         }
     
     def get_all_agents_status(self) -> Dict[str, Dict[str, Any]]:
@@ -232,3 +373,24 @@ class AgentManager:
             'specialty': agent.specialty,
             'persona': agent.persona
         } for name, agent in self.enhanced_agents.items()}
+    
+    def get_decision_history(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get recent decision history"""
+        recent_decisions = sorted(self.decision_history, key=lambda d: d.timestamp, reverse=True)[:limit]
+        return [decision.to_dict() for decision in recent_decisions]
+    
+    def get_department_performance(self) -> Dict[str, Dict[str, float]]:
+        """Get performance metrics by department"""
+        performance = {}
+        
+        for dept in ['market_intelligence', 'trade_operations', 'risk_control', 'performance_lab', 'communications']:
+            dept_agents = [agent for agent in self.enhanced_agents.values() if agent.department == dept]
+            
+            if dept_agents:
+                performance[dept] = {
+                    'avg_confidence': np.mean([agent.confidence for agent in dept_agents]),
+                    'avg_performance': np.mean([agent.performance for agent in dept_agents]),
+                    'agent_count': len(dept_agents)
+                }
+        
+        return performance
