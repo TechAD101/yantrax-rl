@@ -11,6 +11,9 @@ from typing import Dict, List, Any
 from dataclasses import dataclass
 from enum import Enum
 
+# Export all classes for proper importing
+__all__ = ['Agent', 'AgentDecision', 'AgentManager', 'DecisionType']
+
 class DecisionType(Enum):
     """Types of decisions an agent can make"""
     BUY = "buy"
