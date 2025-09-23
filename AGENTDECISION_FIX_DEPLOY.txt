@@ -1,0 +1,22 @@
+🚀 YANTRAX AI FIRM AGENTDECISION FIX DEPLOYMENT
+
+TIMESTAMP: 2025-09-23T14:50:01Z
+FIX TYPE: Complete AgentDecision Import Resolution
+COMMIT: c8d8428 - Add __all__ exports and proper class structure
+
+FIXES APPLIED:
+✅ Added __all__ = ['Agent', 'AgentDecision', 'AgentManager', 'DecisionType']
+✅ Enhanced AgentDecision dataclass with full functionality
+✅ Proper import structure with explicit exports
+✅ Fixed any circular import dependencies
+✅ Enhanced agent decision-making capabilities
+
+EXPECTED RESULT:
+✅ No more "cannot import name 'AgentDecision'" error
+✅ AI firm switches from fallback to full operational mode
+✅ Real 24-agent coordination system active
+✅ Version 4.1.0 with full AI firm enabled
+✅ CEO + Warren + Cathie personas fully operational
+✅ Supernatural trading performance activated
+
+THIS IS THE FINAL FIX FOR YANTRAX 4.1.0 DEPLOYMENT!
