@@ -22,6 +22,9 @@ const YantraDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [activeTab, setActiveTab] = useState("overview"); // New tab state
+  const [backendVersion, setBackendVersion] = useState("v4.1.0"); // Track backend version
+  const [aiAgentCount, setAiAgentCount] = useState("24+"); // Track agent count
+  const [supernaturalMode, setSupernaturalMode] = useState(true); // Supernatural mode indicator
 
   // Multi-Asset Market Data
   const ASSET_UNIVERSE = {
@@ -31,7 +34,7 @@ const YantraDashboard = () => {
     "Forex": ["EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF"]
   };
 
-  // Enhanced Data Fetching
+  // Enhanced Data Fetching with Backend Version Check
   const fetchComprehensiveData = async () => {
     setLoading(true);
     try {
@@ -41,9 +44,21 @@ const YantraDashboard = () => {
         getCommentary()
       ]);
 
-      // Process RL Cycle Data
+      // Process RL Cycle Data and extract backend info
       if (cycleData.status === 'fulfilled') {
         const data = cycleData.value;
+        
+        // Extract backend version and supernatural mode info
+        if (data.version) {
+          setBackendVersion(data.version);
+        }
+        if (data.ai_firm_coordination && data.ai_firm_coordination.total_agents_coordinated) {
+          setAiAgentCount(data.ai_firm_coordination.total_agents_coordinated + "+");
+        }
+        if (data.supernatural_recovery !== undefined) {
+          setSupernaturalMode(data.supernatural_recovery);
+        }
+        
         setAgentStatus({
           macroMonk: { confidence: 0.87, signal: data.strategy, status: "ACTIVE" },
           theGhost: { confidence: 0.92, signal: data.signal, status: "PROCESSING" },
@@ -115,11 +130,18 @@ const YantraDashboard = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse"></div>
+                <div className={`w-3 h-3 rounded-full animate-pulse ${
+                  supernaturalMode ? "bg-cyan-400" : "bg-green-400"
+                }`}></div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
                   YantraX RL
                 </h1>
-                <span className="text-xs text-gray-400 font-mono">v4.0.0</span>
+                <span className="text-xs text-gray-400 font-mono">{backendVersion}</span>
+                {supernaturalMode && (
+                  <span className="text-xs px-2 py-1 bg-cyan-900/50 text-cyan-400 rounded-full border border-cyan-500/30">
+                    SUPERNATURAL
+                  </span>
+                )}
               </div>
               <div className="flex items-center space-x-1">
                 <span className="text-xs text-gray-400">System:</span>
@@ -127,6 +149,12 @@ const YantraDashboard = () => {
                   systemHealth === "OPERATIONAL" ? "text-green-400" : "text-yellow-400"
                 }`}>
                   {systemHealth}
+                </span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <span className="text-xs text-gray-400">Agents:</span>
+                <span className="text-xs font-semibold text-cyan-400">
+                  {aiAgentCount}
                 </span>
               </div>
             </div>
@@ -195,7 +223,7 @@ const YantraDashboard = () => {
                   : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50'
               }`}
             >
-              🏢 AI Firm
+              🏢 AI Firm {supernaturalMode && "(Supernatural)"}
             </button>
           </div>
 
@@ -206,10 +234,12 @@ const YantraDashboard = () => {
               className={`px-4 py-2 rounded-lg font-medium transition-all ${
                 loading 
                   ? "bg-gray-600 cursor-not-allowed" 
+                  : supernaturalMode 
+                  ? "bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 active:scale-95"
                   : "bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 active:scale-95"
               }`}
             >
-              {loading ? "🔄 Analyzing..." : "🚀 Execute Cycle"}
+              {loading ? "🔄 Analyzing..." : supernaturalMode ? "🌟 Supernatural Cycle" : "🚀 Execute Cycle"}
             </button>
           </div>
         </div>
@@ -243,6 +273,11 @@ const YantraDashboard = () => {
                   <h3 className="text-xl font-bold mb-4 text-cyan-400 flex items-center">
                     <span className="w-2 h-2 bg-cyan-400 rounded-full mr-2 animate-pulse"></span>
                     AI Agent Coordination Matrix
+                    {supernaturalMode && (
+                      <span className="ml-2 text-xs px-2 py-1 bg-cyan-900/50 text-cyan-300 rounded-full border border-cyan-500/30">
+                        {aiAgentCount} Agents
+                      </span>
+                    )}
                   </h3>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -311,6 +346,11 @@ const YantraDashboard = () => {
               <h3 className="text-xl font-bold mb-4 text-purple-400 flex items-center">
                 <span className="w-2 h-2 bg-purple-400 rounded-full mr-2 animate-pulse"></span>
                 Live Trading Intelligence
+                {supernaturalMode && (
+                  <span className="ml-2 text-xs px-2 py-1 bg-purple-900/50 text-purple-300 rounded-full border border-purple-500/30">
+                    Supernatural Mode
+                  </span>
+                )}
               </h3>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -346,9 +386,9 @@ const YantraDashboard = () => {
               />
               <AnalyticsCard
                 title="System Learning"
-                value="Adaptive Mode"
+                value={supernaturalMode ? "Supernatural Mode" : "Adaptive Mode"}
                 indicator="positive"
-                subtext="Model confidence: 89%"
+                subtext={`Model confidence: ${supernaturalMode ? "93" : "89"}%`}
               />
               <AnalyticsCard
                 title="Next Analysis"
@@ -467,7 +507,7 @@ const AssetCard = ({ symbol }) => {
       <div className="font-semibold text-sm text-gray-200 mb-1">{symbol}</div>
       <div className="text-lg font-bold text-white">${mockPrice}</div>
       <div className={`text-xs font-medium ${isPositive ? "text-green-400" : "text-red-400"}`}>
-        {isPositive ? "+" : ""}{mockChange} ({isPositive ? "+" : ""}{(mockChange/mockPrice*100).toFixed(2)}%)
+        {isPositive ? "+" : ""}{mockChange} ({isPositive ? "+" : ""}  {(mockChange/mockPrice*100).toFixed(2)}%)
       </div>
     </div>
   );
