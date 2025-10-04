@@ -1,7 +1,8 @@
 {
-  "name": "frontend",
+  "name": "yantrax-rl-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "4.1.0",
+  "description": "YantraX AI Firm - Supernatural Trading Intelligence Frontend v4.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -27,5 +28,6 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.1",
     "vite": "^7.0.0"
-  }
+  },
+  "keywords": ["yantrax", "ai-trading", "supernatural", "24-agents", "ceo-oversight"]
 }
