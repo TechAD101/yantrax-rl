@@ -10,9 +10,8 @@
     }
   ],
   "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "frontend/dist/$1"
-    }
+    { "handle": "filesystem" },
+    { "src": "/api/(.*)", "dest": "https://yantrax-api.onrender.com/api/$1" },
+    { "src": "/(.*)", "dest": "frontend/dist/$1" }
   ]
 }
