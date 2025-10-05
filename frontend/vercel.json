@@ -5,7 +5,8 @@
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "dist"
+        "distDir": "dist",
+        "buildCommand": "npm run build"
       }
     }
   ],
@@ -15,15 +16,18 @@
       "dest": "/assets/$1"
     },
     {
-      "src": "^/api/.*",
-      "dest": "http://localhost:5000/$0"
+      "handle": "filesystem"
     },
     {
-      "src": ".*",
+      "src": "/api/(.*)",
+      "dest": "https://yantrax-api.onrender.com/api/$1"
+    },
+    {
+      "src": "/(.*)",
       "dest": "/index.html"
     }
   ],
   "env": {
-    "REACT_APP_API_URL": "http://localhost:5000"
+    "VITE_API_URL": "https://yantrax-api.onrender.com"
   }
 }
