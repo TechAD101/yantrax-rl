@@ -2,6 +2,8 @@ import React from 'react';
 import { api } from '../api/api';
 import { useState, useEffect } from 'react';
 
+const EFFECTIVE_API = import.meta.env.VITE_API_URL || 'https://yantrax-api.onrender.com';
+
 const Header = () => {
   const [systemStatus, setSystemStatus] = useState({
     version: '4.1.0',
@@ -53,6 +55,10 @@ const Header = () => {
                 <span className="text-green-400">{systemStatus.status}</span>
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
               </div>
+            </div>
+            {/* Debug: show effective API URL for deployment verification */}
+            <div className="text-xs text-gray-400">
+              API: <span className="text-blue-300">{EFFECTIVE_API}</span>
             </div>
           </div>
         </div>
