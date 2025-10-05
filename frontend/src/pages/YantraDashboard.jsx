@@ -1,18 +1,69 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react';
+import { api, subscribeToUpdates } from '../api/api';
+import Navigation from '../components/Navigation';
 
 const YantraDashboard = () => {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  
+  // Market Data State
   const [marketData, setMarketData] = useState({
     symbol: 'BTC/USD',
-    price: '$58,430.00',
-    change: '+2.34%',
-    volume: '1.2B'
-  })
+    price: null,
+    change: null,
+    volume: null,
+    loading: true
+  });
   
+  // AI Firm State
   const [aiData, setAiData] = useState({
-    signal: 'BUY',
-    confidence: '87%',
-    nextAction: 'Hold position'
-  })
+    signal: null,
+    confidence: null,
+    nextAction: null,
+    departments: [],
+    total_agents: 0,
+    loading: true
+  });
+  
+  // Portfolio State
+  const [portfolio, setPortfolio] = useState({
+    total_value: 0,
+    daily_pnl: 0,
+    total_positions: 0,
+    loading: true
+  });
+
+  // Setup real-time data subscriptions
+  useEffect(() => {
+    const subscriptions = [
+      subscribeToUpdates('getMarketPrice', (data) => {
+        setMarketData({
+          ...data,
+          loading: false
+        });
+      }),
+      
+      subscribeToUpdates('getAiFirmStatus', (data) => {
+        setAiData({
+          signal: data.latest_signal,
+          confidence: data.signal_confidence,
+          nextAction: data.recommended_action,
+          departments: data.departments,
+          total_agents: data.total_agents,
+          loading: false
+        });
+      }),
+      
+      subscribeToUpdates('getPortfolio', (data) => {
+        setPortfolio({
+          ...data,
+          loading: false
+        });
+      })
+    ];
+
+    // Cleanup subscriptions
+    return () => subscriptions.forEach(unsub => unsub());
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">

@@ -1,20 +1,92 @@
-// Centralized API helper for frontend
-export const API_BASE_URL = (function () {
-  // Prefer environment variable injected at build time (Vite/Vercel)
-  if (import.meta && import.meta.env && import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL;
+// YantraX API Client v4.1.0
+const API_BASE_URL = 'https://yantrax-backend.onrender.com';
+const UPDATE_INTERVAL = 15000; // 15 seconds
+
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000;
+
+// Error types
+export const ERROR_TYPES = {
+  NETWORK: 'NETWORK_ERROR',
+  API: 'API_ERROR',
+  TIMEOUT: 'TIMEOUT_ERROR'
+};
+
+// Retry logic with exponential backoff
+const fetchWithRetry = async (url, options = {}, retries = MAX_RETRIES) => {
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (retries > 0) {
+      await new Promise(resolve => 
+        setTimeout(resolve, RETRY_DELAY * (MAX_RETRIES - retries + 1))
+      );
+      return fetchWithRetry(url, options, retries - 1);
+    }
+    throw error;
   }
-  // Fallback to production backend
-  return 'https://yantrax-backend.onrender.com';
-})();
+};
 
-export async function getJson(path) {
-  const res = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include' });
-  if (!res.ok) throw new Error(`API request failed: ${res.status}`);
-  return res.json();
-}
+// API Endpoints
+export const api = {
+  // System Status
+  getStatus: () => fetchWithRetry(`${API_BASE_URL}/`),
+  
+  // AI Firm
+  getAiFirmStatus: () => fetchWithRetry(`${API_BASE_URL}/api/ai-firm/status`),
+  getGodCycle: () => fetchWithRetry(`${API_BASE_URL}/god-cycle`),
+  
+  // Trading & Analysis
+  getMarketPrice: (symbol) => 
+    fetchWithRetry(`${API_BASE_URL}/market-price?symbol=${symbol}`),
+  getPortfolio: () => fetchWithRetry(`${API_BASE_URL}/portfolio`),
+  getTradingJournal: () => fetchWithRetry(`${API_BASE_URL}/journal`),
+  
+  // Personas
+  getWarrenAnalysis: () => 
+    fetchWithRetry(`${API_BASE_URL}/api/ai-firm/personas/warren`),
+  getCathieAnalysis: () => 
+    fetchWithRetry(`${API_BASE_URL}/api/ai-firm/personas/cathie`),
+  
+  // Performance & Risk
+  getRiskMetrics: () => fetchWithRetry(`${API_BASE_URL}/risk-metrics`),
+  getPerformance: () => fetchWithRetry(`${API_BASE_URL}/performance`),
+  
+  // Utilities
+  getCommentary: () => fetchWithRetry(`${API_BASE_URL}/commentary`),
+  runTradingCycle: () => 
+    fetchWithRetry(`${API_BASE_URL}/run-cycle`, { method: 'POST' })
+};
 
-export default { API_BASE_URL, getJson };
+// Real-time data subscription
+export const subscribeToUpdates = (endpoint, callback, interval = UPDATE_INTERVAL) => {
+  const fetch = () => {
+    api[endpoint]()
+      .then(callback)
+      .catch(error => console.error(`Update error (${endpoint}):`, error));
+  };
+
+  fetch(); // Initial fetch
+  const timer = setInterval(fetch, interval);
+  
+  // Return cleanup function
+  return () => clearInterval(timer);
+};
+
+export default api;
 // src/api/api.js - Enhanced API with Multi-Asset Support
 const BASE_URL = process.env.REACT_APP_API_URL || "https://yantrax-backend.onrender.com";
 
