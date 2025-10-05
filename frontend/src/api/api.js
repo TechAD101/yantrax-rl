@@ -1,3 +1,20 @@
+// Centralized API helper for frontend
+export const API_BASE_URL = (function () {
+  // Prefer environment variable injected at build time (Vite/Vercel)
+  if (import.meta && import.meta.env && import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  // Fallback to production backend
+  return 'https://yantrax-backend.onrender.com';
+})();
+
+export async function getJson(path) {
+  const res = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include' });
+  if (!res.ok) throw new Error(`API request failed: ${res.status}`);
+  return res.json();
+}
+
+export default { API_BASE_URL, getJson };
 // src/api/api.js - Enhanced API with Multi-Asset Support
 const BASE_URL = process.env.REACT_APP_API_URL || "https://yantrax-backend.onrender.com";
 

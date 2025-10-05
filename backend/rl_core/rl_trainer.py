@@ -1,5 +1,6 @@
 # backend/rl_core/rl_trainer.py - Production RL Training System
 
+
 import numpy as np
 import random
 import json
@@ -8,6 +9,7 @@ from collections import deque, defaultdict
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 import logging
+import asyncio
 
 from rl_core.env_market_sim import MarketSimEnv
 
@@ -319,6 +321,7 @@ class PPOMemory:
         self.dones = []
 
 
+
 class AdvancedRLTrainer:
     """
     Advanced RL training coordinator with multiple agents and strategies
@@ -330,7 +333,6 @@ class AdvancedRLTrainer:
             "exploration": PPOAgent(learning_rate=0.001),  # Higher LR for exploration
             "conservative": PPOAgent(learning_rate=0.0001)  # Lower LR for stability
         }
-
         self.training_history = []
         self.best_performance = {
             "agent": None,
@@ -338,12 +340,11 @@ class AdvancedRLTrainer:
             "episode": 0
         }
 
-    def train_model(self, episodes: int = 100, learning_rate: float = 0.0003) -> Dict:
+    async def train_model_async(self, episodes: int = 100, learning_rate: float = 0.0003) -> Dict:
         """
-        Enhanced training with multiple agents and performance tracking
+        Enhanced async training with multiple agents and performance tracking
         """
-        logger.info(f"🧠 Starting advanced RL training: {episodes} episodes")
-
+        logger.info(f"🧠 Starting advanced RL training (async): {episodes} episodes")
         env = MarketSimEnv()
         training_results = {
             "episodes_completed": 0,
@@ -353,42 +354,30 @@ class AdvancedRLTrainer:
             "agent_performance": {},
             "training_time": datetime.now().isoformat()
         }
-
         for episode in range(episodes):
-            episode_results = self._train_episode(env, episode)
-
-            # Update training results
+            episode_results = await asyncio.to_thread(self._train_episode, env, episode)
             training_results["episodes_completed"] = episode + 1
             training_results["total_reward"] += episode_results["reward"]
             training_results["best_reward"] = max(training_results["best_reward"], episode_results["reward"])
-
-            # Track best performing agent
             if episode_results["reward"] > self.best_performance["reward"]:
                 self.best_performance.update({
                     "agent": episode_results["best_agent"],
                     "reward": episode_results["reward"],
                     "episode": episode
                 })
-
-            # Periodic evaluation and model saving
             if (episode + 1) % 25 == 0:
-                self._evaluate_agents(env)
-                self._save_best_models()
+                await asyncio.to_thread(self._evaluate_agents, env)
+                await asyncio.to_thread(self._save_best_models)
                 logger.info(f"📊 Episode {episode + 1}/{episodes} | Best Reward: {training_results['best_reward']:.3f}")
-
-        # Calculate final metrics
         avg_reward = training_results["total_reward"] / episodes
         convergence_score = self._calculate_convergence_score()
-
         training_results.update({
             "average_reward": avg_reward,
             "convergence_score": convergence_score,
             "status": "completed",
             "best_agent": self.best_performance["agent"]
         })
-
         logger.info(f"✅ Training completed | Avg Reward: {avg_reward:.3f} | Convergence: {convergence_score:.3f}")
-
         return training_results
 
     def _train_episode(self, env: MarketSimEnv, episode: int) -> Dict:
@@ -498,13 +487,22 @@ class AdvancedRLTrainer:
 
 
 # Global trainer instance
-global_trainer = AdvancedRLTrainer()
+
+# Global trainer instance (must be after class definition)
+
+# Global trainer instance (must be after class definition)
+
+
 
 def train_model(episodes: int = 100, learning_rate: float = 0.0003) -> Dict:
     """
     Main training function - Production ready RL training
     """
     return global_trainer.train_model(episodes, learning_rate)
+
+
+# Global trainer instance (must be after class definition)
+global_trainer = AdvancedRLTrainer()
 
 def run_rl_cycle() -> Dict:
     """

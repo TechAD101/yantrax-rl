@@ -7,3 +7,6 @@ yantrax_code_core.txt
 backup/
 node_modules/
 *.zip
+
+# Local environment files (do NOT commit secrets)
+.env

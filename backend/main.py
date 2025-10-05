@@ -11,6 +11,14 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Union
 import asyncio
 from functools import wraps
+import time
+# Integrations: metrics and circuit breaker services
+try:
+    from services.metrics_service import request_counter, agent_latency, cb_state_changes, get_metrics_text
+except Exception:
+    request_counter = agent_latency = cb_state_changes = None
+    def get_metrics_text():
+        return b''
 
 # Free, reliable imports - no paid dependencies
 try:
@@ -391,13 +399,25 @@ def detailed_health():
         'uptime': f"{(datetime.now().hour % 24)} hours"
     })
 
+
 @app.route('/market-price', methods=['GET'])
 @handle_errors
 def get_market_price():
-    """Get market price for any symbol (FREE API)"""
+    """Get market price for any symbol (FREE API) with input validation"""
     symbol = request.args.get('symbol', 'AAPL').upper()
+    # Input validation: only allow alphanumeric and dash/underscore
+    import re
+    if not re.match(r'^[A-Z0-9\-_]+$', symbol):
+        return jsonify({'error': 'Invalid symbol format', 'symbol': symbol}), 400
 
     try:
+        # metrics
+        if request_counter:
+            try:
+                request_counter.labels(endpoint='/market-price', method='GET', status='200').inc()
+            except Exception:
+                pass
+
         price_data = market_data.get_stock_price(symbol)
         return jsonify(price_data)
 
@@ -410,15 +430,20 @@ def get_market_price():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+
 @app.route('/multi-asset-data', methods=['GET'])
 @handle_errors
 def get_multi_asset_data():
-    """Get data for multiple assets"""
+    """Get data for multiple assets with input validation"""
     symbols_param = request.args.get('symbols', 'AAPL,MSFT,GOOGL,TSLA')
     symbols = [s.strip().upper() for s in symbols_param.split(',')]
+    import re
+    valid_symbols = [s for s in symbols if re.match(r'^[A-Z0-9\-_]+$', s)]
+    if not valid_symbols:
+        return jsonify({'error': 'No valid symbols provided'}), 400
 
     results = {}
-    for symbol in symbols:
+    for symbol in valid_symbols:
         try:
             results[symbol] = market_data.get_stock_price(symbol)
         except Exception as e:
@@ -432,7 +457,7 @@ def get_multi_asset_data():
     return jsonify({
         'data': results,
         'timestamp': datetime.now().isoformat(),
-        'symbols_requested': len(symbols),
+        'symbols_requested': len(valid_symbols),
         'symbols_successful': sum(1 for r in results.values() if r.get('status') != 'error')
     })
 
@@ -446,6 +471,13 @@ def run_rl_cycle():
 
         # Execute RL cycle
         result = ai_agents.execute_rl_cycle(config)
+
+        # metrics
+        if request_counter:
+            try:
+                request_counter.labels(endpoint='/run-cycle', method='POST', status='200').inc()
+            except Exception:
+                pass
 
         return jsonify(result)
 
@@ -462,26 +494,80 @@ def run_rl_cycle():
 def god_cycle():
     """Execute comprehensive AI cycle"""
     try:
-        result = ai_agents.execute_rl_cycle()
+        # Run agents in parallel where possible and record per-agent latency
+        # We will attempt to use data_whisperer.run_agents_in_parallel if available
+        try:
+            from ai_agents import data_whisperer
+            # build agent callables: for demo we time just the data_whisperer analyze_data
+            agent_funcs = [lambda: data_whisperer.analyze_data('AAPL')]
 
-        # Add god-cycle specific data
-        result.update({
-            'cycle_type': 'god_cycle',
-            'final_cycle': len(ai_agents.trade_history),
-            'final_mood': 'confident' if result['signal'] == 'BUY' else 'cautious',
-            'curiosity': round(np.random.uniform(0.7, 1.0), 2),
-            'steps': [
-                {
-                    'action': trade.get('signal', 'HOLD').lower(),
-                    'reward': trade.get('reward', 0),
-                    'balance': trade.get('balance', 0),
-                    'timestamp': trade.get('timestamp')
-                }
-                for trade in ai_agents.trade_history[-5:]  # Last 5 steps
-            ]
-        })
+            start = time.time()
+            results = data_whisperer.run_agents_in_parallel(agent_funcs)
+            duration = time.time() - start
 
-        return jsonify(result)
+            # record latency metric
+            if agent_latency:
+                try:
+                    agent_latency.labels(agent='data_whisperer').observe(duration)
+                except Exception:
+                    pass
+
+            # wire circuit breaker state metric if available
+            try:
+                from services.circuit_breaker import RedisCircuitBreaker
+                cb = RedisCircuitBreaker()
+                key = 'AAPL'
+                if cb.is_open(key):
+                    if cb_state_changes:
+                        try:
+                            cb_state_changes.labels(key=key, state='open').inc()
+                        except Exception:
+                            pass
+                else:
+                    if cb_state_changes:
+                        try:
+                            cb_state_changes.labels(key=key, state='closed').inc()
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+            # Base RL cycle
+            result = ai_agents.execute_rl_cycle()
+
+            # Add god-cycle specific data
+            result.update({
+                'cycle_type': 'god_cycle',
+                'final_cycle': len(ai_agents.trade_history),
+                'final_mood': 'confident' if result['signal'] == 'BUY' else 'cautious',
+                'curiosity': round(np.random.uniform(0.7, 1.0), 2),
+                'agent_subresults': results,
+                'steps': [
+                    {
+                        'action': trade.get('signal', 'HOLD').lower(),
+                        'reward': trade.get('reward', 0),
+                        'balance': trade.get('balance', 0),
+                        'timestamp': trade.get('timestamp')
+                    }
+                    for trade in ai_agents.trade_history[-5:]  # Last 5 steps
+                ]
+            })
+
+            # metrics: request counter
+            if request_counter:
+                try:
+                    request_counter.labels(endpoint='/god-cycle', method='GET', status='200').inc()
+                except Exception:
+                    pass
+
+            return jsonify(result)
+
+        except Exception as e:
+            logger.error(f"God-cycle orchestration error: {e}")
+            # fall back to single-cycle RL execution
+            result = ai_agents.execute_rl_cycle()
+            result.update({'cycle_type': 'god_cycle_fallback'})
+            return jsonify(result)
 
     except Exception as e:
         logger.error(f"God cycle error: {str(e)}")
@@ -604,6 +690,16 @@ def handle_exception(e):
         'type': type(e).__name__,
         'timestamp': datetime.now().isoformat()
     }), 500
+
+
+@app.route('/metrics', methods=['GET'])
+def metrics_endpoint():
+    """Expose Prometheus metrics"""
+    try:
+        data = get_metrics_text()
+        return app.response_class(data, mimetype='text/plain; version=0.0.4; charset=utf-8')
+    except Exception:
+        return '', 500
 
 # Production-ready startup
 if __name__ == '__main__':

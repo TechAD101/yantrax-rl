@@ -1,21 +1,102 @@
 # ai_agents/data_whisperer.py - Enhanced Data Analysis Agent
+
 import random
 import requests
 from typing import Dict, Optional
 from services.market_data_service import get_latest_price
+import threading
+import time
+
+# Attempt to use Redis-backed circuit breaker service
+try:
+    from services.circuit_breaker import RedisCircuitBreaker
+    cb = RedisCircuitBreaker()
+except Exception:
+    cb = None
+
+# Optional metrics
+try:
+    from services.metrics_service import agent_latency, cb_state_changes
+except Exception:
+    agent_latency = None
+    cb_state_changes = None
+
+# Thread lock for thread-safe operations
+_data_lock = threading.Lock()
+
+# Simple circuit breaker state
+_cb_failures = 0
+_cb_open = False
+_cb_last_attempt = 0
+_CB_FAILURE_THRESHOLD = 3
+_CB_RESET_TIMEOUT = 30  # seconds
 
 def analyze_data(symbol: str = "AAPL") -> Dict:
     """
-    Enhanced market data analysis with real-time integration and fallback logic.
-
-    Args:
-        symbol: Stock symbol to analyze
-
-    Returns:
-        Dict containing price, volatility, sentiment, and technical indicators
+    Enhanced market data analysis with real-time integration, thread safety, and circuit breaker fallback.
     """
-    # Try to get real market data first
-    price = get_latest_price(symbol)
+    global _cb_failures, _cb_open, _cb_last_attempt
+    price = None
+
+    # Use Redis-backed circuit breaker if available for cross-process protection
+    key = symbol.upper()
+    allowed = True
+    if cb:
+        try:
+            allowed = cb.allow_request(key)
+        except Exception:
+            allowed = True
+
+    with _data_lock:
+        now = time.time()
+        if not allowed:
+            print(f"[Data Whisperer] Circuit breaker OPEN for {symbol}, using fallback.")
+            price = None
+        else:
+            try:
+                start = time.time()
+                price = get_latest_price(symbol)
+                duration = time.time() - start
+                # record agent latency metric
+                if agent_latency:
+                    try:
+                        agent_latency.labels(agent='data_whisperer').observe(duration)
+                    except Exception:
+                        pass
+
+                if price is None:
+                    raise Exception("No price returned")
+
+                # success
+                _cb_failures = 0
+                if cb:
+                    try:
+                        cb.record_success(key)
+                        if cb_state_changes:
+                            try:
+                                cb_state_changes.labels(key=key, state='closed').inc()
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+            except Exception as e:
+                _cb_failures += 1
+                print(f"[Data Whisperer] Market data error: {e}")
+                if cb:
+                    try:
+                        cb.record_failure(key)
+                        if cb_state_changes:
+                            try:
+                                cb_state_changes.labels(key=key, state='open').inc()
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                else:
+                    if _cb_failures >= _CB_FAILURE_THRESHOLD:
+                        _cb_open = True
+                        _cb_last_attempt = now
+                price = None
 
     if price is None:
         # Fallback to simulated data for testing/demo
@@ -88,24 +169,17 @@ def _detect_market_phase(price: float) -> str:
     else:
         return "range_bound"
 
-# Additional utility functions for advanced analysis
-def get_market_correlation(symbol1: str = "AAPL", symbol2: str = "MSFT") -> float:
-    """Calculate correlation between two assets (simulated)"""
-    return round(random.uniform(-0.5, 0.8), 3)
 
-def detect_anomalies(market_data: Dict) -> Dict:
-    """Detect market anomalies and unusual patterns"""
-    anomalies = {
-        "price_spike": market_data["price"] > 55000,
-        "volume_spike": market_data["volume"] > 8000000,
-        "volatility_spike": market_data["volatility"] > 0.4,
-        "sentiment_divergence": market_data["sentiment"] in ["very_bearish", "very_bullish"]
-    }
+# --- Parallel agent execution utility ---
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
-    anomaly_score = sum(anomalies.values()) / len(anomalies)
-
-    return {
-        "anomalies_detected": anomalies,
-        "anomaly_score": round(anomaly_score, 2),
-        "risk_alert": anomaly_score > 0.5
-    }
+def run_agents_in_parallel(agent_funcs, *args, **kwargs):
+    """
+    Run multiple agent functions in parallel threads for efficiency.
+    agent_funcs: list of callables
+    Returns: list of results in order
+    """
+    with ThreadPoolExecutor(max_workers=len(agent_funcs)) as executor:
+        futures = [executor.submit(func, *args, **kwargs) for func in agent_funcs]
+        return [f.result() for f in futures]
