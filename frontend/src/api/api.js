@@ -1,5 +1,5 @@
 // YantraX API Client v4.1.0
-const API_BASE_URL = 'https://yantrax-backend.onrender.com';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://yantrax-api.onrender.com';
 const UPDATE_INTERVAL = 15000; // 15 seconds
 
 // Retry configuration
