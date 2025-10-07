@@ -1,4 +1,16 @@
-# render.yaml - Placeholder content for RL-enhanced Yantra X
-build:
-  environment:
-    python: 3.10.13
+services:
+  - type: web
+    name: yantrax-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn main:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.13
+      - key: APP_VERSION
+        value: 4.1.0
+      - key: DEPLOYMENT_MODE
+        value: production
+    healthCheckPath: /health
+    autoDeploy: true
+    branch: main
