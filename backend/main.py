@@ -346,7 +346,7 @@ def health_check():
     return jsonify({
         'message': 'YantraX RL Backend API - Production Ready',
         'status': 'operational',
-        'version': '3.0.0',
+        'version': '4.1.0',
         'timestamp': datetime.now().isoformat(),
         'uptime_hours': uptime_hours,
         'environment': 'production',
@@ -387,7 +387,7 @@ def detailed_health():
                 error_counts['successful_requests'] / max(error_counts['total_requests'], 1) * 100, 2
             )
         },
-        'version': '3.0.0',
+        'version': '4.1.0',
         'uptime': f"{(datetime.now().hour % 24)} hours"
     })
 
@@ -607,7 +607,7 @@ def handle_exception(e):
 
 # Production-ready startup
 if __name__ == '__main__':
-    logger.info("🚀 Starting YantraX RL Backend v3.0.0")
+    logger.info("🚀 Starting YantraX RL Backend v4.1.0")
     logger.info("✅ All dependencies loaded successfully")
     logger.info("🔧 Error handling and fallbacks active")
     logger.info("💰 Using FREE market data APIs only")
