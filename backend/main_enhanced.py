@@ -601,6 +601,18 @@ def internal_error(error):
         'timestamp': datetime.now().isoformat()
     }), 500
 
+
+# Debug-only endpoint to surface internal god-cycle exceptions (safe to remove after debugging)
+@app.route('/debug/god-cycle', methods=['GET'])
+def debug_god_cycle():
+    import traceback
+    try:
+        result = yantrax_system.execute_god_cycle()
+        return jsonify({'status': 'ok', 'result': result})
+    except Exception as e:
+        tb = traceback.format_exc()
+        return jsonify({'status': 'error', 'error': str(e), 'traceback': tb}), 500
+
 if __name__ == '__main__':
     print("🚀 YantraX RL v4.0 - Enhanced AI Firm Starting")
     print(f"🤖 AI Firm Ready: {AI_FIRM_READY}")
