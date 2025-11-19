@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Any, Union
 import asyncio
 from functools import wraps
 
+
 # Database utilities (optional). Use DB when configured; falls back to in-memory structures.
 try:
     from db import init_db, get_session, engine
@@ -465,7 +466,7 @@ def health_check():
     return jsonify({
         'message': 'YantraX RL Backend API - Production Ready',
         'status': 'operational',
-        'version': '4.1.0',
+        'version': '4.1.1',
         'timestamp': datetime.now().isoformat(),
         'uptime_hours': uptime_hours,
         'environment': 'production',
@@ -506,7 +507,7 @@ def detailed_health():
                 error_counts['successful_requests'] / max(error_counts['total_requests'], 1) * 100, 2
             )
         },
-        'version': '4.1.0',
+        'version': '4.1.1',
         'uptime': f"{(datetime.now().hour % 24)} hours"
     })
 
