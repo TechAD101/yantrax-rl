@@ -1,4 +1,19 @@
-# YantraX RL Backend - FREE Dependencies Only
+Flask==3.0.0
+flask-cors==4.0.0
+yfinance==0.2.28
+pandas==2.1.4
+numpy==1.25.2
+requests==2.31.0
+urllib3==2.1.0
+werkzeug==3.0.1
+gunicorn==21.2.0
+
+# Database and migrations
+SQLAlchemy==2.0.21
+alembic==1.11.1
+
+# Optional: For enhanced features
+python-dotenv==1.0.0# YantraX RL Backend - FREE Dependencies Only
 # All packages have free tiers or are completely free
 
 Flask==3.0.0
