@@ -106,7 +106,14 @@ class MarketDataManager:
     def __init__(self):
         self.session = create_robust_session()
         self.cache = {}
-        self.cache_timeout = 300  # 5 minutes
+        # Cache timeout is configurable via env var for flexibility in production
+        self.cache_timeout = int(os.environ.get('MARKET_DATA_CACHE_SECONDS', 300))  # default 5 minutes
+
+        # Decide data source: 'live' will try AlphaVantage (if key provided) or yfinance; otherwise mock
+        self.preferred_source = os.environ.get('MARKET_DATA_SOURCE', 'mock').lower()
+        self.alpha_vantage_key = os.environ.get('ALPHA_VANTAGE_KEY')
+        # Per-call timeout for HTTP requests (seconds)
+        self.request_timeout = float(os.environ.get('MARKET_DATA_REQUEST_TIMEOUT', 5.0))
 
     def get_stock_price(self, symbol: str) -> Dict[str, Any]:
         """Get stock price using yfinance (FREE)"""
@@ -116,49 +123,31 @@ class MarketDataManager:
             if self.is_cache_valid(cache_key):
                 logger.info(f"Cache hit for {symbol}")
                 return self.cache[cache_key]['data']
+            logger.info(f"Fetching market data for {symbol} using preferred source '{self.preferred_source}'")
 
-            logger.info(f"Fetching market data for {symbol} using yfinance")
+            # Try live sources when configured
+            if self.preferred_source == 'live':
+                # Prefer Alpha Vantage when API key available
+                if self.alpha_vantage_key:
+                    try:
+                        result = self._get_stock_price_alpha(symbol)
+                        # Cache and return
+                        self.cache[cache_key] = {'data': result, 'timestamp': datetime.now()}
+                        return result
+                    except Exception as e:
+                        logger.warning(f"AlphaVantage fetch failed for {symbol}: {e}. Falling back to yfinance.")
 
-            # Use yfinance - completely free and reliable
-            ticker = yf.Ticker(symbol)
+                # Try yfinance as a live fallback
+                try:
+                    result = self._get_stock_price_yfinance(symbol)
+                    self.cache[cache_key] = {'data': result, 'timestamp': datetime.now()}
+                    return result
+                except Exception as e:
+                    logger.warning(f"yfinance fetch failed for {symbol}: {e}. Falling back to mock data.")
 
-            # Get current price and basic info
-            info = ticker.info
-            hist = ticker.history(period="1d")
-
-            if hist.empty:
-                raise ValueError(f"No data available for {symbol}")
-
-            current_price = float(hist['Close'].iloc[-1])
-            prev_close = float(info.get('previousClose', current_price))
-
-            # Calculate change
-            price_change = current_price - prev_close
-            percent_change = (price_change / prev_close) * 100 if prev_close != 0 else 0
-
-            result = {
-                'symbol': symbol,
-                'price': round(current_price, 2),
-                'change': round(price_change, 2),
-                'changePercent': round(percent_change, 2),
-                'previousClose': round(prev_close, 2),
-                'volume': int(info.get('volume', 0)),
-                'marketCap': info.get('marketCap'),
-                'name': info.get('longName', symbol),
-                'currency': info.get('currency', 'USD'),
-                'timestamp': datetime.now().isoformat(),
-                'source': 'yfinance',
-                'status': 'success'
-            }
-
-            # Cache the result
-            self.cache[cache_key] = {
-                'data': result,
-                'timestamp': datetime.now()
-            }
-
-            logger.info(f"Successfully fetched data for {symbol}: ${current_price}")
-            return result
+            # If not live or all live attempts failed, use mock (safe fallback)
+            logger.info(f"Using mock data for {symbol}")
+            return self.get_mock_price_data(symbol)
 
         except Exception as e:
             error_counts['market_data_errors'] += 1
@@ -205,6 +194,83 @@ class MarketDataManager:
             'status': 'mock',
             'note': 'Mock data for development - real API unavailable'
         }
+
+    def _get_stock_price_alpha(self, symbol: str) -> Dict[str, Any]:
+        """Fetch latest price from Alpha Vantage GLOBAL_QUOTE endpoint"""
+        if not self.alpha_vantage_key:
+            raise RuntimeError('Alpha Vantage API key not configured')
+
+        url = 'https://www.alphavantage.co/query'
+        params = {
+            'function': 'GLOBAL_QUOTE',
+            'symbol': symbol,
+            'apikey': self.alpha_vantage_key
+        }
+
+        resp = self.session.get(url, params=params, timeout=self.request_timeout)
+        resp.raise_for_status()
+        data = resp.json()
+
+        if 'Global Quote' not in data or not data['Global Quote']:
+            raise ValueError('Alpha Vantage returned no quote')
+
+        quote = data['Global Quote']
+
+        price = float(quote.get('05. price', 0))
+        prev_close = float(quote.get('08. previous close', price)) if quote.get('08. previous close') else price
+        change = price - prev_close
+        percent_change = (change / prev_close * 100) if prev_close != 0 else 0
+
+        result = {
+            'symbol': symbol,
+            'price': round(price, 2),
+            'change': round(change, 2),
+            'changePercent': round(percent_change, 2),
+            'previousClose': round(prev_close, 2),
+            'volume': int(quote.get('06. volume', 0)),
+            'marketCap': None,
+            'name': symbol,
+            'currency': 'USD',
+            'timestamp': datetime.now().isoformat(),
+            'source': 'alpha_vantage',
+            'status': 'success'
+        }
+
+        logger.info(f"AlphaVantage: fetched {symbol} price {price}")
+        return result
+
+    def _get_stock_price_yfinance(self, symbol: str) -> Dict[str, Any]:
+        """Fetch latest price using yfinance as a live source (fallback)"""
+        # Note: yfinance may perform multiple network calls internally; wrap in try/except
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+        hist = ticker.history(period="1d")
+
+        if hist.empty:
+            raise ValueError(f"No data available for {symbol} via yfinance")
+
+        current_price = float(hist['Close'].iloc[-1])
+        prev_close = float(info.get('previousClose', current_price))
+        price_change = current_price - prev_close
+        percent_change = (price_change / prev_close) * 100 if prev_close != 0 else 0
+
+        result = {
+            'symbol': symbol,
+            'price': round(current_price, 2),
+            'change': round(price_change, 2),
+            'changePercent': round(percent_change, 2),
+            'previousClose': round(prev_close, 2),
+            'volume': int(info.get('volume', 0)),
+            'marketCap': info.get('marketCap'),
+            'name': info.get('longName', symbol),
+            'currency': info.get('currency', 'USD'),
+            'timestamp': datetime.now().isoformat(),
+            'source': 'yfinance',
+            'status': 'success'
+        }
+
+        logger.info(f"yfinance: fetched {symbol} price {current_price}")
+        return result
 
     def is_cache_valid(self, cache_key: str) -> bool:
         """Check if cached data is still valid"""
