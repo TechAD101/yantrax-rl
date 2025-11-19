@@ -108,17 +108,27 @@ class YantraXEnhancedSystem:
         }
         
         # Simulate agent coordination
-        voting_result = agent_manager.coordinate_decision_making(context)
-        
-        # CEO strategic oversight
-        ceo_context = {
-            'type': 'strategic_trading_decision',
-            'agent_recommendation': voting_result['winning_recommendation'],
-            'consensus_strength': voting_result['consensus_strength'],
-            'market_trend': 'bullish'
-        }
-        
-        ceo_decision = ceo.make_strategic_decision(ceo_context)
+        try:
+            voting_result = agent_manager.coordinate_decision_making(context)
+
+            # CEO strategic oversight
+            ceo_context = {
+                'type': 'strategic_trading_decision',
+                'agent_recommendation': voting_result.get('winning_recommendation', voting_result.get('winning_signal')),
+                'consensus_strength': voting_result.get('consensus_strength', 0.0),
+                'market_trend': 'bullish'
+            }
+
+            ceo_decision = ceo.make_strategic_decision(ceo_context)
+        except Exception as e:
+            logger.exception("Enhanced god cycle failed during coordination or CEO decision")
+            # Return structured error to help remote debugging (temporary)
+            return {
+                'status': 'error',
+                'error': 'enhanced_god_cycle_failure',
+                'message': str(e),
+                'voting_result_snapshot': locals().get('voting_result', None)
+            }
         
         # Execute trade
         final_signal = voting_result['winning_recommendation']
