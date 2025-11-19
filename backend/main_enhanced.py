@@ -335,11 +335,14 @@ def enhanced_god_cycle():
     result = yantrax_system.execute_god_cycle()
     
     # Add enhanced god cycle metadata
+    # Use .get() defensively in case the result is an error-diagnostic payload
+    signal = result.get('signal') if isinstance(result, dict) else None
+    final_mood = 'confident' if signal in ['BUY', 'STRONG_BUY'] else 'cautious'
     result.update({
         'cycle_type': 'enhanced_god_cycle_v4',
         'ai_firm_coordination': AI_FIRM_READY,
         'system_evolution': 'supernatural_recovery_complete',
-        'final_mood': 'confident' if result['signal'] in ['BUY', 'STRONG_BUY'] else 'cautious'
+        'final_mood': final_mood
     })
     
     return jsonify(result)
