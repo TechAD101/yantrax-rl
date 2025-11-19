@@ -1,5 +1,6 @@
 // AIFirmDashboard.jsx - Enhanced AI Firm Integration Component
 import React, { useState, useEffect } from 'react';
+import { BASE_URL } from '../api/api';
 
 const AIFirmDashboard = () => {
   const [firmStatus, setFirmStatus] = useState(null);
@@ -7,8 +8,6 @@ const AIFirmDashboard = () => {
   const [cathieAnalysis, setCathieAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  const API_BASE = 'https://yantrax-backend.onrender.com';
 
   useEffect(() => {
     fetchAIFirmData();
@@ -21,33 +20,43 @@ const AIFirmDashboard = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch AI firm status
-      const firmResponse = await fetch(`${API_BASE}/api/ai-firm/status`);
+      // Fetch AI firm status using shared BASE_URL
+      const firmResponse = await fetch(`${BASE_URL}/api/ai-firm/status`);
       if (firmResponse.ok) {
         const firmData = await firmResponse.json();
         setFirmStatus(firmData);
+      } else {
+        // fallback to root health if status endpoint is unavailable
+        try {
+          const root = await fetch(`${BASE_URL}/`);
+          if (root.ok) setFirmStatus(await root.json());
+        } catch (e) {
+          console.debug('Root health fallback failed', e);
+        }
       }
 
-      // Fetch Warren analysis
-      const warrenResponse = await fetch(`${API_BASE}/api/ai-firm/personas/warren`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol: 'AAPL' })
-      });
-      if (warrenResponse.ok) {
-        const warrenData = await warrenResponse.json();
-        setWarrenAnalysis(warrenData);
+      // Fetch Warren analysis (persona endpoint) using BASE_URL
+      try {
+        const warrenResponse = await fetch(`${BASE_URL}/api/ai-firm/personas/warren`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ symbol: 'AAPL' })
+        });
+        if (warrenResponse.ok) setWarrenAnalysis(await warrenResponse.json());
+      } catch (e) {
+        console.debug('Warren persona fetch failed', e);
       }
 
-      // Fetch Cathie analysis
-      const cathieResponse = await fetch(`${API_BASE}/api/ai-firm/personas/cathie`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol: 'NVDA' })
-      });
-      if (cathieResponse.ok) {
-        const cathieData = await cathieResponse.json();
-        setCathieAnalysis(cathieData);
+      // Fetch Cathie analysis (persona endpoint)
+      try {
+        const cathieResponse = await fetch(`${BASE_URL}/api/ai-firm/personas/cathie`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ symbol: 'NVDA' })
+        });
+        if (cathieResponse.ok) setCathieAnalysis(await cathieResponse.json());
+      } catch (e) {
+        console.debug('Cathie persona fetch failed', e);
       }
 
     } catch (err) {
@@ -112,7 +121,7 @@ const AIFirmDashboard = () => {
             {/* Total Agents */}
             <div className="bg-gray-900/60 rounded-lg p-4 border border-gray-700/30">
               <div className="text-2xl font-bold text-white mb-1">
-                {firmStatus.ai_firm?.total_agents || 0}
+                {firmStatus.ai_firm?.total_agents || firmStatus?.total_agents || 0}
               </div>
               <div className="text-sm text-gray-400">Total AI Agents</div>
               <div className="text-xs text-green-400 mt-1">
@@ -134,7 +143,7 @@ const AIFirmDashboard = () => {
             {/* Departments Active */}
             <div className="bg-gray-900/60 rounded-lg p-4 border border-gray-700/30">
               <div className="text-2xl font-bold text-purple-400 mb-1">
-                {Object.keys(firmStatus.ai_firm?.departments || {}).length || 0}
+                {Object.keys(firmStatus.ai_firm?.departments || firmStatus?.departments || {}).length || 0}
               </div>
               <div className="text-sm text-gray-400">Active Departments</div>
               <div className="text-xs text-orange-400 mt-1">
@@ -175,7 +184,7 @@ const AIFirmDashboard = () => {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-300">Confidence:</span>
                 <span className="text-sm font-bold text-green-400">
-                  {((warrenAnalysis.warren_analysis?.confidence || 0) * 100).toFixed(0)}%
+                  {((warrenAnalysis?.warren_analysis?.confidence || warrenAnalysis?.confidence || 0) * 100).toFixed(0)}%
                 </span>
               </div>
 
@@ -184,7 +193,7 @@ const AIFirmDashboard = () => {
                   "{warrenAnalysis.philosophy || 'Value investing philosophy'}"
                 </p>
                 <p className="text-xs text-green-300 mt-2">
-                  {warrenAnalysis.warren_analysis?.reasoning || 'Analyzing fundamental metrics...'}
+                  {warrenAnalysis?.warren_analysis?.reasoning || warrenAnalysis?.reasoning || 'Analyzing fundamental metrics...'}
                 </p>
               </div>
             </div>
@@ -223,7 +232,7 @@ const AIFirmDashboard = () => {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-300">Confidence:</span>
                 <span className="text-sm font-bold text-purple-400">
-                  {((cathieAnalysis.cathie_analysis?.confidence || 0) * 100).toFixed(0)}%
+                  {((cathieAnalysis?.cathie_analysis?.confidence || cathieAnalysis?.confidence || 0) * 100).toFixed(0)}%
                 </span>
               </div>
 
@@ -232,7 +241,7 @@ const AIFirmDashboard = () => {
                   "{cathieAnalysis.philosophy || 'Innovation investment philosophy'}"
                 </p>
                 <p className="text-xs text-purple-300 mt-2">
-                  {cathieAnalysis.cathie_analysis?.reasoning || 'Analyzing innovation potential...'}
+                  {cathieAnalysis?.cathie_analysis?.reasoning || cathieAnalysis?.reasoning || 'Analyzing innovation potential...'}
                 </p>
               </div>
             </div>
@@ -252,21 +261,27 @@ const AIFirmDashboard = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="text-center">
               <div className="text-xl font-bold text-blue-400">
-                {firmStatus.ai_firm.ceo_metrics?.total_decisions || 0}
+                {firmStatus.ai_firm?.ceo_metrics?.total_decisions || firmStatus?.ceo_metrics?.total_decisions || 0}
               </div>
               <div className="text-xs text-gray-400">CEO Decisions</div>
             </div>
             
             <div className="text-center">
               <div className="text-xl font-bold text-green-400">
-                {firmStatus.ai_firm.personas_active ? '2' : '0'}
+                {(() => {
+                  const pa = firmStatus.ai_firm?.personas_active ?? firmStatus?.personas_active;
+                  if (typeof pa === 'number') return pa;
+                  if (typeof pa === 'boolean') return pa ? 2 : 0;
+                  if (typeof pa === 'object' && pa) return Object.keys(pa).length;
+                  return 0;
+                })()}
               </div>
               <div className="text-xs text-gray-400">Active Personas</div>
             </div>
             
             <div className="text-center">
               <div className="text-xl font-bold text-purple-400">
-                {firmStatus.ai_firm.recent_coordination_sessions || 0}
+                {firmStatus.ai_firm?.recent_coordination_sessions || firmStatus.ai_firm?.recent_voting_sessions || firmStatus.ai_firm?.recent_voting_sessions || 0}
               </div>
               <div className="text-xs text-gray-400">Coordination Sessions</div>
             </div>

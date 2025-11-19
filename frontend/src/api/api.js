@@ -4,6 +4,9 @@ const BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && impor
   ? import.meta.env.VITE_API_URL
   : (process.env.VITE_API_URL || process.env.REACT_APP_API_URL || "https://yantrax-backend.onrender.com");
 
+// Export BASE_URL so UI components can reuse the same resolved backend URL
+export { BASE_URL };
+
 // Enhanced market data fetching with multiple assets
 export const getMultiAssetData = async (symbols = ["AAPL", "MSFT", "GOOGL", "TSLA"]) => {
   try {

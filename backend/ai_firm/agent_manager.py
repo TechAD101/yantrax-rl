@@ -9,6 +9,41 @@ import numpy as np
 from datetime import datetime
 from typing import Dict, List, Any
 
+class Agent:
+    """Lightweight Agent representation used by the package API.
+
+    This minimal class satisfies imports from `ai_firm.__init__` and
+    higher-level code that expects an `Agent` type. It is intentionally
+    small — the full runtime uses the `AgentManager`'s internal dicts.
+    """
+
+    def __init__(self, name: str, confidence: float = 0.5, role: str = 'analyst', **kwargs):
+        self.name = name
+        self.confidence = confidence
+        self.role = role
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {k: v for k, v in self.__dict__.items()}
+
+
+class AgentDecision:
+    """Simple container for an agent decision/result."""
+
+    def __init__(self, agent_name: str, decision: str, confidence: float = 0.5):
+        self.agent_name = agent_name
+        self.decision = decision
+        self.confidence = confidence
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            'agent_name': self.agent_name,
+            'decision': self.decision,
+            'confidence': self.confidence
+        }
+
+
 class AgentManager:
     """Manages enhanced agent coordination for YantraX"""
     
