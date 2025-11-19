@@ -237,7 +237,33 @@ class AgentManager:
         names are supported and deployments that reference the older name
         continue to work.
         """
-        return self.conduct_agent_voting(context)
+        result = self.conduct_agent_voting(context)
+
+        # Map canonical keys to older expected keys for backward compatibility
+        mapped = dict(result)  # shallow copy
+
+        # `main_enhanced.py` expects `winning_recommendation` (not `winning_signal`)
+        if 'winning_signal' in result and 'winning_recommendation' not in result:
+            mapped['winning_recommendation'] = result['winning_signal']
+
+        # Provide both names so callers using either schema work
+        if 'winning_recommendation' in result and 'winning_signal' not in result:
+            mapped['winning_signal'] = result['winning_recommendation']
+
+        # main_enhanced expects counts named `total_votes`
+        if 'participating_agents' in result and 'total_votes' not in result:
+            # participating_agents is a count of participating agents
+            mapped['total_votes'] = result['participating_agents']
+
+        # Some callers expect `total_weight` or `total_votes` — keep both
+        if 'total_weight' in result and 'total_weight' not in mapped:
+            mapped['total_weight'] = result['total_weight']
+
+        # Ensure consensus_strength is present (same name in both)
+        if 'consensus_strength' not in mapped and 'consensus' in result:
+            mapped['consensus_strength'] = result['consensus']
+
+        return mapped
     
     def _get_vote_weight(self, role: str) -> float:
         """Get voting weight based on agent role"""
