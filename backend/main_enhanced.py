@@ -332,8 +332,16 @@ def detailed_health():
 @handle_errors
 def enhanced_god_cycle():
     """Enhanced god cycle with AI firm coordination"""
-    result = yantrax_system.execute_god_cycle()
-    
+    try:
+        result = yantrax_system.execute_god_cycle()
+    except Exception as e:
+        logger.exception('god-cycle execution failed')
+        return jsonify({
+            'status': 'error',
+            'error': 'god_cycle_execution_failed',
+            'message': str(e)
+        }), 500
+
     # Add enhanced god cycle metadata
     # Use .get() defensively in case the result is an error-diagnostic payload
     signal = result.get('signal') if isinstance(result, dict) else None
@@ -344,7 +352,7 @@ def enhanced_god_cycle():
         'system_evolution': 'supernatural_recovery_complete',
         'final_mood': final_mood
     })
-    
+
     return jsonify(result)
 
 @app.route('/api/ai-firm/status', methods=['GET'])
