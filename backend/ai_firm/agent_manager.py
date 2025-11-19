@@ -273,9 +273,25 @@ class AgentManager:
                     'avg_performance': round(np.mean([data['performance'] for _, data in dept_agents]), 2)
                 }
         
+        # Build a flattened list of all agents (compatibility for older callers)
+        all_agents_list = []
+        for dept, info in department_breakdown.items():
+            for agent in info.get('agents', []):
+                all_agents_list.append({
+                    'name': agent.get('name'),
+                    'confidence': agent.get('confidence'),
+                    'performance': agent.get('performance'),
+                    'department': dept,
+                    'role': agent.get('role'),
+                    'specialty': agent.get('specialty'),
+                    'persona': agent.get('persona', False)
+                })
+
         return {
             'total_agents': len(self.enhanced_agents),
             'departments': department_breakdown,
             'recent_voting_sessions': len(self.voting_sessions),
-            'personas_active': len([a for a in self.enhanced_agents.values() if a.get('persona', False)])
+            'personas_active': len([a for a in self.enhanced_agents.values() if a.get('persona', False)]),
+            # Compatibility: include a list value so legacy callers can count enhanced agents
+            'all_agents': all_agents_list
         }
