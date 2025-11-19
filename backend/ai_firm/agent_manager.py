@@ -227,6 +227,17 @@ class AgentManager:
                 return np.random.choice(['BUY', 'HOLD'], p=[0.7, 0.3])
             else:
                 return 'HOLD'
+
+    def coordinate_decision_making(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Compatibility shim for older callers.
+
+        Some entry points (for example `main_enhanced.py`) call
+        `coordinate_decision_making`. The canonical implementation in this
+        module is `conduct_agent_voting`. Provide a small wrapper so both
+        names are supported and deployments that reference the older name
+        continue to work.
+        """
+        return self.conduct_agent_voting(context)
     
     def _get_vote_weight(self, role: str) -> float:
         """Get voting weight based on agent role"""
