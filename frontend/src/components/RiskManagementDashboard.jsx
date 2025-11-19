@@ -493,25 +493,25 @@ const RiskManagementDashboard = ({ riskData, portfolioData, loading = false }) =
                 <div className="flex items-center justify-between p-2 bg-gray-800/50 rounded">
                   <span className="text-gray-300">VaR Breach</span>
                   <div className="px-2 py-1 bg-red-900/50 text-red-300 rounded text-xs">
-                    > 5%
+                    {'> 5%'}
                   </div>
                 </div>
                 <div className="flex items-center justify-between p-2 bg-gray-800/50 rounded">
                   <span className="text-gray-300">Drawdown Alert</span>
                   <div className="px-2 py-1 bg-yellow-900/50 text-yellow-300 rounded text-xs">
-                    > 10%
+                    {'> 10%'}
                   </div>
                 </div>
                 <div className="flex items-center justify-between p-2 bg-gray-800/50 rounded">
                   <span className="text-gray-300">Volatility Spike</span>
                   <div className="px-2 py-1 bg-orange-900/50 text-orange-300 rounded text-xs">
-                    > 40%
+                    {'> 40%'}
                   </div>
                 </div>
                 <div className="flex items-center justify-between p-2 bg-gray-800/50 rounded">
                   <span className="text-gray-300">Correlation Alert</span>
                   <div className="px-2 py-1 bg-blue-900/50 text-blue-300 rounded text-xs">
-                    > 0.8
+                    {'> 0.8'}
                   </div>
                 </div>
               </div>
