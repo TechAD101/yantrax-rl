@@ -23,6 +23,13 @@ try:
     import requests
     from requests.adapters import HTTPAdapter
     from urllib3.util.retry import Retry
+    # Optionally load environment variables from a .env file when python-dotenv is installed
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except Exception:
+        # dotenv is optional; ignore if not available
+        pass
 except ImportError as e:
     print(f"❌ Critical import error: {e}")
     print("🔧 Install missing packages: pip install flask flask-cors yfinance pandas numpy requests")
