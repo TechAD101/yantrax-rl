@@ -12,6 +12,15 @@ from typing import Dict, List, Optional, Any, Union
 import asyncio
 from functools import wraps
 
+# Database utilities (optional). Use DB when configured; falls back to in-memory structures.
+try:
+    from db import init_db, get_session, engine
+    from models import JournalEntry
+    DB_AVAILABLE = True
+except Exception:
+    # If DB modules are not available or misconfigured, keep DB disabled.
+    DB_AVAILABLE = False
+
 # Free, reliable imports - no paid dependencies
 try:
     from flask import Flask, jsonify, request, abort
@@ -290,6 +299,21 @@ class MarketDataManager:
 # Initialize market data manager
 market_data = MarketDataManager()
 
+# Initialize DB if requested via env var (safe, idempotent)
+try:
+    use_db = os.environ.get('USE_DB', '').lower() in ['1', 'true', 'yes'] or bool(os.environ.get('DATABASE_URL'))
+    if use_db and DB_AVAILABLE:
+        try:
+            init_db()
+            logger.info('Database initialized and ready')
+        except Exception as e:
+            logger.warning(f'Could not initialize DB on startup: {e}')
+    else:
+        logger.info('Database not enabled (USE_DB not set or DB modules missing)')
+except Exception:
+    # Keep application startup resilient
+    pass
+
 # AI Agent simulation (production-ready)
 class AIAgentManager:
     """Professional AI agent simulation system"""
@@ -407,6 +431,28 @@ class AIAgentManager:
 
 # Initialize AI agent manager
 ai_agents = AIAgentManager()
+
+# Attempt to initialize DB integration if requested via env var USE_DB or DATABASE_URL
+USE_DB = os.environ.get('USE_DB', '').lower() in ('1', 'true', 'yes') or bool(os.environ.get('DATABASE_URL'))
+db_available = False
+if USE_DB:
+    try:
+        from . import db as database  # relative import when running as package
+    except Exception:
+        try:
+            import db as database  # fallback for direct script run
+        except Exception:
+            database = None
+
+    if database:
+        try:
+            database.init_db()
+            db_available = True
+            logger.info('Database initialized and models available')
+        except Exception as e:
+            logger.warning(f'Database initialization failed: {e}. Falling back to in-memory journal.')
+            db_available = False
+
 
 # ==================== API ENDPOINTS ====================
 
@@ -569,7 +615,21 @@ def god_cycle():
 def get_journal():
     """Get trading journal entries"""
     try:
-        # Return recent trade history as journal
+        # If DB is available, read journal entries from the DB table
+        if db_available:
+            try:
+                session = database.get_session()
+                from models import JournalEntry
+
+                rows = session.query(JournalEntry).order_by(JournalEntry.timestamp.desc()).limit(50).all()
+                journal_entries = [r.to_dict() for r in rows]
+                session.close()
+                return jsonify(journal_entries)
+            except Exception as e:
+                logger.error(f"DB journal read failed: {e}")
+                # Fall back to in-memory journal below
+
+        # Fallback: Return recent trade history as journal (in-memory)
         journal_entries = [
             {
                 'id': i,
