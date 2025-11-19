@@ -340,3 +340,24 @@ class APIMonetizationService:
             method=method,
             timestamp=datetime.now(),
             response_time_ms=response_time_ms,
+            status_code=status_code,
+            request_size_bytes=0,
+            response_size_bytes=0,
+            cost=Decimal('0.00'),
+            metadata={}
+        )
+
+        # Calculate cost (best-effort). If pricing calculation fails, continue and record with zero cost.
+        try:
+            cost = await self.pricing_calculator.calculate_cost(usage_record, tier)
+            usage_record.cost = cost
+        except Exception as e:
+            logger.warning(f"Pricing calculation failed: {e}. Recording usage with zero cost.")
+
+        # Record usage in Redis/analytics (best-effort)
+        try:
+            await self.usage_tracker.record_usage(usage_record)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to record API usage: {e}")
+            return False
