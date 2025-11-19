@@ -247,21 +247,61 @@ yantrax_system = YantraXEnhancedSystem()
 class MarketDataManager:
     def __init__(self):
         self.cache = {}
-        self.cache_timeout = 300
-    
+        # Configurable cache timeout via env var
+        try:
+            self.cache_timeout = int(os.environ.get('MARKET_DATA_CACHE_SECONDS', os.environ.get('CACHE_TIMEOUT', 300)))
+        except Exception:
+            self.cache_timeout = 300
+        # request timeout
+        try:
+            self.request_timeout = int(os.environ.get('MARKET_DATA_REQUEST_TIMEOUT', 10))
+        except Exception:
+            self.request_timeout = 10
+        # source selection: 'yfinance' or 'alpha_vantage'
+        self.source = os.environ.get('MARKET_DATA_SOURCE', 'yfinance')
+        self.alpha_vantage_key = os.environ.get('ALPHA_VANTAGE_KEY')
+
+    def _from_cache(self, symbol: str):
+        entry = self.cache.get(symbol)
+        if not entry:
+            return None
+        ts, data = entry
+        if (datetime.now() - ts).total_seconds() > self.cache_timeout:
+            del self.cache[symbol]
+            return None
+        return data
+
+    def _to_cache(self, symbol: str, data: Dict[str, Any]):
+        self.cache[symbol] = (datetime.now(), data)
+
     def get_stock_price(self, symbol: str) -> Dict[str, Any]:
+        symbol = symbol.upper()
+        # Check cache
+        cached = self._from_cache(symbol)
+        if cached:
+            cached['cached'] = True
+            return cached
+
+        # Try selected source
+        if self.source == 'alpha_vantage' and self.alpha_vantage_key:
+            data = self._get_price_alpha_vantage(symbol)
+            if data:
+                self._to_cache(symbol, data)
+                return data
+
+        # Default to yfinance if available
         try:
             ticker = yf.Ticker(symbol)
             hist = ticker.history(period="1d")
             info = ticker.info
-            
+
             if hist.empty:
-                return self.get_mock_price_data(symbol)
-            
+                raise RuntimeError('yfinance returned empty history')
+
             current_price = float(hist['Close'].iloc[-1])
-            prev_close = float(info.get('previousClose', current_price))
-            
-            return {
+            prev_close = float(info.get('previousClose', current_price) or current_price)
+
+            result = {
                 'symbol': symbol,
                 'price': round(current_price, 2),
                 'change': round(current_price - prev_close, 2),
@@ -269,17 +309,49 @@ class MarketDataManager:
                 'timestamp': datetime.now().isoformat(),
                 'source': 'yfinance'
             }
-        except:
-            return self.get_mock_price_data(symbol)
-    
+            self._to_cache(symbol, result)
+            return result
+        except Exception:
+            # fallback to mock
+            mock = self.get_mock_price_data(symbol)
+            self._to_cache(symbol, mock)
+            return mock
+
+    def _get_price_alpha_vantage(self, symbol: str) -> Optional[Dict[str, Any]]:
+        try:
+            import requests
+            url = 'https://www.alphavantage.co/query'
+            params = {'function': 'GLOBAL_QUOTE', 'symbol': symbol, 'apikey': self.alpha_vantage_key}
+            resp = requests.get(url, params=params, timeout=self.request_timeout)
+            resp.raise_for_status()
+            payload = resp.json()
+            quote = payload.get('Global Quote') or payload.get('Global Quote', {})
+            if not quote:
+                return None
+
+            price = float(quote.get('05. price') or 0)
+            prev_close = float(quote.get('08. previous close') or price)
+
+            return {
+                'symbol': symbol,
+                'price': round(price, 2),
+                'change': round(price - prev_close, 2),
+                'changePercent': round((price - prev_close) / prev_close * 100, 2) if prev_close else 0,
+                'timestamp': datetime.now().isoformat(),
+                'source': 'alpha_vantage'
+            }
+        except Exception:
+            return None
+
     def get_mock_price_data(self, symbol: str) -> Dict[str, Any]:
         base_prices = {'AAPL': 175.50, 'MSFT': 330.25, 'GOOGL': 135.75, 'TSLA': 245.60}
         base_price = base_prices.get(symbol, 100.0)
         variation = np.random.normal(0, 0.02)
         current_price = base_price * (1 + variation)
-        
+
         return {
-            'symbol': symbol, 'price': round(current_price, 2),
+            'symbol': symbol,
+            'price': round(current_price, 2),
             'change': round(base_price * variation, 2),
             'changePercent': round(variation * 100, 2),
             'timestamp': datetime.now().isoformat(),

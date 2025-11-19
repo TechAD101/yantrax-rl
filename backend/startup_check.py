@@ -30,8 +30,7 @@ except ImportError as e:
     sys.exit(1)
 
 # Test AI firm components
-print("
-🤖 Testing AI Firm Components:")
+print("\n🤖 Testing AI Firm Components:")
 
 # Test AI Firm imports
 try:
@@ -64,8 +63,7 @@ except ImportError as e:
     traceback.print_exc()
 
 # Test AI firm initialization
-print("
-🚀 Testing AI Firm Initialization:")
+print("\n🚀 Testing AI Firm Initialization:")
 try:
     ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
     warren = WarrenAgent()
@@ -87,6 +85,5 @@ except Exception as e:
     print(f"❌ AI Firm initialization failed: {e}")
     traceback.print_exc()
 
-print("
-✨ Startup diagnostics complete!")
+print("\n✨ Startup diagnostics complete!")
 print("If all components show ✅ OK, the AI firm should be fully operational.")
