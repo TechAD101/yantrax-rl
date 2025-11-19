@@ -12,9 +12,14 @@
     }
   ],
   "routes": [
+    { "handle": "filesystem" },
     {
       "src": "/(.*)",
       "dest": "frontend/dist/$1"
+    },
+    {
+      "src": "/.*",
+      "dest": "frontend/dist/index.html"
     }
   ],
   "rewrites": [

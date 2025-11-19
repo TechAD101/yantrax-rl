@@ -1,17 +1,23 @@
+# render.yaml - YantraX RL Enhanced AI Firm Deployment
 services:
   - type: web
-    name: yantrax-backend-preview
+    name: yantrax-rl-backend
     env: python
-    plan: free
-    branch: feat/add-alembic-migrations
-    buildCommand: pip install --upgrade pip setuptools wheel build && pip install --prefer-binary -r requirements.txt
-    startCommand: gunicorn -w 4 -b 0.0.0.0:$PORT backend.main:app
+    region: oregon
+    branch: main
+    buildCommand: |
+      cd backend &&
+      pip install --upgrade pip &&
+      pip install -r requirements.txt &&
+      pip install gunicorn
+    startCommand: |
+      cd backend &&
+      gunicorn main:app -b 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    healthCheckPath: /health
     envVars:
-      - key: MARKET_DATA_SOURCE
-        value: mock
-      - key: USE_DB
-        value: "false"
-      - key: MARKET_DATA_CACHE_SECONDS
-        value: "15"
-      - key: MARKET_DATA_REQUEST_TIMEOUT
-        value: "5"
+      - key: FLASK_ENV
+        value: production
+      - key: AI_FIRM_ENABLED
+        value: true
+      - key: PYTHON_VERSION
+        value: 3.10.13
