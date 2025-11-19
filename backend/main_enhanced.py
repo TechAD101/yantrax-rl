@@ -207,15 +207,57 @@ class YantraXEnhancedSystem:
             enhanced_status = agent_manager.get_agent_status()
             if isinstance(enhanced_status, dict):
                 for dept, agents in enhanced_status.items():
-                    for agent in agents:
-                        all_agents[agent.get('name', 'unknown')] = {
-                            'confidence': agent.get('confidence_level', 0.75),
-                            'performance': agent.get('performance_score', 0.75),
-                            'department': agent.get('department', 'enhanced'),
-                            'role': agent.get('role', 'agent'),
-                            'specialty': agent.get('expertise_areas', ['general']),
-                            'status': 'operational'
-                        }
+                    # Defensive normalization: agents may be an int (count), a dict,
+                    # a list of agent dicts, or a list of agent names.
+                    if isinstance(agents, int):
+                        # department only reports a count; nothing to enumerate
+                        logger.debug(f"Agent manager returned count for dept '{dept}': {agents}")
+                        continue
+
+                    if isinstance(agents, dict):
+                        # dict keyed by agent name -> details
+                        for name, details in agents.items():
+                            if not isinstance(details, dict):
+                                # details may be a simple score/number
+                                details = {}
+                            all_agents[name] = {
+                                'confidence': details.get('confidence_level', details.get('confidence', 0.75)),
+                                'performance': details.get('performance_score', details.get('performance', 0.75)),
+                                'department': details.get('department', dept),
+                                'role': details.get('role', 'agent'),
+                                'specialty': details.get('expertise_areas', details.get('specialty', ['general'])),
+                                'status': details.get('status', 'operational')
+                            }
+                        continue
+
+                    if isinstance(agents, list):
+                        for agent in agents:
+                            # agent may be a dict or a simple name/string
+                            if isinstance(agent, dict):
+                                name = agent.get('name') or agent.get('id') or 'unknown'
+                                all_agents[name] = {
+                                    'confidence': agent.get('confidence_level', agent.get('confidence', 0.75)),
+                                    'performance': agent.get('performance_score', agent.get('performance', 0.75)),
+                                    'department': agent.get('department', dept),
+                                    'role': agent.get('role', 'agent'),
+                                    'specialty': agent.get('expertise_areas', agent.get('specialty', ['general'])),
+                                    'status': agent.get('status', 'operational')
+                                }
+                            elif isinstance(agent, str):
+                                all_agents[agent] = {
+                                    'confidence': 0.75,
+                                    'performance': 0.0,
+                                    'department': dept,
+                                    'role': 'agent',
+                                    'specialty': ['general'],
+                                    'status': 'operational'
+                                }
+                            else:
+                                logger.debug(f"Skipping unsupported agent item in dept '{dept}': {agent}")
+                        continue
+
+                    # Unknown shape for agents — log and skip safely
+                    logger.debug(f"Unknown agents payload for dept '{dept}': {type(agents)}")
         except Exception as e:
             logger.error(f"Enhanced agent status error: {e}")
         
