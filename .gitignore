@@ -1,3 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+backend/.venv/
+
+# Virtualenv and caches
+*.egg-info/
+dist/
+build/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Database
+*.db
+*.sqlite3
+yantrax.db
+
+# Env files
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Archives and artifacts
+*.tar.gz
+*.zip
+yantrax-*.tar.gz
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Ignore audit outputs and large artifacts
+audit_output/
+all_artifacts_sha256.txt
+artifacts_sha256.txt
+_sha256.txt
+npm_audit.json
+pip_audit.json
+pip_outdated.txt
+pytest_report.txt
+eslint.log
+flake8.log
+backend_run.log
+yantrax_backend.log
 # Ignore unwanted files
 structure.txt
 yantrax_code_core.txt
