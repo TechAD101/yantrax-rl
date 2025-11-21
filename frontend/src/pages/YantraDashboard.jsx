@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import AIFirmDashboard from '../components/AIFirmDashboard';
 import {
   getGodCycle,
@@ -347,9 +347,9 @@ const YantraDashboard = () => {
               />
               <AnalyticsCard
                 title="System RL Signal"
-                value="WAIT"
+        value="WAIT"
                 indicator="neutral"
-                subtext="Real-time RL signal monitoring"
+        subtext="Real-time RL signal monitoring"
               />
               <AnalyticsCard
                 title="Next Analysis"

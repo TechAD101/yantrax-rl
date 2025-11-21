@@ -1,0 +1,20 @@
+[33me2b1443[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m debug: add logging to reveal env vars in MarketDataManager init
+[33m7de66bb[m debug: add logging to see actual source value
+[33mc22f1f2[m fix: add comprehensive error logging to Alpha Vantage integration
+[33m7106242[m fix: Add useMemo to React imports to resolve useMemo undefined error
+[33mc6c7cdc[m fix: Add missing React imports to resolve useState undefined error
+[33m6545591[m fix: remove undefined rlCycleData variable references causing runtime error and white screen
+[33me88d539[m feat(ui): Wire RL cycle data to dashboard - display real signal, market state, and RL metrics
+[33m5ac8d6a[m refactor(api): Remove mock data fallback from runRLCycle - use proper error throwing
+[33mda72609[m fix(frontend): Fix syntax error in YantraDashboard - correct market_state condition
+[33mcb352d8[m fix(god-cycle): Fix bugs and refactor JSON response structure
+[33mae554a7[m fix(ai-firm): defensively parse agent_manager.get_agent_status payload to handle counts/dicts/lists
+[33m1eefcd0[m debug: add /debug/god-cycle endpoint to capture full traceback for diagnosing runtime error on Render
+[33mb1f84dd[m debug(enhanced): return diagnostic payload from /god-cycle on internal failure
+[33mcb7b6f9[m fix(enhanced): defensive final_mood computation to avoid KeyError when god-cycle returns diagnostic payload
+[33m9a3cc11[m debug(enhanced): add defensive logging and diagnostic response around god-cycle coordination to surface internal errors
+[33m567a99b[m fix(ai-firm): map voting result keys for main_enhanced compatibility (winning_recommendation, total_votes)
+[33m1d84782[m fix(ai-firm): include all_agents list in get_agent_status for compatibility with main_enhanced
+[33m9045be7[m fix(ai-firm): add coordinate_decision_making shim for backward compatibility
+[33m2d663e4[m chore(deploy): push latest edits for redeploy
+[33mc716bc0[m fix(frontend): remove duplicate page components and use Vite index.html
