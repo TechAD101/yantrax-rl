@@ -205,12 +205,25 @@ class YantraXEnhancedSystem:
         # Get enhanced agent status
         try:
             enhanced_status = agent_manager.get_agent_status()
+
+            # Normalize to a mapping of dept -> list_of_agent_dicts
+            dept_map = None
             if isinstance(enhanced_status, dict):
-                for dept, agents in enhanced_status.items():
-                    # Defensive normalization: agents may be an int (count), a dict,
-                    # a list of agent dicts, or a list of agent names.
+                # Preferred canonical nested structure: enhanced_status['departments'][dept]['agents']
+                if 'departments' in enhanced_status and isinstance(enhanced_status['departments'], dict):
+                    dept_map = {dept: info.get('agents', []) for dept, info in enhanced_status['departments'].items()}
+                # Compatibility helper included by AgentManager: departments_simple
+                elif 'departments_simple' in enhanced_status and isinstance(enhanced_status['departments_simple'], dict):
+                    dept_map = enhanced_status['departments_simple']
+                else:
+                    # Fallback: look for any keys whose values are lists of agents
+                    dept_map = {k: v for k, v in enhanced_status.items() if isinstance(v, list)}
+
+            if not dept_map:
+                logger.debug('No department map found in enhanced_status; skipping enhanced agents')
+            else:
+                for dept, agents in dept_map.items():
                     if isinstance(agents, int):
-                        # department only reports a count; nothing to enumerate
                         logger.debug(f"Agent manager returned count for dept '{dept}': {agents}")
                         continue
 
@@ -218,7 +231,6 @@ class YantraXEnhancedSystem:
                         # dict keyed by agent name -> details
                         for name, details in agents.items():
                             if not isinstance(details, dict):
-                                # details may be a simple score/number
                                 details = {}
                             all_agents[name] = {
                                 'confidence': details.get('confidence_level', details.get('confidence', 0.75)),
@@ -232,7 +244,6 @@ class YantraXEnhancedSystem:
 
                     if isinstance(agents, list):
                         for agent in agents:
-                            # agent may be a dict or a simple name/string
                             if isinstance(agent, dict):
                                 name = agent.get('name') or agent.get('id') or 'unknown'
                                 all_agents[name] = {
@@ -255,8 +266,6 @@ class YantraXEnhancedSystem:
                             else:
                                 logger.debug(f"Skipping unsupported agent item in dept '{dept}': {agent}")
                         continue
-
-                    # Unknown shape for agents — log and skip safely
                     logger.debug(f"Unknown agents payload for dept '{dept}': {type(agents)}")
         except Exception as e:
             logger.error(f"Enhanced agent status error: {e}")

@@ -4,6 +4,7 @@ Integrates with existing Flask structure while adding 20+ agent coordination
 """
 
 import json
+import logging
 import uuid
 import numpy as np
 from datetime import datetime
@@ -50,6 +51,7 @@ class AgentManager:
     def __init__(self):
         self.enhanced_agents = self._initialize_20_plus_agents()
         self.voting_sessions = []
+        self.logger = logging.getLogger(__name__)
         
     def _initialize_20_plus_agents(self) -> Dict[str, Dict]:
         """Initialize 20+ agent ecosystem"""
@@ -313,11 +315,49 @@ class AgentManager:
                     'persona': agent.get('persona', False)
                 })
 
-        return {
-            'total_agents': len(self.enhanced_agents),
-            'departments': department_breakdown,
-            'recent_voting_sessions': len(self.voting_sessions),
-            'personas_active': len([a for a in self.enhanced_agents.values() if a.get('persona', False)]),
-            # Compatibility: include a list value so legacy callers can count enhanced agents
-            'all_agents': all_agents_list
-        }
+        try:
+            # Log diagnostic summary to help remote debugging when unexpected shapes
+            # are observed by callers (e.g. Render logs showed ints instead of lists).
+            dept_keys = list(department_breakdown.keys())
+            self.logger.debug("get_agent_status: total_agents=%d, departments=%s, recent_voting=%d",
+                              len(self.enhanced_agents), dept_keys, len(self.voting_sessions))
+
+            # Provide additional compatibility payloads to reduce surprises for
+            # older callers that expect simpler shapes (e.g. dept -> list of agents)
+            departments_simple = {
+                dept: info.get('agents', []) if isinstance(info, dict) else []
+                for dept, info in department_breakdown.items()
+            }
+
+            departments_counts = {dept: info.get('agent_count', len(info.get('agents', [])))
+                                  for dept, info in department_breakdown.items()}
+
+            payload = {
+                'total_agents': len(self.enhanced_agents),
+                'departments': department_breakdown,
+                'departments_simple': departments_simple,     # compatibility: dept -> [agent dicts]
+                'departments_counts': departments_counts,     # compatibility: dept -> count
+                'recent_voting_sessions': len(self.voting_sessions),
+                'personas_active': len([a for a in self.enhanced_agents.values() if a.get('persona', False)]),
+                # Compatibility: include a list value so legacy callers can count enhanced agents
+                'all_agents': all_agents_list
+            }
+
+            # Also include a short sample of the first agent in each department for diagnostics
+            sample = {}
+            for dept, agents in departments_simple.items():
+                sample[dept] = agents[0] if isinstance(agents, list) and agents else None
+
+            payload['sample_agents'] = sample
+
+            return payload
+        except Exception as e:
+            # If anything unexpected happens, log and return a safe minimal payload
+            self.logger.exception("agent_manager.get_agent_status unexpected error")
+            return {
+                'total_agents': len(self.enhanced_agents),
+                'departments': {},
+                'recent_voting_sessions': len(self.voting_sessions),
+                'personas_active': 0,
+                'all_agents': []
+            }
