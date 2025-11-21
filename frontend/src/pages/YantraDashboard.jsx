@@ -346,9 +346,9 @@ const YantraDashboard = () => {
               />
               <AnalyticsCard
                 title="System RL Signal"
-                value={rlCycleData?.signal || "WAIT"}
+                value="WAIT"
                 indicator="neutral"
-                subtext={rlCycleData ? `Cycle: ${rlCycleData.market_state?.cycle || 0} | Reward: ${rlCycleData.rl_metrics?.reward?.toFixed(2) || '0.00'}` : "No data yet"}
+                subtext="Real-time RL signal monitoring"
               />
               <AnalyticsCard
                 title="Next Analysis"
