@@ -1,5 +1,4 @@
-// YantraDashboard.jsx - Revolutionary AI Trading Intelligence Interface
-import React, { useState, useEffect, useMemo } from "react";
+
 import AIFirmDashboard from '../components/AIFirmDashboard';
 import {
   getGodCycle,
@@ -22,7 +21,7 @@ const YantraDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [activeTab, setActiveTab] = useState("overview"); // New tab state
-
+  const [rlCycleData, setRlCycleData] = useState(null);
   // Multi-Asset Market Data
   const ASSET_UNIVERSE = {
     "Stocks": ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "AMZN", "META"],
@@ -44,6 +43,7 @@ const YantraDashboard = () => {
       // Process RL Cycle Data
       if (cycleData.status === 'fulfilled') {
         const data = cycleData.value;
+              setRlCycleData(data); // Store complete RL cycle data
         setAgentStatus({
           macroMonk: { confidence: 0.87, signal: data.strategy, status: "ACTIVE" },
           theGhost: { confidence: 0.92, signal: data.signal, status: "PROCESSING" },
@@ -345,10 +345,10 @@ const YantraDashboard = () => {
                 subtext="Fear & Greed Index: 45/100"
               />
               <AnalyticsCard
-                title="System Learning"
-                value="Adaptive Mode"
-                indicator="positive"
-                subtext="Model confidence: 89%"
+                title="System RL Signal"
+                value={rlCycleData?.signal || "WAIT"}
+                indicator="neutral"
+                subtext={rlCycleData ? `Cycle: ${rlCycleData.market_state?.cycle || 0} | Reward: ${rlCycleData.rl_metrics?.reward?.toFixed(2) || '0.00'}` : "No data yet"}
               />
               <AnalyticsCard
                 title="Next Analysis"
