@@ -155,20 +155,7 @@ export const runRLCycle = async (config = {}) => {
     return await response.json();
   } catch (error) {
     console.error("RL cycle failed:", error);
-    // Return fallback mock data to keep system operational
-    return {
-      status: 'error',
-      signal: 'HOLD',
-      final_balance: 125000,
-      total_reward: 0,
-      agents: {
-        'macro_monk': { confidence: 0.75, performance: 12.5, signal: 'NEUTRAL' },
-        'the_ghost': { confidence: 0.82, performance: 15.2, signal: 'HOLD' },
-        'data_whisperer': { confidence: 0.78, performance: 13.8, analysis: 'UNCERTAIN' },
-        'degen_auditor': { confidence: 0.85, performance: 16.9, audit: 'PENDING' }
-      },
-      error: error.message
-    };
+        throw new Error(`RL cycle request failed: ${error.message}`);
   }
 };
 
