@@ -432,6 +432,7 @@ class MarketDataManager:
     def _get_price_alpha_vantage(self, symbol: str) -> Optional[Dict[str, Any]]:
         try:
             import requests
+                        logger.info(f"Calling Alpha Vantage for {symbol}")
             url = 'https://www.alphavantage.co/query'
             params = {'function': 'GLOBAL_QUOTE', 'symbol': symbol, 'apikey': self.alpha_vantage_key}
             resp = requests.get(url, params=params, timeout=self.request_timeout)
@@ -453,6 +454,7 @@ class MarketDataManager:
                 'source': 'alpha_vantage'
             }
         except Exception:
+                        logger.error(f"Alpha Vantage error for {symbol}: {str(Exception)}")
             return None
 
     def get_mock_price_data(self, symbol: str) -> Dict[str, Any]:
