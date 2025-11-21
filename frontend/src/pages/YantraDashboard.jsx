@@ -53,15 +53,15 @@ const YantraDashboard = () => {
 
         setPortfolioMetrics({
           totalValue: data.final_balance || 10000,
-          dailyPnL: data.total_reward || 0,
+          dailyPnL: data.rl_metrics?.reward || 0,
           sharpeRatio: 1.23,
           maxDrawdown: -0.08,
           winRate: 0.67
         });
 
-        if (data.market_data) {
+            if (data.market_state) {
           setRiskAnalytics({
-            volatility: data.market_data.volatility || 0.02,
+            volatility: data.market_state.volatility || 0.02,
             var95: 0.034,
             correlation: 0.76,
             riskScore: data.anomalies?.risk_alert ? 0.85 : 0.45
