@@ -308,14 +308,17 @@ class MarketDataManager:
 
     def _get_price_alpha_vantage(self, symbol: str) -> Optional[Dict[str, Any]]:
         try:
+                    logger.info(f"Attempting to fetch {symbol} from Alpha Vantage...")
             import requests
             url = 'https://www.alphavantage.co/query'
             params = {'function': 'GLOBAL_QUOTE', 'symbol': symbol, 'apikey': self.alpha_vantage_key}
             resp = requests.get(url, params=params, timeout=self.request_timeout)
             resp.raise_for_status()
             payload = resp.json()
+                    logger.debug(f"Alpha Vantage API response: {payload}")
             quote = payload.get('Global Quote') or payload.get('Global Quote', {})
-            if not quote:
+                        logger.error(f"Alpha Vantage returned empty quote for {symbol}. Full response: {payload}")
+if not quote:
                 return None
 
             price = float(quote.get('05. price') or 0)
@@ -329,7 +332,8 @@ class MarketDataManager:
                 'timestamp': datetime.now().isoformat(),
                 'source': 'alpha_vantage'
             }
-        except Exception:
+        except Exceptio as e:
+        logger.error(f"Alpha Vantage API error for {symbol}: {str(e)}")
             return None
 
     def get_mock_price_data(self, symbol: str) -> Dict[str, Any]:
