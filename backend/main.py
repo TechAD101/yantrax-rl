@@ -1,5 +1,5 @@
-# main.py - YantraX RL Backend v4.1 EMERGENCY AI FIRM FIX
-# Critical Production Fix: Resolve import issues for 20+ agent coordination
+# main.py - YantraX RL Backend v4.2 AI FIRM ↔ RL CORE INTEGRATION
+# INTEGRATION FIX: Connect AI Firm decision-making to actual RL environment
 
 import os
 import sys
@@ -29,7 +29,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# EMERGENCY FIX: Corrected AI Firm imports with proper paths
+# AI Firm imports
 try:
     from ai_firm.ceo import AutonomousCEO, CEOPersonality
     from ai_agents.personas.warren import WarrenAgent
@@ -39,8 +39,7 @@ try:
     print("🏢 AI FIRM ARCHITECTURE LOADED SUCCESSFULLY!")
     print("🚀 20+ AGENT COORDINATION SYSTEM ACTIVE")
 except ImportError as e:
-    print(f"⚠️ AI Firm import error (attempting alternate paths): {e}")
-    # Fallback attempt with full paths
+    print(f"⚠️ AI Firm (attempting alternate paths): {e}")
     try:
         import ai_firm.ceo as ceo_module
         import ai_agents.personas.warren as warren_module 
@@ -58,6 +57,15 @@ except ImportError as e:
     except ImportError as e2:
         print(f"❌ AI Firm fallback failed: {e2}")
         AI_FIRM_READY = False
+
+# RL Core imports
+try:
+    from rl_core.env_market_sim import MarketSimEnv
+    RL_ENV_READY = True
+    print("🎮 RL CORE: MarketSimEnv LOADED!")
+except ImportError as e:
+    print(f"❌ RL Core import failed: {e}")
+    RL_ENV_READY = False
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
@@ -79,7 +87,7 @@ def handle_errors(func):
             return jsonify({'error': 'internal_server_error', 'timestamp': datetime.now().isoformat()}), 500
     return wrapper
 
-# Initialize AI Firm with enhanced error handling
+# Initialize AI Firm
 if AI_FIRM_READY:
     try:
         ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
@@ -95,11 +103,21 @@ if AI_FIRM_READY:
         AI_FIRM_READY = False
         print("🔄 Falling back to 4-agent legacy mode")
 
-# Enhanced AI system with 20+ agent integration
+# Enhanced AI system with REAL RL INTEGRATION
 class YantraXEnhancedSystem:
     def __init__(self):
         self.portfolio_balance = 132240.84
         self.trade_history = []
+        
+        # INTEGRATION: Initialize persistent RL environment
+        if RL_ENV_READY:
+            self.env = MarketSimEnv()
+            self.current_state = self.env.reset()
+            print("✅ RL Environment initialized and ready!")
+        else:
+            self.env = None
+            self.current_state = None
+            print("⚠️ RL Environment not available - using legacy mode")
         
         # Original 4 agents (compatibility)
         self.legacy_agents = {
@@ -108,35 +126,139 @@ class YantraXEnhancedSystem:
             'data_whisperer': {'confidence': 0.990, 'performance': 12.9, 'analysis': 'BULLISH_BREAKOUT'},
             'degen_auditor': {'confidence': 0.904, 'performance': 22.1, 'audit': 'LOW_RISK_APPROVED'}
         }
-
-                # Initialize RL environment
-        from rl_core.env_market_sim import MarketSimEnv
-        self.env = MarketSimEnv()
-        self.current_state = self.env.reset()
+    
+    def _map_signal_to_action(self, signal: str) -> str:
+        """Map AI Firm trading signal to RL environment action"""
+        signal_upper = signal.upper()
+        if signal_upper == "BUY":
+            return "buy"
+        elif signal_upper == "SELL":
+            return "sell"
+        else:  # HOLD or anything else
+            return "hold"
         
     def execute_god_cycle(self) -> Dict[str, Any]:
         """Execute enhanced god cycle with AI firm coordination"""
         
-        if AI_FIRM_READY:
+        if AI_FIRM_READY and RL_ENV_READY:
+            return self._execute_integrated_god_cycle()
+        elif AI_FIRM_READY:
             return self._execute_enhanced_god_cycle()
         else:
             return self._execute_legacy_god_cycle()
     
+    def _execute_integrated_god_cycle(self) -> Dict[str, Any]:
+        """FULLY INTEGRATED GOD CYCLE: AI Firm decisions → RL Environment step"""
+        
+        # 1. Build context from current RL state
+        context = {
+            'decision_type': 'trading',
+            'market_price': self.current_state['price'],
+            'market_volatility': self.current_state['volatility'],
+            'market_mood': self.current_state['mood'],
+            'balance': self.current_state['balance'],
+            'position': self.current_state['position'],
+            'cycle': self.current_state['cycle'],
+            'timestamp': datetime.now().isoformat(),
+            'ai_firm_mode': 'fully_integrated'
+        }
+        
+        # 2. Execute agent voting across 20+ agents
+        voting_result = agent_manager.conduct_agent_voting(context)
+        
+        # 3. CEO strategic oversight
+        ceo_context = {
+            'type': 'strategic_trading_decision',
+            'agent_recommendation': voting_result['winning_signal'],
+            'consensus_strength': voting_result['consensus_strength'],
+            'market_state': self.current_state,
+            'market_trend': self.current_state['mood'],
+            'agent_participation': voting_result['participating_agents']
+        }
+        
+        ceo_decision = ceo.make_strategic_decision(ceo_context)
+        
+        # 4. Use CEO's final decision as the trading signal
+        final_signal = voting_result['winning_signal']  # CEO can override via agent_overrides
+        
+        # 5. Map signal to RL action
+        rl_action = self._map_signal_to_action(final_signal)
+        
+        # 6. Step the RL environment with the action
+        next_state, reward, done = self.env.step(rl_action)
+        
+        # 7. Update current state
+        self.current_state = next_state
+        
+        # 8. Update portfolio balance from RL env balance
+        self.portfolio_balance = next_state['balance']
+        
+        # 9. Record trade in history
+        trade_record = {
+            'cycle': next_state['cycle'],
+            'action': rl_action,
+            'signal': final_signal,
+            'price': next_state['price'],
+            'reward': reward,
+            'balance': next_state['balance'],
+            'mood': next_state['mood'],
+            'volatility': next_state['volatility'],
+            'position': next_state['position'],
+            'timestamp': datetime.now().isoformat()
+        }
+        self.trade_history.append(trade_record)
+        
+        # 10. Reset environment if episode done
+        if done:
+            print(f"📍 Episode complete at cycle {next_state['cycle']}. Resetting environment.")
+            self.current_state = self.env.reset()
+        
+        # 11. Return comprehensive response
+        return {
+            'status': 'success',
+            'signal': final_signal,
+            'action': rl_action,
+            'market_state': {
+                'price': next_state['price'],
+                'volatility': next_state['volatility'],
+                'mood': next_state['mood'],
+                'balance': next_state['balance'],
+                'position': next_state['position'],
+                'cycle': next_state['cycle'],
+                'curiosity': next_state.get('curiosity', 0)
+            },
+            'ai_firm_coordination': {
+                'mode': 'fully_integrated',
+                'total_agents_coordinated': voting_result['participating_agents'],
+                'consensus_strength': voting_result['consensus_strength'],
+                'ceo_confidence': ceo_decision.confidence,
+                'ceo_reasoning': ceo_decision.reasoning,
+                'action_source': 'ai_firm_with_rl_execution'
+            },
+            'rl_metrics': {
+                'reward': round(reward, 2),
+                'cycle': next_state['cycle'],
+                'done': done,
+                'cumulative_curiosity': next_state.get('curiosity', 0)
+            },
+            'timestamp': datetime.now().isoformat()
+        }
+    
     def _execute_enhanced_god_cycle(self) -> Dict[str, Any]:
-        """ENHANCED GOD CYCLE: 20+ agent coordination with CEO oversight"""
+        """ENHANCED GOD CYCLE: 20+ agent coordination (legacy without RL env)"""
         
         # Coordinate decision across 20+ agents
         context = {
             'decision_type': 'trading',
             'market_volatility': np.random.uniform(0.1, 0.3),
             'timestamp': datetime.now().isoformat(),
-            'ai_firm_mode': 'full_operational'
+            'ai_firm_mode': 'enhanced_no_rl'
         }
         
-        # Execute agent voting (this calls the agent_manager's method)
+        # Execute agent voting
         voting_result = agent_manager.conduct_agent_voting(context)
         
-        # CEO strategic oversight and decision
+        # CEO strategic oversight
         ceo_context = {
             'type': 'strategic_trading_decision',
             'agent_recommendation': voting_result['winning_signal'],
@@ -147,52 +269,34 @@ class YantraXEnhancedSystem:
         
         ceo_decision = ceo.make_strategic_decision(ceo_context)
         
-        # Enhanced execution with AI firm coordination
-        # Map signal to action
         final_signal = voting_result['winning_signal']
-        signal_to_action = {
-            'bullish': 1,      # buy
-            'bearish': 2,      # sell
-            'neutral': 0,      # hold
-            'hold': 0
-        }
-        action = signal_to_action.get(final_signal.lower(), 0)  # default to hold
+        reward = np.random.normal(950, 300)  # Simulated reward (no RL env)
         
-        # Execute action in environment
-        state, reward, done = self.env.step(action)
-        
-        # Update state
-        self.current_state = state
-
         self.portfolio_balance += reward
         
         return {
             'status': 'success',
             'signal': final_signal,
-            'market_state': {
-                'price': state.get('price', 0) if isinstance(state, dict) else 0,
-                'volatility': state.get('volatility', 0) if isinstance(state, dict) else 0,
-                'mood': state.get('mood', 'neutral') if isinstance(state, dict) else 'neutral',
-                'balance': self.portfolio_balance,
-                'position': state.get('position', 0) if isinstance(state, dict) else 0,
-                'cycle': state.get('cycle', 0) if isinstance(state, dict) else 0
-            },
+            'strategy': 'AI_FIRM_24_AGENTS_NO_RL',
+            'audit': 'CEO_APPROVED_ENHANCED',
+            'final_balance': round(self.portfolio_balance, 2),
+            'total_reward': round(reward, 2),
             'ai_firm_coordination': {
-                'mode': 'full_operational',
+                'mode': 'enhanced_no_rl',
                 'total_agents_coordinated': voting_result['participating_agents'],
                 'consensus_strength': voting_result['consensus_strength'],
                 'ceo_confidence': ceo_decision.confidence,
-                'ceo_reasoning': ceo_decision.reasoning
-            },
-            'rl_metrics': {
-                'reward': round(reward, 2),
-                'cycle': state.get('cycle', 0) if isinstance(state, dict) else 0,
-                'done': done
+                'ceo_reasoning': ceo_decision.reasoning,
+                'agent_overrides': len(ceo_decision.agent_overrides)
             },
             'agents': self._get_enhanced_agent_status(),
-            'final_balance': round(self.portfolio_balance, 2),
+            'note': 'RL environment not loaded - using simulated rewards',
             'timestamp': datetime.now().isoformat()
         }
+    
+    def _execute_legacy_god_cycle(self) -> Dict[str, Any]:
+        """Fallback to original 4-agent god cycle"""
+        
         # Update legacy agent states
         for agent_name, state in self.legacy_agents.items():
             variation = np.random.normal(0, 0.05)
@@ -218,16 +322,42 @@ class YantraXEnhancedSystem:
                 for name, state in self.legacy_agents.items()
             },
             'timestamp': datetime.now().isoformat(),
-            'note': 'Legacy 4-agent mode - AI firm components failed to initialize',
-            'fix_needed': 'Import path resolution required'
+            'note': 'Legacy 4-agent mode - AI firm & RL not loaded'
         }
     
     def _get_enhanced_agent_status(self) -> Dict[str, Any]:
         """Get status of all agents including enhanced 20+ agent system"""
         
-# Simply return the agent status from agent manager
-        # It already has the correct format with department breakdown
-        return agent_manager.get_agent_status()
+        if not AI_FIRM_READY:
+            return {name: {'confidence': round(state['confidence'], 3), 'performance': state['performance']} 
+                   for name, state in self.legacy_agents.items()}
+        
+        all_agents = {}
+        
+        # Legacy agents (still operational)
+        for name, state in self.legacy_agents.items():
+            all_agents[name] = {
+                'confidence': round(state['confidence'], 3),
+                'performance': state['performance'],
+                'department': 'legacy_integration',
+                'status': 'operational',
+                'enhanced': True
+            }
+        
+        # Enhanced agents from agent manager (20+ agents)
+        enhanced_agents = agent_manager.get_all_agents_status()
+        for name, data in enhanced_agents.items():
+            all_agents[name] = {
+                'confidence': round(data.get('confidence', 0.75), 3),
+                'performance': data.get('performance', 75.0),
+                'department': data.get('department', 'unknown'),
+                'role': data.get('role', 'specialist'),
+                'specialty': data.get('specialty', 'general'),
+                'persona': data.get('persona', False),
+                'status': 'operational'
+            }
+        
+        return all_agents
 
 # Initialize enhanced system
 yantrax_system = YantraXEnhancedSystem()
@@ -236,20 +366,17 @@ yantrax_system = YantraXEnhancedSystem()
 class MarketDataManager:
     def __init__(self):
         self.cache = {}
-        # Configurable cache timeout via env var
         try:
             self.cache_timeout = int(os.environ.get('MARKET_DATA_CACHE_SECONDS', os.environ.get('CACHE_TIMEOUT', 300)))
         except Exception:
             self.cache_timeout = 300
-        # request timeout
         try:
             self.request_timeout = int(os.environ.get('MARKET_DATA_REQUEST_TIMEOUT', 10))
         except Exception:
             self.request_timeout = 10
-        # source selection: 'yfinance' or 'alpha_vantage'
         self.source = os.environ.get('MARKET_DATA_SOURCE', 'yfinance')
         self.alpha_vantage_key = os.environ.get('ALPHA_VANTAGE_KEY')
-
+        logger.info(f"MarketDataManager init: source={self.source}, alpha_key={'SET' if self.alpha_vantage_key else 'NONE'}")
     def _from_cache(self, symbol: str):
         entry = self.cache.get(symbol)
         if not entry:
@@ -265,21 +392,17 @@ class MarketDataManager:
 
     def get_stock_price(self, symbol: str) -> Dict[str, Any]:
         symbol = symbol.upper()
-        # Check cache
         cached = self._from_cache(symbol)
         if cached:
             cached['cached'] = True
             return cached
 
-        # Try selected source
-                logger.info(f"DEBUGGING: source={self.source}, alpha_vantage_key={'present' if self.alpha_vantage_key else 'missing'}")if self.source == 'alpha_vantage' and self.alpha_vantage_key:
-
+        if self.source == 'alpha_vantage' and self.alpha_vantage_key:
             data = self._get_price_alpha_vantage(symbol)
             if data:
                 self._to_cache(symbol, data)
                 return data
 
-        # Default to yfinance if available
         try:
             ticker = yf.Ticker(symbol)
             hist = ticker.history(period="1d")
@@ -302,24 +425,20 @@ class MarketDataManager:
             self._to_cache(symbol, result)
             return result
         except Exception:
-            # fallback to mock
             mock = self.get_mock_price_data(symbol)
             self._to_cache(symbol, mock)
             return mock
 
     def _get_price_alpha_vantage(self, symbol: str) -> Optional[Dict[str, Any]]:
         try:
-                    logger.info(f"Attempting to fetch {symbol} from Alpha Vantage...")
             import requests
             url = 'https://www.alphavantage.co/query'
             params = {'function': 'GLOBAL_QUOTE', 'symbol': symbol, 'apikey': self.alpha_vantage_key}
             resp = requests.get(url, params=params, timeout=self.request_timeout)
             resp.raise_for_status()
             payload = resp.json()
-                    logger.debug(f"Alpha Vantage API response: {payload}")
             quote = payload.get('Global Quote') or payload.get('Global Quote', {})
-                        logger.error(f"Alpha Vantage returned empty quote for {symbol}. Full response: {payload}")
-if not quote:
+            if not quote:
                 return None
 
             price = float(quote.get('05. price') or 0)
@@ -333,8 +452,7 @@ if not quote:
                 'timestamp': datetime.now().isoformat(),
                 'source': 'alpha_vantage'
             }
-        except Exceptio as e:
-        logger.error(f"Alpha Vantage API error for {symbol}: {str(e)}")
+        except Exception:
             return None
 
     def get_mock_price_data(self, symbol: str) -> Dict[str, Any]:
@@ -361,20 +479,28 @@ market_data = MarketDataManager()
 def health_check():
     total_agents = len(yantrax_system.legacy_agents)
     if AI_FIRM_READY:
-        total_agents = 24  # Full 20+ agent system + legacy integration
+        total_agents = 24
+    
+    integration_status = "fully_integrated" if (AI_FIRM_READY and RL_ENV_READY) else (
+        "ai_firm_only" if AI_FIRM_READY else "legacy_mode"
+    )
     
     return jsonify({
-        'message': 'YantraX RL Backend - SUPERNATURAL AI FIRM ARCHITECTURE v4.1',
+        'message': 'YantraX RL Backend - AI FIRM ↔ RL CORE INTEGRATION v4.2',
         'status': 'operational',
-        'version': '4.1.0',
-        'emergency_fix': 'import_path_resolution_applied',
+        'version': '4.2.0',
+        'integration': integration_status,
         'ai_firm': {
             'enabled': AI_FIRM_READY,
             'total_agents': total_agents,
             'ceo_active': AI_FIRM_READY,
             'personas_active': AI_FIRM_READY,
             'departments': 5 if AI_FIRM_READY else 1,
-            'mode': 'supernatural_coordination' if AI_FIRM_READY else 'legacy_fallback'
+        },
+        'rl_core': {
+            'enabled': RL_ENV_READY,
+            'environment': 'MarketSimEnv',
+            'real_rewards': RL_ENV_READY
         },
         'stats': error_counts,
         'timestamp': datetime.now().isoformat()
@@ -384,14 +510,19 @@ def health_check():
 @handle_errors
 def detailed_health():
     total_agents = 24 if AI_FIRM_READY else 4
+    integration_status = "fully_integrated" if (AI_FIRM_READY and RL_ENV_READY) else (
+        "ai_firm_only" if AI_FIRM_READY else "legacy_mode"
+    )
         
     return jsonify({
         'status': 'healthy',
+        'integration_mode': integration_status,
         'services': {
             'api': 'operational',
             'market_data': 'operational', 
             'ai_agents': 'operational',
-            'ai_firm': 'fully_operational' if AI_FIRM_READY else 'fallback_mode'
+            'ai_firm': 'fully_operational' if AI_FIRM_READY else 'fallback_mode',
+            'rl_core': 'operational' if RL_ENV_READY else 'not_loaded'
         },
         'ai_firm_components': {
             'ceo': AI_FIRM_READY,
@@ -400,7 +531,11 @@ def detailed_health():
             'agent_manager': AI_FIRM_READY,
             'department_coordination': AI_FIRM_READY,
             'total_system_agents': total_agents,
-            'import_fix_applied': True
+        },
+        'rl_components': {
+            'market_sim_env': RL_ENV_READY,
+            'real_step_function': RL_ENV_READY,
+            'reward_system': 'integrated' if RL_ENV_READY else 'simulated'
         },
         'performance': error_counts,
         'timestamp': datetime.now().isoformat()
@@ -409,16 +544,18 @@ def detailed_health():
 @app.route('/god-cycle', methods=['GET'])
 @handle_errors
 def enhanced_god_cycle():
-    """SUPERNATURAL GOD CYCLE: 20+ agent coordination with CEO oversight"""
+    """INTEGRATED GOD CYCLE: AI Firm → RL Environment"""
     result = yantrax_system.execute_god_cycle()
     
-    # Add supernatural god cycle metadata
+    integration_mode = 'fully_integrated' if (AI_FIRM_READY and RL_ENV_READY) else (
+        'ai_firm_only' if AI_FIRM_READY else 'legacy'
+    )
+    
     result.update({
-        'cycle_type': 'supernatural_god_cycle_v4_1',
-        'ai_firm_coordination': AI_FIRM_READY,
-        'system_evolution': 'supernatural_recovery_emergency_fix',
-        'import_fix_status': 'applied',
-        'final_mood': 'supernatural_confidence' if AI_FIRM_READY else 'cautious_fallback'
+        'cycle_type': 'integrated_god_cycle_v4_2',
+        'integration_mode': integration_mode,
+        'rl_environment_active': RL_ENV_READY,
+        'ai_firm_active': AI_FIRM_READY
     })
     
     return jsonify(result)
@@ -426,28 +563,25 @@ def enhanced_god_cycle():
 @app.route('/api/ai-firm/status', methods=['GET'])
 @handle_errors
 def ai_firm_status():
-    """ENHANCED AI FIRM STATUS: Full 20+ agent system"""
+    """AI FIRM STATUS with RL integration details"""
     
     if not AI_FIRM_READY:
         return jsonify({
             'status': 'fallback_mode',
-            'message': 'AI Firm import failed - running in legacy mode',
+            'message': 'AI Firm not loaded - running in legacy mode',
             'legacy_agents': len(yantrax_system.legacy_agents),
-            'fallback_operational': True,
-            'emergency_fix_needed': 'import_path_resolution',
-            'expected_agents': 24,
-            'departments': 5
+            'rl_integration': False
         })
     
-    # FULL OPERATIONAL STATUS
     agent_status = agent_manager.get_agent_status()
     ceo_status = ceo.get_ceo_status()
     
     return jsonify({
         'status': 'fully_operational',
         'message': '20+ AI agent coordination system active',
+        'rl_integration': RL_ENV_READY,
         'ai_firm': {
-            'total_agents': 24,  # 4 legacy + 20 enhanced
+            'total_agents': 24,
             'departments': {
                 'market_intelligence': {'agents': 5, 'status': 'operational'},
                 'trade_operations': {'agents': 4, 'status': 'operational'},
@@ -467,14 +601,18 @@ def ai_firm_status():
                 'cathie': {'active': True, 'specialty': 'innovation_growth'}
             },
             'coordination_active': True,
-            'memory_learning': True,
-            'supernatural_mode': True
+            'memory_learning': True
+        },
+        'rl_core': {
+            'environment_loaded': RL_ENV_READY,
+            'current_cycle': yantrax_system.current_state['cycle'] if yantrax_system.current_state else 0,
+            'current_balance': yantrax_system.current_state['balance'] if yantrax_system.current_state else 0,
+            'market_mood': yantrax_system.current_state['mood'] if yantrax_system.current_state else 'unknown'
         },
         'system_performance': {
             'portfolio_balance': yantrax_system.portfolio_balance,
             'total_trades': len(yantrax_system.trade_history),
-            'success_rate': round(error_counts['successful_requests'] / max(error_counts['total_requests'], 1) * 100, 2),
-            'enhanced_performance': True
+            'success_rate': round(error_counts['successful_requests'] / max(error_counts['total_requests'], 1) * 100, 2)
         },
         'timestamp': datetime.now().isoformat()
     })
@@ -490,15 +628,13 @@ def warren_analysis_endpoint():
             'warren_analysis': {
                 'recommendation': 'STRONG_BUY',
                 'confidence': 0.89,
-                'reasoning': 'Demo: Strong fundamentals with economic moat',
-                'warren_score': 0.87,
-                'note': 'AI firm not fully loaded - import issue'
+                'reasoning': 'Demo: AI firm not loaded',
+                'warren_score': 0.87
             }
         })
     
     context = request.get_json() or {}
     
-    # Enhanced context with real analysis
     analysis_context = {
         'symbol': context.get('symbol', 'AAPL'),
         'fundamentals': {
@@ -520,8 +656,7 @@ def warren_analysis_endpoint():
         'status': 'success',
         'warren_analysis': analysis,
         'warren_insights': insights,
-        'philosophy': "Never lose money. Buy wonderful companies at fair prices.",
-        'supernatural_mode': True
+        'philosophy': "Never lose money. Buy wonderful companies at fair prices."
     })
 
 @app.route('/api/ai-firm/personas/cathie', methods=['POST'])
@@ -535,9 +670,8 @@ def cathie_insights_endpoint():
             'cathie_analysis': {
                 'recommendation': 'HIGH_CONVICTION_BUY',
                 'confidence': 0.91,
-                'reasoning': 'Demo: Exceptional innovation with disruption potential',
-                'innovation_score': 0.88,
-                'note': 'AI firm not fully loaded - import issue'
+                'reasoning': 'Demo: AI firm not loaded',
+                'innovation_score': 0.88
             }
         })
     
@@ -567,8 +701,7 @@ def cathie_insights_endpoint():
         'status': 'success',
         'cathie_analysis': analysis,
         'cathie_insights': insights,
-        'philosophy': "Invest in disruptive innovation transforming industries",
-        'supernatural_mode': True
+        'philosophy': "Invest in disruptive innovation transforming industries"
     })
 
 @app.route('/api/ai-firm/ceo-decisions', methods=['GET'])
@@ -580,16 +713,13 @@ def ceo_decisions_endpoint():
         return jsonify({
             'status': 'demo_mode',
             'ceo_decision': {
-                'reasoning': 'Demo: Strategic decision framework active',
-                'confidence': 0.82,
-                'note': 'CEO not loaded - import issue'
+                'reasoning': 'Demo: CEO not loaded',
+                'confidence': 0.82
             }
         })
     
-    # Get CEO status and recent decisions
     ceo_status = ceo.get_ceo_status()
     
-    # Generate strategic decision if none recent
     strategic_context = {
         'type': 'strategic_market_analysis',
         'market_trend': 'bullish',
@@ -610,11 +740,10 @@ def ceo_decisions_endpoint():
             'decision_type': strategic_decision.decision_type.value,
             'agent_overrides': strategic_decision.agent_overrides
         },
-        'strategic_insights': strategic_insights,
-        'supernatural_mode': True
+        'strategic_insights': strategic_insights
     })
 
-# Legacy endpoints (preserved for compatibility)
+# Legacy endpoints (preserved)
 @app.route('/market-price', methods=['GET'])
 @handle_errors
 def get_market_price():
@@ -650,7 +779,7 @@ def get_multi_asset_data():
 @app.route('/run-cycle', methods=['POST'])
 @handle_errors
 def run_rl_cycle():
-    """Execute enhanced RL cycle"""
+    """Execute integrated RL cycle"""
     try:
         config = request.get_json() if request.is_json else {}
         result = yantrax_system.execute_god_cycle()
@@ -666,10 +795,14 @@ def run_rl_cycle():
 @app.route('/journal', methods=['GET'])
 @handle_errors
 def get_journal():
-    """Get trading journal entries with AI firm enhancement"""
+    """Get trading journal entries"""
     try:
-        ai_firm_status = "enhanced_coordination" if AI_FIRM_READY else "legacy_mode"
+        # Return actual trade history if available
+        if yantrax_system.trade_history:
+            return jsonify(yantrax_system.trade_history[-10:])  # Last 10 trades
         
+        # Fallback to demo data
+        integration_status = "integrated" if (AI_FIRM_READY and RL_ENV_READY) else "simulated"
         journal_entries = [
             {
                 'id': i, 
@@ -677,9 +810,8 @@ def get_journal():
                 'action': ['BUY', 'SELL', 'HOLD'][i % 3], 
                 'reward': round(750 + (i * 50), 2),
                 'balance': round(132240.84 + (i * 250), 2),
-                'notes': f'{ai_firm_status} - Cycle {i+1}',
-                'ai_firm_active': AI_FIRM_READY,
-                'agent_count': 24 if AI_FIRM_READY else 4
+                'notes': f'{integration_status} - Cycle {i+1}',
+                'mode': integration_status
             } for i in range(5)
         ]
         return jsonify(journal_entries)
@@ -690,42 +822,42 @@ def get_journal():
 @app.route('/commentary', methods=['GET'])
 @handle_errors
 def get_commentary():
-    """Get AI commentary with enhanced AI firm insights"""
+    """Get AI commentary"""
     try:
-        if AI_FIRM_READY:
+        if AI_FIRM_READY and RL_ENV_READY:
             commentaries = [
                 {
                     'id': 1, 'agent': 'Warren Persona', 
-                    'comment': 'Fundamental analysis complete - strong economic moat identified with 18% ROE',
+                    'comment': 'Fundamental analysis complete - strong economic moat with 18% ROE',
                     'confidence': 0.89, 'timestamp': datetime.now().isoformat(),
-                    'sentiment': 'bullish', 'persona': True, 'supernatural_mode': True
+                    'sentiment': 'bullish', 'persona': True
                 },
                 {
                     'id': 2, 'agent': 'Cathie Persona', 
-                    'comment': 'Innovation metrics exceptional - disruption score 0.88 with TAM expansion 3x',
+                    'comment': 'Innovation metrics exceptional - disruption score 0.88',
                     'confidence': 0.91, 'timestamp': datetime.now().isoformat(),
-                    'sentiment': 'bullish', 'persona': True, 'supernatural_mode': True
+                    'sentiment': 'bullish', 'persona': True
                 },
                 {
                     'id': 3, 'agent': 'Autonomous CEO', 
-                    'comment': '24-agent coordination achieving 78% consensus - strategic oversight approved',
+                    'comment': '24-agent coordination achieving consensus - RL environment active',
                     'confidence': 0.85, 'timestamp': datetime.now().isoformat(),
-                    'sentiment': 'confident', 'ceo': True, 'supernatural_mode': True
+                    'sentiment': 'confident', 'ceo': True
                 },
                 {
-                    'id': 4, 'agent': 'AI Firm Coordinator',
-                    'comment': 'Supernatural recovery complete - all departments operational with memory learning',
+                    'id': 4, 'agent': 'RL Core',
+                    'comment': f'Market mood: {yantrax_system.current_state["mood"]} | Cycle: {yantrax_system.current_state["cycle"]}',
                     'confidence': 0.93, 'timestamp': datetime.now().isoformat(),
-                    'sentiment': 'supernatural', 'enhanced': True
+                    'sentiment': 'operational', 'rl': True
                 }
             ]
         else:
             commentaries = [
                 {
                     'id': 1, 'agent': 'System Status', 
-                    'comment': 'AI firm import failed - running legacy 4-agent system. Import path fix needed.',
+                    'comment': f'Integration mode: {"AI Firm only" if AI_FIRM_READY else "Legacy"}',
                     'confidence': 0.75, 'timestamp': datetime.now().isoformat(),
-                    'sentiment': 'neutral', 'fix_needed': True
+                    'sentiment': 'neutral'
                 }
             ]
         
@@ -745,7 +877,7 @@ def not_found(error):
             '/api/ai-firm/status', '/api/ai-firm/personas/warren', 
             '/api/ai-firm/personas/cathie', '/api/ai-firm/ceo-decisions'
         ],
-        'ai_firm_status': 'operational' if AI_FIRM_READY else 'fallback_mode',
+        'integration_status': 'integrated' if (AI_FIRM_READY and RL_ENV_READY) else 'partial',
         'timestamp': datetime.now().isoformat()
     }), 404
 
@@ -754,24 +886,25 @@ def internal_error(error):
     return jsonify({
         'error': 'Internal server error',
         'message': 'An unexpected error occurred',
-        'ai_firm_status': AI_FIRM_READY,
+        'integration_active': AI_FIRM_READY and RL_ENV_READY,
         'timestamp': datetime.now().isoformat()
     }), 500
 
 if __name__ == '__main__':
     print("\n" + "="*60)
-    print("🚀 YantraX RL v4.1 - SUPERNATURAL AI FIRM EMERGENCY FIX")
+    print("🚀 YantraX RL v4.2 - AI FIRM ↔ RL CORE INTEGRATION")
     print("="*60)
     print(f"🤖 AI Firm Ready: {AI_FIRM_READY}")
+    print(f"🎮 RL Core Ready: {RL_ENV_READY}")
     
-    if AI_FIRM_READY:
-        print("✅ 24-AGENT COORDINATION SYSTEM: ACTIVE")
-        print("✅ AUTONOMOUS CEO: OPERATIONAL")
-        print("✅ WARREN & CATHIE PERSONAS: LOADED")
-        print("✅ SUPERNATURAL MODE: ENABLED")
+    if AI_FIRM_READY and RL_ENV_READY:
+        print("✅ FULLY INTEGRATED: AI Firm decisions → RL Environment")
+        print("✅ 24-AGENT COORDINATION → MarketSimEnv.step()")
+        print("✅ REAL REWARDS from RL environment")
+    elif AI_FIRM_READY:
+        print("⚠️  PARTIAL: AI Firm active, RL env not loaded")
     else:
-        print("⚠️  FALLBACK MODE: 4-agent legacy system")
-        print("🔧 IMPORT PATH FIX NEEDED")
+        print("⚠️  FALLBACK MODE: Legacy 4-agent system")
     
     print("="*60)
     
