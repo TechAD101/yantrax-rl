@@ -108,6 +108,11 @@ class YantraXEnhancedSystem:
             'data_whisperer': {'confidence': 0.990, 'performance': 12.9, 'analysis': 'BULLISH_BREAKOUT'},
             'degen_auditor': {'confidence': 0.904, 'performance': 22.1, 'audit': 'LOW_RISK_APPROVED'}
         }
+
+                # Initialize RL environment
+        from rl_core.env_market_sim import MarketSimEnv
+        self.env = MarketSimEnv()
+        self.current_state = self.env.reset()
         
     def execute_god_cycle(self) -> Dict[str, Any]:
         """Execute enhanced god cycle with AI firm coordination"""
@@ -143,40 +148,51 @@ class YantraXEnhancedSystem:
         ceo_decision = ceo.make_strategic_decision(ceo_context)
         
         # Enhanced execution with AI firm coordination
+        # Map signal to action
         final_signal = voting_result['winning_signal']
-        reward = np.random.normal(950, 300)  # Enhanced performance with 20+ agents
+        signal_to_action = {
+            'bullish': 1,      # buy
+            'bearish': 2,      # sell
+            'neutral': 0,      # hold
+            'hold': 0
+        }
+        action = signal_to_action.get(final_signal.lower(), 0)  # default to hold
         
+        # Execute action in environment
+        state, reward, done = self.env.step(action)
+        
+        # Update state
+        self.current_state = state
+
         self.portfolio_balance += reward
         
         return {
             'status': 'success',
             'signal': final_signal,
-            'strategy': 'SUPERNATURAL_AI_FIRM_24_AGENTS',
-            'audit': 'CEO_APPROVED_ENHANCED',
-            'final_balance': round(self.portfolio_balance, 2),
-            'total_reward': round(reward, 2),
+            'market_state': {
+                'price': state.get('price', 0) if isinstance(state, dict) else 0,
+                'volatility': state.get('volatility', 0) if isinstance(state, dict) else 0,
+                'mood': state.get('mood', 'neutral') if isinstance(state, dict) else 'neutral',
+                'balance': self.portfolio_balance,
+                'position': state.get('position', 0) if isinstance(state, dict) else 0,
+                'cycle': state.get('cycle', 0) if isinstance(state, dict) else 0
+            },
             'ai_firm_coordination': {
                 'mode': 'full_operational',
                 'total_agents_coordinated': voting_result['participating_agents'],
                 'consensus_strength': voting_result['consensus_strength'],
                 'ceo_confidence': ceo_decision.confidence,
-                'ceo_reasoning': ceo_decision.reasoning,
-                'agent_overrides': len(ceo_decision.agent_overrides)
+                'ceo_reasoning': ceo_decision.reasoning
+            },
+            'rl_metrics': {
+                'reward': round(reward, 2),
+                'cycle': state.get('cycle', 0) if isinstance(state, dict) else 0,
+                'done': done
             },
             'agents': self._get_enhanced_agent_status(),
-            'enhanced_features': {
-                'warren_active': True,
-                'cathie_active': True,
-                'ceo_oversight': True,
-                'memory_learning': True,
-                'department_coordination': True
-            },
+            'final_balance': round(self.portfolio_balance, 2),
             'timestamp': datetime.now().isoformat()
         }
-    
-    def _execute_legacy_god_cycle(self) -> Dict[str, Any]:
-        """Fallback to original 4-agent god cycle"""
-        
         # Update legacy agent states
         for agent_name, state in self.legacy_agents.items():
             variation = np.random.normal(0, 0.05)
@@ -209,36 +225,9 @@ class YantraXEnhancedSystem:
     def _get_enhanced_agent_status(self) -> Dict[str, Any]:
         """Get status of all agents including enhanced 20+ agent system"""
         
-        if not AI_FIRM_READY:
-            return {name: {'confidence': round(state['confidence'], 3), 'performance': state['performance']} 
-                   for name, state in self.legacy_agents.items()}
-        
-        all_agents = {}
-        
-        # Legacy agents (still operational)
-        for name, state in self.legacy_agents.items():
-            all_agents[name] = {
-                'confidence': round(state['confidence'], 3),
-                'performance': state['performance'],
-                'department': 'legacy_integration',
-                'status': 'operational',
-                'enhanced': True
-            }
-        
-        # Enhanced agents from agent manager (20+ agents)
-        enhanced_agents = agent_manager.get_all_agents_status()
-        for name, data in enhanced_agents.items():
-            all_agents[name] = {
-                'confidence': round(data.get('confidence', 0.75), 3),
-                'performance': data.get('performance', 75.0),
-                'department': data.get('department', 'unknown'),
-                'role': data.get('role', 'specialist'),
-                'specialty': data.get('specialty', 'general'),
-                'persona': data.get('persona', False),
-                'status': 'operational'
-            }
-        
-        return all_agents
+# Simply return the agent status from agent manager
+        # It already has the correct format with department breakdown
+        return agent_manager.get_agent_status()
 
 # Initialize enhanced system
 yantrax_system = YantraXEnhancedSystem()
