@@ -272,7 +272,8 @@ class MarketDataManager:
             return cached
 
         # Try selected source
-        if self.source == 'alpha_vantage' and self.alpha_vantage_key:
+                logger.info(f"DEBUGGING: source={self.source}, alpha_vantage_key={'present' if self.alpha_vantage_key else 'missing'}")if self.source == 'alpha_vantage' and self.alpha_vantage_key:
+
             data = self._get_price_alpha_vantage(symbol)
             if data:
                 self._to_cache(symbol, data)
