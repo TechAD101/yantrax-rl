@@ -1,5 +1,5 @@
-# main.py - YantraX RL Backend v4.3 - COMPREHENSIVE FIX
-# All critical issues resolved - ready for deployment
+# main.py - YantraX RL Backend v4.4 - LIVE DATA FIXED
+# Critical: MarketDataService v2 properly instantiated with Alpaca fallback
 
 import os
 import sys
@@ -28,14 +28,51 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# FIXED #1: Single MarketDataService import (duplicate removed)
+# FIXED: Properly import and instantiate MarketDataService v2
 MARKET_SERVICE_READY = False
+market_data = None
+
 try:
-    from services.market_data_service_v2 import MarketDataService
-    MARKET_SERVICE_READY = True
-    logger.info("✅ MarketDataService v2 imported successfully")
+    from services.market_data_service_v2 import MarketDataService, MarketDataConfig
+    
+    # Get API keys from environment
+    alpha_key = os.getenv('ALPHA_VANTAGE_KEY', '')
+    alpaca_key = os.getenv('ALPACA_API_KEY', '')
+    alpaca_secret = os.getenv('ALPACA_SECRET_KEY', '')
+    
+    logger.info(f"🔑 Alpha Vantage Key: {'SET' if alpha_key else 'MISSING'}")
+    logger.info(f"🔑 Alpaca API Key: {'SET' if alpaca_key else 'MISSING'}")
+    logger.info(f"🔑 Alpaca Secret: {'SET' if alpaca_secret else 'MISSING'}")
+    
+    if alpha_key or (alpaca_key and alpaca_secret):
+        # Create config with available keys
+        config = MarketDataConfig(
+            alpha_vantage_key=alpha_key if alpha_key else 'demo',
+            polygon_key=None,  # Not using Polygon
+            finnhub_key=None,  # Not using Finnhub
+            cache_ttl_seconds=60,
+            rate_limit_calls=25,  # Alpha Vantage: 25/day
+            rate_limit_period=86400,  # 1 day in seconds
+            fallback_to_mock=True  # Re-enabled for reliability
+        )
+        
+        # Store Alpaca credentials for WebSocket fallback
+        config.alpaca_key = alpaca_key
+        config.alpaca_secret = alpaca_secret
+        
+        market_data = MarketDataService(config)
+        MARKET_SERVICE_READY = True
+        logger.info("✅ MarketDataService v2 initialized with config")
+        logger.info("📊 Data Sources: Alpha Vantage (primary, 25/day) → Alpaca (secondary, unlimited) → Mock (fallback)")
+    else:
+        logger.warning("⚠️ No API keys found - will use mock data only")
+        MARKET_SERVICE_READY = False
+        
 except ImportError as e:
-    logger.warning(f"⚠️  MarketDataService v2 not available: {e}")
+    logger.error(f"❌ MarketDataService v2 import failed: {e}")
+    MARKET_SERVICE_READY = False
+except Exception as e:
+    logger.error(f"❌ MarketDataService v2 initialization failed: {e}")
     MARKET_SERVICE_READY = False
 
 # AI Firm imports with enhanced error handling
@@ -49,7 +86,7 @@ try:
     logger.info("🏢 AI FIRM ARCHITECTURE LOADED SUCCESSFULLY!")
     logger.info("🚀 20+ AGENT COORDINATION SYSTEM ACTIVE")
 except ImportError as e:
-    logger.warning(f"⚠️  AI Firm primary import failed: {e}")
+    logger.warning(f"⚠️ AI Firm primary import failed: {e}")
     logger.info("🔍 Attempting alternate import paths...")
     try:
         import ai_firm.ceo as ceo_module
@@ -77,7 +114,7 @@ try:
     RL_ENV_READY = True
     logger.info("🎮 RL CORE: MarketSimEnv loaded successfully!")
 except ImportError as e:
-    logger.warning(f"⚠️  RL Core not available: {e}")
+    logger.warning(f"⚠️ RL Core not available: {e}")
     RL_ENV_READY = False
 
 app = Flask(__name__)
@@ -120,23 +157,9 @@ if AI_FIRM_READY:
         logger.info("📊 WARREN & CATHIE PERSONAS LOADED")
         logger.info("🔄 20+ AGENT COORDINATION READY")
     except Exception as e:
-        logger.error(f"⚠️  AI Firm initialization error: {e}")
+        logger.error(f"⚠️ AI Firm initialization error: {e}")
         AI_FIRM_READY = False
         logger.info("🔄 Falling back to legacy mode")
-
-# FIXED #3: Market Data Service initialization with safety check
-market_data = None
-if MARKET_SERVICE_READY:
-    try:
-        market_data = MarketDataService()
-        logger.info("✅ MarketDataService v2 initialized")
-        logger.info("📊 Primary: Alpha Vantage | Fallbacks: Polygon, Finnhub, Mock")
-    except Exception as e:
-        logger.error(f"⚠️  MarketDataService v2 init failed: {e}")
-        MARKET_SERVICE_READY = False
-        market_data = None
-else:
-    logger.info("📊 Using fallback market data (MarketDataService v2 not available)")
 
 class YantraXEnhancedSystem:
     """Enhanced trading system with AI Firm + RL Core integration"""
@@ -338,7 +361,7 @@ class YantraXEnhancedSystem:
         }
     
     def _get_agent_status(self) -> Dict[str, Any]:
-        """FIXED #4: Get agent status with defensive handling"""
+        """Get agent status with defensive handling"""
         if not AI_FIRM_READY:
             return {
                 name: {
@@ -399,9 +422,9 @@ yantrax_system = YantraXEnhancedSystem()
 @handle_errors
 def health_check():
     return jsonify({
-        'message': 'YantraX RL Backend v4.3 - ALL FIXES APPLIED',
+        'message': 'YantraX RL Backend v4.4 - LIVE DATA FIXED',
         'status': 'operational',
-        'version': '4.3.0',
+        'version': '4.4.0',
         'integration': {
             'ai_firm': AI_FIRM_READY,
             'rl_core': RL_ENV_READY,
@@ -409,6 +432,11 @@ def health_check():
             'mode': 'fully_integrated' if (AI_FIRM_READY and RL_ENV_READY) else (
                 'ai_firm_only' if AI_FIRM_READY else 'legacy'
             )
+        },
+        'data_sources': {
+            'primary': 'Alpha Vantage (25/day)' if MARKET_SERVICE_READY else 'None',
+            'secondary': 'Alpaca (unlimited)' if MARKET_SERVICE_READY else 'None',
+            'fallback': 'Mock data' if MARKET_SERVICE_READY else 'Enabled'
         },
         'components': {
             'total_agents': 24 if AI_FIRM_READY else 4,
@@ -449,7 +477,7 @@ def detailed_health():
 @handle_errors
 def god_cycle():
     result = yantrax_system.execute_god_cycle()
-    result['version'] = '4.3.0'
+    result['version'] = '4.4.0'
     result['integration_active'] = AI_FIRM_READY and RL_ENV_READY
     return jsonify(result)
 
@@ -477,26 +505,37 @@ def ai_firm_status():
         logger.error(f"AI Firm status error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-# FIXED #5: Market price endpoint with fallback
 @app.route('/market-price', methods=['GET'])
 @handle_errors
 def get_market_price():
+    """Get market price with proper MarketDataService v2 integration"""
     symbol = request.args.get('symbol', 'AAPL').upper()
     
     if MARKET_SERVICE_READY and market_data:
         try:
-            return jsonify(market_data.get_price(symbol))
+            result = market_data.get_stock_price(symbol)
+            logger.info(f"📊 Market data for {symbol}: ${result.get('price', 0)} from {result.get('source', 'unknown')}")
+            return jsonify(result)
         except Exception as e:
-            logger.error(f"Market data error: {e}")
-    
-    # Fallback to mock data
-    return jsonify({
-        'symbol': symbol,
-        'price': round(np.random.uniform(100, 500), 2),
-        'change': round(np.random.uniform(-10, 10), 2),
-        'timestamp': datetime.now().isoformat(),
-        'source': 'mock_fallback'
-    })
+            logger.error(f"Market data error for {symbol}: {e}")
+            # Fallback to mock
+            return jsonify({
+                'symbol': symbol,
+                'price': round(np.random.uniform(100, 500), 2),
+                'change': round(np.random.uniform(-10, 10), 2),
+                'timestamp': datetime.now().isoformat(),
+                'source': 'mock_emergency_fallback',
+                'error': str(e)
+            })
+    else:
+        # No market service - return mock
+        return jsonify({
+            'symbol': symbol,
+            'price': round(np.random.uniform(100, 500), 2),
+            'change': round(np.random.uniform(-10, 10), 2),
+            'timestamp': datetime.now().isoformat(),
+            'source': 'mock_no_service'
+        })
 
 @app.route('/multi-asset-data', methods=['GET'])
 @handle_errors
@@ -508,7 +547,7 @@ def get_multi_asset_data():
     for symbol in symbols:
         try:
             if MARKET_SERVICE_READY and market_data:
-                results[symbol] = market_data.get_price(symbol)
+                results[symbol] = market_data.get_stock_price(symbol)
             else:
                 results[symbol] = {
                     'symbol': symbol,
@@ -596,18 +635,24 @@ def internal_error(error):
 
 if __name__ == '__main__':
     print("\n" + "="*60)
-    print("🚀 YantraX RL v4.3 - ALL CRITICAL FIXES APPLIED")
+    print("🚀 YantraX RL v4.4 - LIVE DATA PROPERLY CONFIGURED")
     print("="*60)
     print(f"🤖 AI Firm: {'✅ READY' if AI_FIRM_READY else '❌ FALLBACK'}")
     print(f"🎮 RL Core: {'✅ READY' if RL_ENV_READY else '❌ NOT LOADED'}")
-    print(f"📊 Market Service: {'✅ v2' if MARKET_SERVICE_READY else '❌ FALLBACK'}")
+    print(f"📊 Market Data: {'✅ v2 CONFIGURED' if MARKET_SERVICE_READY else '❌ MOCK ONLY'}")
+    
+    if MARKET_SERVICE_READY:
+        print("📡 Data Pipeline:")
+        print("   1️⃣ Alpha Vantage (primary, 25/day)")
+        print("   2️⃣ Alpaca (secondary, unlimited)")
+        print("   3️⃣ Mock (emergency fallback)")
     
     if AI_FIRM_READY and RL_ENV_READY:
         print("✅ FULLY INTEGRATED MODE")
     elif AI_FIRM_READY:
-        print("⚠️  AI FIRM ONLY MODE")
+        print("⚠️ AI FIRM ONLY MODE")
     else:
-        print("⚠️  LEGACY 4-AGENT MODE")
+        print("⚠️ LEGACY 4-AGENT MODE")
     
     print("="*60 + "\n")
     
