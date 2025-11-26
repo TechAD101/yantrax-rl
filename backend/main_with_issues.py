@@ -451,33 +451,7 @@ class MarketDataManager:
             'change': round(base_price * variation, 2),
             'changePercent': round(variation * 100, 2),
             'timestamp': datetime.now().isoformat(),
-            'source': 'git add -A'
-            'git commit -m "feat: Add professional MarketDataService v2 with Alpha Vantage integration
-
-Major improvements:
-- Created MarketDataService v2 with production-grade architecture
-- Multi-provider support (Alpha Vantage, Polygon, Finnhub, Mock)
-- Intelligent fallback strategy
-- Built-in rate limiting (5 calls/min configurable)
-- Smart caching system (60s TTL)
-- Comprehensive API response validation
-- Detailed logging for monitoring
-- Health check endpoint support
-- Batch symbol fetching
-- Full type safety
-
-Tested and verified:
-- ✅ Alpha Vantage integration working
-- ✅ Cache functioning properly
-- ✅ Rate limiter operational
-- ✅ Health checks passing
-
-Next steps:
-- Integrate v2 into main.py
-- Add health endpoint to API
-- Complete frontend integration
-- Deploy to production""
-"'
+            'source': 'mock_data'
         }
 
 market_data = MarketDataService()

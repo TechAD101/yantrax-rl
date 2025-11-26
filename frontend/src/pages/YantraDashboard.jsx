@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import AIFirmDashboard from '../components/AIFirmDashboard';
 import {
@@ -107,11 +106,10 @@ const YantraDashboard = () => {
     if (volatility < 0.15) return { regime: "LOW_VOL", color: "text-green-400", bg: "bg-green-900/20" };
     return { regime: "NORMAL", color: "text-blue-400", bg: "bg-blue-900/20" };
   }, [riskAnalytics.volatility]);
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
-      {/* Revolutionary Header */}
-      <header className="border-b border-gray-700/50 bg-gray-900/80 backdrop-blur-xl">
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
+        {/* Revolutionary Header */}
+        <header className="border-b border-gray-700/50 bg-gray-900/80 backdrop-blur-xl">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
