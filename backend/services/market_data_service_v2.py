@@ -36,7 +36,7 @@ class MarketDataConfig:
     request_timeout: int = 10
     rate_limit_calls: int = 5  # calls per minute
     rate_limit_period: int = 60  # seconds
-    fallback_to_mock: bool = True
+    fallback_to_mock: bool = False
     
 class RateLimiter:
     """Simple rate limiter to avoid hitting API limits"""
