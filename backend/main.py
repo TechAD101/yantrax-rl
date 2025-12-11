@@ -1,5 +1,5 @@
-# main.py - YantraX RL Backend v4.4 - LIVE DATA FIXED
-# Critical: MarketDataService v2 properly instantiated with Alpaca fallback
+# main.py - YantraX RL Backend v4.5 - LIVE DATA FINALLY FIXED
+# Critical: Pass Alpaca credentials BEFORE service initialization
 
 import os
 import sys
@@ -45,25 +45,24 @@ try:
     logger.info(f"🔑 Alpaca Secret: {'SET' if alpaca_secret else 'MISSING'}")
     
     if alpha_key or (alpaca_key and alpaca_secret):
-        # Create config with available keys
+        # CRITICAL FIX: Pass credentials directly to config constructor
+        # This ensures _get_available_providers() sees them during __init__
         config = MarketDataConfig(
             alpha_vantage_key=alpha_key if alpha_key else 'demo',
-            polygon_key=None,  # Not using Polygon
-            finnhub_key=None,  # Not using Finnhub
+            alpaca_key=alpaca_key if alpaca_key else None,  # PASS HERE!
+            alpaca_secret=alpaca_secret if alpaca_secret else None,  # PASS HERE!
+            polygon_key=None,
+            finnhub_key=None,
             cache_ttl_seconds=60,
-            rate_limit_calls=25,  # Alpha Vantage: 25/day
-            rate_limit_period=86400,  # 1 day in seconds
-            fallback_to_mock=True  # Re-enabled for reliability
+            rate_limit_calls=25,
+            rate_limit_period=86400,
+            fallback_to_mock=True
         )
         
-        # Store Alpaca credentials for WebSocket fallback
-        config.alpaca_key = alpaca_key
-        config.alpaca_secret = alpaca_secret
-        
-        market_data = MarketDataService(config)
+        market_data = MarketDataService(config)  # NOW Alpaca is detected!
         MARKET_SERVICE_READY = True
         logger.info("✅ MarketDataService v2 initialized with config")
-        logger.info("📊 Data Sources: Alpha Vantage (primary, 25/day) → Alpaca (secondary, unlimited) → Mock (fallback)")
+        logger.info("📡 Data Sources: Alpha Vantage (primary, 25/day) → Alpaca (secondary, unlimited) → Mock (fallback)")
     else:
         logger.warning("⚠️ No API keys found - will use mock data only")
         MARKET_SERVICE_READY = False
@@ -422,9 +421,9 @@ yantrax_system = YantraXEnhancedSystem()
 @handle_errors
 def health_check():
     return jsonify({
-        'message': 'YantraX RL Backend v4.4 - LIVE DATA FIXED',
+        'message': 'YantraX RL Backend v4.5 - LIVE DATA TRULY FIXED',
         'status': 'operational',
-        'version': '4.4.0',
+        'version': '4.5.0',
         'integration': {
             'ai_firm': AI_FIRM_READY,
             'rl_core': RL_ENV_READY,
@@ -477,7 +476,7 @@ def detailed_health():
 @handle_errors
 def god_cycle():
     result = yantrax_system.execute_god_cycle()
-    result['version'] = '4.4.0'
+    result['version'] = '4.5.0'
     result['integration_active'] = AI_FIRM_READY and RL_ENV_READY
     return jsonify(result)
 
@@ -635,7 +634,7 @@ def internal_error(error):
 
 if __name__ == '__main__':
     print("\n" + "="*60)
-    print("🚀 YantraX RL v4.4 - LIVE DATA PROPERLY CONFIGURED")
+    print("🚀 YantraX RL v4.5 - CRITICAL BUG FIXED")
     print("="*60)
     print(f"🤖 AI Firm: {'✅ READY' if AI_FIRM_READY else '❌ FALLBACK'}")
     print(f"🎮 RL Core: {'✅ READY' if RL_ENV_READY else '❌ NOT LOADED'}")
@@ -644,7 +643,7 @@ if __name__ == '__main__':
     if MARKET_SERVICE_READY:
         print("📡 Data Pipeline:")
         print("   1️⃣ Alpha Vantage (primary, 25/day)")
-        print("   2️⃣ Alpaca (secondary, unlimited)")
+        print("   2️⃣ Alpaca (secondary, UNLIMITED!)")
         print("   3️⃣ Mock (emergency fallback)")
     
     if AI_FIRM_READY and RL_ENV_READY:
