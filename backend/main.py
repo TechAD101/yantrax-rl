@@ -1,5 +1,5 @@
-# main.py - YantraX RL Backend v4.5 - LIVE DATA FINALLY FIXED
-# Critical: Pass Alpaca credentials BEFORE service initialization
+# main.py - YantraX RL Backend v4.6 - DIAGNOSTIC + FORCE TEST
+# Critical: Debug why live data isn't flowing
 
 import os
 import sys
@@ -23,34 +23,54 @@ except ImportError as e:
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # Changed to DEBUG for more details
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
+# ==================== CRITICAL DIAGNOSTIC ====================
+
+logger.info("\n" + "="*80)
+logger.info("🔍 YANTRAX RL v4.6 - DIAGNOSTIC MODE")
+logger.info("="*80)
+
+# Log all environment variables
+logger.info("📋 ENVIRONMENT VARIABLES CHECK:")
+alpha_key_env = os.getenv('ALPHA_VANTAGE_KEY', '')
+alpaca_key_env = os.getenv('ALPACA_API_KEY', '')
+alpaca_secret_env = os.getenv('ALPACA_SECRET_KEY', '')
+
+logger.info(f"  ALPHA_VANTAGE_KEY present: {bool(alpha_key_env)} (first 10 chars: {alpha_key_env[:10] if alpha_key_env else 'EMPTY'})")
+logger.info(f"  ALPACA_API_KEY present: {bool(alpaca_key_env)} (first 10 chars: {alpaca_key_env[:10] if alpaca_key_env else 'EMPTY'})")
+logger.info(f"  ALPACA_SECRET_KEY present: {bool(alpaca_secret_env)} (first 10 chars: {alpaca_secret_env[:10] if alpaca_secret_env else 'EMPTY'})")
+
 # FIXED: Properly import and instantiate MarketDataService v2
 MARKET_SERVICE_READY = False
 market_data = None
+MARKET_DATA_CONFIG = None
 
 try:
     from services.market_data_service_v2 import MarketDataService, MarketDataConfig
+    
+    logger.info("✅ MarketDataService v2 imported successfully")
     
     # Get API keys from environment
     alpha_key = os.getenv('ALPHA_VANTAGE_KEY', '')
     alpaca_key = os.getenv('ALPACA_API_KEY', '')
     alpaca_secret = os.getenv('ALPACA_SECRET_KEY', '')
     
-    logger.info(f"🔑 Alpha Vantage Key: {'SET' if alpha_key else 'MISSING'}")
-    logger.info(f"🔑 Alpaca API Key: {'SET' if alpaca_key else 'MISSING'}")
-    logger.info(f"🔑 Alpaca Secret: {'SET' if alpaca_secret else 'MISSING'}")
+    logger.info(f"\n🔑 API KEYS CHECK:")
+    logger.info(f"  Alpha Vantage: {'✅ SET' if alpha_key else '❌ MISSING'}")
+    logger.info(f"  Alpaca API Key: {'✅ SET' if alpaca_key else '❌ MISSING'}")
+    logger.info(f"  Alpaca Secret: {'✅ SET' if alpaca_secret else '❌ MISSING'}")
     
     if alpha_key or (alpaca_key and alpaca_secret):
+        logger.info("\n🔨 CREATING MarketDataConfig...")
         # CRITICAL FIX: Pass credentials directly to config constructor
-        # This ensures _get_available_providers() sees them during __init__
         config = MarketDataConfig(
             alpha_vantage_key=alpha_key if alpha_key else 'demo',
-            alpaca_key=alpaca_key if alpaca_key else None,  # PASS HERE!
-            alpaca_secret=alpaca_secret if alpaca_secret else None,  # PASS HERE!
+            alpaca_key=alpaca_key if alpaca_key else None,
+            alpaca_secret=alpaca_secret if alpaca_secret else None,
             polygon_key=None,
             finnhub_key=None,
             cache_ttl_seconds=60,
@@ -59,20 +79,38 @@ try:
             fallback_to_mock=True
         )
         
-        market_data = MarketDataService(config)  # NOW Alpaca is detected!
+        logger.info(f"  Config created:")
+        logger.info(f"    - alpha_vantage_key: {bool(config.alpha_vantage_key)}")
+        logger.info(f"    - alpaca_key: {bool(config.alpaca_key)}")
+        logger.info(f"    - alpaca_secret: {bool(config.alpaca_secret)}")
+        logger.info(f"    - fallback_to_mock: {config.fallback_to_mock}")
+        
+        MARKET_DATA_CONFIG = config
+        
+        logger.info("\n🚀 INITIALIZING MarketDataService...")
+        market_data = MarketDataService(config)
+        
         MARKET_SERVICE_READY = True
-        logger.info("✅ MarketDataService v2 initialized with config")
-        logger.info("📡 Data Sources: Alpha Vantage (primary, 25/day) → Alpaca (secondary, unlimited) → Mock (fallback)")
+        logger.info(f"✅ MarketDataService initialized successfully")
+        logger.info(f"📊 Available providers: {[p.value for p in market_data.providers]}")
+        logger.info("📡 Data Pipeline: Alpha Vantage (25/day) → Alpaca (unlimited) → Mock (fallback)")
     else:
-        logger.warning("⚠️ No API keys found - will use mock data only")
+        logger.error("❌ NO API KEYS FOUND!")
+        logger.error("   - Check ALPHA_VANTAGE_KEY environment variable")
+        logger.error("   - Check ALPACA_API_KEY environment variable")
+        logger.error("   - Check ALPACA_SECRET_KEY environment variable")
         MARKET_SERVICE_READY = False
         
 except ImportError as e:
     logger.error(f"❌ MarketDataService v2 import failed: {e}")
+    logger.error(f"   Import error details: {str(e)}")
     MARKET_SERVICE_READY = False
 except Exception as e:
     logger.error(f"❌ MarketDataService v2 initialization failed: {e}")
+    logger.error(f"   Traceback: {str(e)}")
     MARKET_SERVICE_READY = False
+
+logger.info("="*80 + "\n")
 
 # AI Firm imports with enhanced error handling
 AI_FIRM_READY = False
@@ -211,7 +249,6 @@ class YantraXEnhancedSystem:
     def _execute_integrated_cycle(self) -> Dict[str, Any]:
         """Fully integrated: AI Firm → RL Environment"""
         try:
-            # Build context from RL state
             context = {
                 'decision_type': 'trading',
                 'market_price': self.current_state['price'],
@@ -223,10 +260,7 @@ class YantraXEnhancedSystem:
                 'timestamp': datetime.now().isoformat()
             }
             
-            # Agent voting
             voting_result = agent_manager.conduct_agent_voting(context)
-            
-            # CEO decision
             ceo_context = {
                 'type': 'strategic_trading_decision',
                 'agent_recommendation': voting_result['winning_signal'],
@@ -236,16 +270,13 @@ class YantraXEnhancedSystem:
             }
             ceo_decision = ceo.make_strategic_decision(ceo_context)
             
-            # Execute in RL environment
             final_signal = voting_result['winning_signal']
             rl_action = self._map_signal_to_action(final_signal)
             next_state, reward, done = self.env.step(rl_action)
             
-            # Update state
             self.current_state = next_state
             self.portfolio_balance = next_state['balance']
             
-            # Record trade
             self.trade_history.append({
                 'cycle': next_state['cycle'],
                 'action': rl_action,
@@ -333,7 +364,6 @@ class YantraXEnhancedSystem:
     
     def _execute_legacy_cycle(self) -> Dict[str, Any]:
         """Legacy 4-agent fallback"""
-        # Update legacy agents
         for state in self.legacy_agents.values():
             variation = np.random.normal(0, 0.05)
             state['confidence'] = np.clip(state['confidence'] + variation, 0.1, 0.99)
@@ -372,7 +402,6 @@ class YantraXEnhancedSystem:
         
         all_agents = {}
         
-        # Add legacy agents
         for name, state in self.legacy_agents.items():
             all_agents[name] = {
                 'confidence': round(state['confidence'], 3),
@@ -381,11 +410,9 @@ class YantraXEnhancedSystem:
                 'status': 'operational'
             }
         
-        # Add AI Firm agents with defensive handling
         try:
             enhanced = agent_manager.get_agent_status()
             
-            # Handle different response types
             if isinstance(enhanced, dict):
                 for name, data in enhanced.items():
                     if isinstance(data, dict):
@@ -421,9 +448,9 @@ yantrax_system = YantraXEnhancedSystem()
 @handle_errors
 def health_check():
     return jsonify({
-        'message': 'YantraX RL Backend v4.5 - LIVE DATA TRULY FIXED',
+        'message': 'YantraX RL Backend v4.6 - DIAGNOSTIC MODE',
         'status': 'operational',
-        'version': '4.5.0',
+        'version': '4.6.0',
         'integration': {
             'ai_firm': AI_FIRM_READY,
             'rl_core': RL_ENV_READY,
@@ -446,6 +473,147 @@ def health_check():
         'stats': error_counts,
         'timestamp': datetime.now().isoformat()
     })
+
+@app.route('/debug', methods=['GET'])
+@handle_errors
+def debug_status():
+    """Detailed debug information"""
+    return jsonify({
+        'version': '4.6.0',
+        'status': 'diagnostic',
+        'market_service': {
+            'initialized': MARKET_SERVICE_READY,
+            'config': {
+                'alpha_vantage_key_set': bool(MARKET_DATA_CONFIG.alpha_vantage_key if MARKET_DATA_CONFIG else False),
+                'alpaca_key_set': bool(MARKET_DATA_CONFIG.alpaca_key if MARKET_DATA_CONFIG else False),
+                'alpaca_secret_set': bool(MARKET_DATA_CONFIG.alpaca_secret if MARKET_DATA_CONFIG else False),
+                'fallback_to_mock': MARKET_DATA_CONFIG.fallback_to_mock if MARKET_DATA_CONFIG else False
+            },
+            'providers_available': [p.value for p in market_data.providers] if market_data else [],
+        },
+        'environment': {
+            'ALPHA_VANTAGE_KEY': 'SET' if os.getenv('ALPHA_VANTAGE_KEY') else 'MISSING',
+            'ALPACA_API_KEY': 'SET' if os.getenv('ALPACA_API_KEY') else 'MISSING',
+            'ALPACA_SECRET_KEY': 'SET' if os.getenv('ALPACA_SECRET_KEY') else 'MISSING'
+        },
+        'ai_firm': {
+            'ready': AI_FIRM_READY
+        },
+        'rl_core': {
+            'ready': RL_ENV_READY
+        },
+        'timestamp': datetime.now().isoformat()
+    })
+
+@app.route('/test-alpaca', methods=['GET'])
+@handle_errors
+def test_alpaca():
+    """Force test Alpaca API directly"""
+    symbol = request.args.get('symbol', 'AAPL').upper()
+    
+    logger.info(f"\n🧪 FORCE TEST: Alpaca API for {symbol}")
+    
+    alpaca_key = os.getenv('ALPACA_API_KEY')
+    alpaca_secret = os.getenv('ALPACA_SECRET_KEY')
+    
+    if not alpaca_key or not alpaca_secret:
+        logger.error("❌ Alpaca credentials missing!")
+        return jsonify({
+            'status': 'error',
+            'message': 'Alpaca credentials not configured',
+            'alpaca_key_set': bool(alpaca_key),
+            'alpaca_secret_set': bool(alpaca_secret)
+        })
+    
+    try:
+        import requests
+        
+        logger.info(f"  Alpaca Key (first 10): {alpaca_key[:10] if alpaca_key else 'NONE'}")
+        logger.info(f"  Making request to Alpaca...")
+        
+        headers = {
+            'APCA-API-KEY-ID': alpaca_key,
+            'APCA-API-SECRET-KEY': alpaca_secret
+        }
+        
+        url = f"https://data.alpaca.markets/v2/stocks/{symbol}/quotes/latest"
+        logger.info(f"  URL: {url}")
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        logger.info(f"  Status: {response.status_code}")
+        logger.info(f"  Response: {response.text[:200]}")
+        
+        return jsonify({
+            'status': 'success',
+            'symbol': symbol,
+            'response_status': response.status_code,
+            'response': response.json(),
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"❌ Alpaca test failed: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'symbol': symbol,
+            'timestamp': datetime.now().isoformat()
+        })
+
+@app.route('/test-alpha', methods=['GET'])
+@handle_errors
+def test_alpha():
+    """Force test Alpha Vantage API directly"""
+    symbol = request.args.get('symbol', 'AAPL').upper()
+    
+    logger.info(f"\n🧪 FORCE TEST: Alpha Vantage API for {symbol}")
+    
+    alpha_key = os.getenv('ALPHA_VANTAGE_KEY')
+    
+    if not alpha_key:
+        logger.error("❌ Alpha Vantage credentials missing!")
+        return jsonify({
+            'status': 'error',
+            'message': 'Alpha Vantage credentials not configured',
+            'alpha_key_set': False
+        })
+    
+    try:
+        import requests
+        
+        logger.info(f"  Alpha Key (first 10): {alpha_key[:10] if alpha_key else 'NONE'}")
+        logger.info(f"  Making request to Alpha Vantage...")
+        
+        url = f"https://www.alphavantage.co/query"
+        params = {
+            'function': 'GLOBAL_QUOTE',
+            'symbol': symbol,
+            'apikey': alpha_key
+        }
+        
+        logger.info(f"  URL: {url}")
+        logger.info(f"  Params: {list(params.keys())}")
+        
+        response = requests.get(url, params=params, timeout=10)
+        
+        logger.info(f"  Status: {response.status_code}")
+        logger.info(f"  Response: {response.text[:200]}")
+        
+        return jsonify({
+            'status': 'success',
+            'symbol': symbol,
+            'response_status': response.status_code,
+            'response': response.json(),
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"❌ Alpha test failed: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'symbol': symbol,
+            'timestamp': datetime.now().isoformat()
+        })
 
 @app.route('/health', methods=['GET'])
 @handle_errors  
@@ -476,33 +644,9 @@ def detailed_health():
 @handle_errors
 def god_cycle():
     result = yantrax_system.execute_god_cycle()
-    result['version'] = '4.5.0'
+    result['version'] = '4.6.0'
     result['integration_active'] = AI_FIRM_READY and RL_ENV_READY
     return jsonify(result)
-
-@app.route('/api/ai-firm/status', methods=['GET'])
-@handle_errors
-def ai_firm_status():
-    if not AI_FIRM_READY:
-        return jsonify({
-            'status': 'fallback_mode',
-            'message': 'AI Firm not loaded',
-            'agents': len(yantrax_system.legacy_agents)
-        })
-    
-    try:
-        ceo_status = ceo.get_ceo_status()
-        return jsonify({
-            'status': 'operational',
-            'total_agents': 24,
-            'ceo': ceo_status,
-            'personas': {'warren': True, 'cathie': True},
-            'rl_integration': RL_ENV_READY,
-            'timestamp': datetime.now().isoformat()
-        })
-    except Exception as e:
-        logger.error(f"AI Firm status error: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/market-price', methods=['GET'])
 @handle_errors
@@ -517,7 +661,6 @@ def get_market_price():
             return jsonify(result)
         except Exception as e:
             logger.error(f"Market data error for {symbol}: {e}")
-            # Fallback to mock
             return jsonify({
                 'symbol': symbol,
                 'price': round(np.random.uniform(100, 500), 2),
@@ -527,7 +670,6 @@ def get_market_price():
                 'error': str(e)
             })
     else:
-        # No market service - return mock
         return jsonify({
             'symbol': symbol,
             'price': round(np.random.uniform(100, 500), 2),
@@ -576,7 +718,6 @@ def get_journal():
     if yantrax_system.trade_history:
         return jsonify(yantrax_system.trade_history[-10:])
     
-    # Demo data
     return jsonify([
         {
             'id': i,
@@ -621,7 +762,7 @@ def get_commentary():
 def not_found(error):
     return jsonify({
         'error': 'Not found',
-        'endpoints': ['/', '/health', '/god-cycle', '/market-price', '/run-cycle', '/journal', '/commentary'],
+        'endpoints': ['/', '/health', '/debug', '/test-alpaca', '/test-alpha', '/god-cycle', '/market-price', '/run-cycle', '/journal', '/commentary'],
         'timestamp': datetime.now().isoformat()
     }), 404
 
@@ -634,25 +775,19 @@ def internal_error(error):
 
 if __name__ == '__main__':
     print("\n" + "="*60)
-    print("🚀 YantraX RL v4.5 - CRITICAL BUG FIXED")
+    print("🚀 YantraX RL v4.6 - DIAGNOSTIC MODE ACTIVE")
     print("="*60)
     print(f"🤖 AI Firm: {'✅ READY' if AI_FIRM_READY else '❌ FALLBACK'}")
     print(f"🎮 RL Core: {'✅ READY' if RL_ENV_READY else '❌ NOT LOADED'}")
     print(f"📊 Market Data: {'✅ v2 CONFIGURED' if MARKET_SERVICE_READY else '❌ MOCK ONLY'}")
     
-    if MARKET_SERVICE_READY:
-        print("📡 Data Pipeline:")
-        print("   1️⃣ Alpha Vantage (primary, 25/day)")
-        print("   2️⃣ Alpaca (secondary, UNLIMITED!)")
-        print("   3️⃣ Mock (emergency fallback)")
+    if MARKET_SERVICE_READY and market_data:
+        print(f"📡 Available Providers: {[p.value for p in market_data.providers]}")
     
-    if AI_FIRM_READY and RL_ENV_READY:
-        print("✅ FULLY INTEGRATED MODE")
-    elif AI_FIRM_READY:
-        print("⚠️ AI FIRM ONLY MODE")
-    else:
-        print("⚠️ LEGACY 4-AGENT MODE")
-    
+    print("\n🧪 DIAGNOSTIC ENDPOINTS:")
+    print("  /debug - Full config status")
+    print("  /test-alpha?symbol=AAPL - Test Alpha Vantage directly")
+    print("  /test-alpaca?symbol=AAPL - Test Alpaca directly")
     print("="*60 + "\n")
     
     port = int(os.environ.get('PORT', 5000))
