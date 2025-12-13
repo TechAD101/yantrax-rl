@@ -90,10 +90,21 @@ error_counts = {
     'api_call_errors': 0
 }
 
+# Simple Prometheus-like metrics registry (lightweight)
+metrics_registry = {
+    'yantrax_requests_total': 0,
+    'yantrax_agent_latency_seconds_count': 0,
+    'yantrax_agent_latency_seconds_sum': 0.0
+}
+
 def handle_errors(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         error_counts['total_requests'] += 1
+        try:
+            metrics_registry['yantrax_requests_total'] += 1
+        except Exception:
+            pass
         try:
             result = func(*args, **kwargs)
             error_counts['successful_requests'] += 1
@@ -448,10 +459,37 @@ def detailed_health():
 @app.route('/god-cycle', methods=['GET'])
 @handle_errors
 def god_cycle():
+    start_ts = datetime.now()
     result = yantrax_system.execute_god_cycle()
+    # Update prometheus-like metrics
+    try:
+        elapsed = (datetime.now() - start_ts).total_seconds()
+        metrics_registry['yantrax_agent_latency_seconds_count'] += 1
+        metrics_registry['yantrax_agent_latency_seconds_sum'] += elapsed
+    except Exception:
+        pass
     result['version'] = '4.3.0'
     result['integration_active'] = AI_FIRM_READY and RL_ENV_READY
     return jsonify(result)
+
+
+@app.route('/metrics', methods=['GET'])
+@handle_errors
+def metrics():
+    # Return simple text metrics in Prometheus exposition format
+    try:
+        output = []
+        output.append(f"# HELP yantrax_requests_total Total number of yantrax requests")
+        output.append(f"# TYPE yantrax_requests_total counter")
+        output.append(f"yantrax_requests_total {int(metrics_registry.get('yantrax_requests_total', 0))}")
+        output.append(f"# HELP yantrax_agent_latency_seconds Histogram for agent latency")
+        output.append(f"# TYPE yantrax_agent_latency_seconds histogram")
+        output.append(f"yantrax_agent_latency_seconds_count {int(metrics_registry.get('yantrax_agent_latency_seconds_count', 0))}")
+        output.append(f"yantrax_agent_latency_seconds_sum {metrics_registry.get('yantrax_agent_latency_seconds_sum', 0.0)}")
+        return ("\n".join(output), 200, {'Content-Type': 'text/plain; charset=utf-8'})
+    except Exception as e:
+        logger.error(f"Metrics exposition error: {e}")
+        return ("", 500, {'Content-Type': 'text/plain; charset=utf-8'})
 
 @app.route('/api/ai-firm/status', methods=['GET'])
 @handle_errors
