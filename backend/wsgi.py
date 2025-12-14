@@ -15,18 +15,25 @@ def _str2bool(s: str) -> bool:
 ai_firm_enabled = _str2bool(os.environ.get("AI_FIRM_ENABLED", "false"))
 
 app = None
-if ai_firm_enabled:
+# Prefer `main` (newer entrypoint with diagnostics). If it's available, use it.
+try:
+    if importlib.util.find_spec("main") is not None:
+        mod_main = importlib.import_module("main")
+        app = getattr(mod_main, "app", None)
+except Exception:
+    app = None
+
+# If `main` wasn't available or didn't provide an app, try the enhanced AI entrypoint
+if app is None and ai_firm_enabled:
     try:
-        # Only import main_enhanced if module is present to avoid ImportError
         if importlib.util.find_spec("main_enhanced") is not None:
             mod = importlib.import_module("main_enhanced")
             app = getattr(mod, "app", None)
     except Exception:
-        # If anything goes wrong, we'll fall back to legacy main below
         app = None
 
+# Final fallback: try to import `main` again (or raise if neither present)
 if app is None:
-    # Fallback to legacy `main` app
     try:
         from main import app  # type: ignore
     except Exception:
