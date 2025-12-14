@@ -35,6 +35,39 @@ try:
 except Exception:
     logger.debug("python-dotenv not available or failed to load .env")
 
+
+def _load_dotenv_fallback(filepath: str) -> None:
+    """Fallback loader for .env when python-dotenv isn't available.
+
+    Reads simple KEY=VALUE lines and sets os.environ for missing keys.
+    Does not overwrite existing environment variables.
+    """
+    try:
+        if not os.path.exists(filepath):
+            logger.debug("No local .env file at %s", filepath)
+            return
+
+        logger.info("Loading local .env fallback from %s", filepath)
+        with open(filepath, 'r', encoding='utf-8') as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if '=' not in line:
+                    continue
+                k, v = line.split('=', 1)
+                k = k.strip()
+                v = v.strip().strip('"').strip("'")
+                if k and (k not in os.environ or not os.environ.get(k)):
+                    os.environ[k] = v
+                    logger.debug("Set env var from .env: %s", k)
+    except Exception as e:
+        logger.warning(f"Failed to load .env fallback: {e}")
+
+
+# Ensure local .env is loaded even if python-dotenv is missing
+_load_dotenv_fallback(os.path.join(os.path.dirname(__file__), '.env'))
+
 # ==================== CRITICAL DIAGNOSTIC ====================
 
 logger.info("\n" + "="*80)
@@ -43,7 +76,19 @@ logger.info("="*80)
 
 # Log all environment variables
 logger.info("📋 ENVIRONMENT VARIABLES CHECK:")
-alpha_key_env = os.getenv('ALPHA_VANTAGE_KEY', '')
+def _get_alpha_vantage_key() -> str:
+    """Return the Alpha Vantage key from any commonly used env var name."""
+    return (
+        os.getenv('ALPHA_VANTAGE_KEY') or
+        os.getenv('ALPHAVANTAGE_API_KEY') or
+        os.getenv('ALPHAVANTAGE_KEY') or
+        os.getenv('ALPHA_VANTAGE') or
+        os.getenv('ALPHAVANTAGE') or
+        os.getenv('ALPHAVANTAGE_APIKEY') or
+        ''
+    )
+
+alpha_key_env = _get_alpha_vantage_key()
 alpaca_key_env = os.getenv('ALPACA_API_KEY', '')
 alpaca_secret_env = os.getenv('ALPACA_SECRET_KEY', '')
 
@@ -61,8 +106,8 @@ try:
     
     logger.info("✅ MarketDataService v2 imported successfully")
     
-    # Get API keys from environment
-    alpha_key = os.getenv('ALPHA_VANTAGE_KEY', '')
+    # Get API keys from environment (accept many common names)
+    alpha_key = _get_alpha_vantage_key()
     alpaca_key = os.getenv('ALPACA_API_KEY', '')
     alpaca_secret = os.getenv('ALPACA_SECRET_KEY', '')
     
@@ -73,6 +118,39 @@ try:
     
     if alpha_key or (alpaca_key and alpaca_secret):
         logger.info("\n🔨 CREATING MarketDataConfig...")
+        # Try to detect a working Alpha Vantage key among common env var names
+        def _select_working_alpha_key(candidates):
+            import requests
+            for candidate in candidates:
+                if not candidate:
+                    continue
+                try:
+                    url = 'https://www.alphavantage.co/query'
+                    params = {'function': 'GLOBAL_QUOTE', 'symbol': 'AAPL', 'apikey': candidate}
+                    r = requests.get(url, params=params, timeout=5)
+                    r.raise_for_status()
+                    j = r.json()
+                    if isinstance(j, dict) and 'Global Quote' in j and j['Global Quote']:
+                        return candidate
+                except Exception:
+                    continue
+            return None
+
+        # Gather candidate keys in priority order (prefer explicit ALPHA_VANTAGE_KEY)
+        candidates = [
+            os.getenv('ALPHA_VANTAGE_KEY'),
+            os.getenv('ALPHAVANTAGE_API_KEY'),
+            os.getenv('ALPHAVANTAGE_KEY'),
+            os.getenv('ALPHA_VANTAGE'),
+            os.getenv('ALPHAVANTAGE'),
+            os.getenv('ALPHAVANTAGE_APIKEY')
+        ]
+        working_alpha = _select_working_alpha_key(candidates)
+        if working_alpha:
+            logger.info(f"  ✅ Detected working Alpha Vantage key (first 8 chars): {working_alpha[:8]}")
+            alpha_key = working_alpha
+        else:
+            logger.warning("  ⚠️ No working Alpha Vantage key found among candidates; will attempt with provided key if any")
         # CRITICAL FIX: Pass credentials directly to config constructor
         config = MarketDataConfig(
             alpha_vantage_key=alpha_key if alpha_key else 'demo',
@@ -223,10 +301,20 @@ if MARKET_SERVICE_READY:
         # Build config from environment variables (alpha vantage key, etc.)
         try:
             from services.market_data_service_v2 import MarketDataConfig
-            av_key = os.getenv('ALPHA_VANTAGE_KEY') or os.getenv('ALPHA_VANTAGE') or ''
+            # Use the robust key detection to pick the alpha key and include alpaca creds
+            av_key = _get_alpha_vantage_key() or os.getenv('ALPHA_VANTAGE') or ''
+            alpaca_key_env = os.getenv('ALPACA_API_KEY') or os.getenv('ALPACA_KEY')
+            alpaca_secret_env = os.getenv('ALPACA_SECRET_KEY') or os.getenv('ALPACA_SECRET')
             polygon = os.getenv('POLYGON_KEY') or os.getenv('POLYGON') or None
             finnhub = os.getenv('FINNHUB_KEY') or os.getenv('FINNHUB') or None
-            cfg = MarketDataConfig(alpha_vantage_key=av_key, polygon_key=polygon, finnhub_key=finnhub, fallback_to_mock=True)
+            cfg = MarketDataConfig(
+                alpha_vantage_key=av_key,
+                alpaca_key=alpaca_key_env,
+                alpaca_secret=alpaca_secret_env,
+                polygon_key=polygon,
+                finnhub_key=finnhub,
+                fallback_to_mock=True
+            )
             market_data = MarketDataService(cfg)
             logger.info("✅ MarketDataService v2 initialized with config from env")
             logger.info("📊 Providers in use: %s", [p.value for p in market_data.providers])
@@ -244,6 +332,18 @@ else:
 def unified_get_market_price(symbol: str) -> Dict[str, Any]:
     """Try yfinance first, then alpha_vantage via MarketDataService, then mock."""
     symbol = symbol.upper()
+    # Honor MARKET_DATA_SOURCE if the deploy configured a preferred provider
+    preferred = (os.getenv('MARKET_DATA_SOURCE') or '').lower()
+
+    # If alpha_vantage is preferred and service is ready, try it first
+    if preferred == 'alpha_vantage' and MARKET_SERVICE_READY and market_data:
+        try:
+            if hasattr(market_data, 'get_stock_price'):
+                return market_data.get_stock_price(symbol)
+            elif hasattr(market_data, 'get_price'):
+                return market_data.get_price(symbol)
+        except Exception as e:
+            logger.error(f"MarketDataService lookup failed for {symbol}: {e}")
 
     # 1) Try yfinance quick fetch
     try:
@@ -264,7 +364,7 @@ def unified_get_market_price(symbol: str) -> Dict[str, Any]:
     except Exception as e:
         logger.debug(f"yfinance lookup failed for {symbol}: {e}")
 
-    # 2) Try MarketDataService (Alpha Vantage or other providers)
+    # 2) Try MarketDataService (Alpha Vantage or other providers) if not already tried
     if MARKET_SERVICE_READY and market_data:
         try:
             if hasattr(market_data, 'get_stock_price'):
@@ -652,14 +752,18 @@ def test_alpha():
     
     logger.info(f"\n🧪 FORCE TEST: Alpha Vantage API for {symbol}")
     
-    alpha_key = os.getenv('ALPHA_VANTAGE_KEY')
+    # Support alternate env var names when testing Alpha directly
+    alpha_key = _get_alpha_vantage_key()
     
     if not alpha_key:
         logger.error("❌ Alpha Vantage credentials missing!")
         return jsonify({
             'status': 'error',
             'message': 'Alpha Vantage credentials not configured',
-            'alpha_key_set': False
+            'alpha_key_set': False,
+            'tried_envs': [
+                'ALPHA_VANTAGE_KEY', 'ALPHAVANTAGE_API_KEY', 'ALPHAVANTAGE_KEY', 'ALPHA_VANTAGE', 'ALPHAVANTAGE'
+            ]
         })
     
     try:
@@ -828,9 +932,15 @@ def get_multi_asset_data():
 @handle_errors
 def env_status():
     """Return non-sensitive environment status to diagnose deployments."""
+    alpha_present = bool(_get_alpha_vantage_key())
+    alpaca_present = bool(os.getenv('ALPACA_API_KEY') and os.getenv('ALPACA_SECRET_KEY'))
     return jsonify({
-        'alpha_vantage_present': bool(os.getenv('ALPHA_VANTAGE_KEY')),
-        'alpaca_present': bool(os.getenv('ALPACA_API_KEY') and os.getenv('ALPACA_SECRET_KEY')),
+        'alpha_vantage_present': alpha_present,
+        'alpha_vantage_env_names': [
+            name for name in ['ALPHA_VANTAGE_KEY', 'ALPHAVANTAGE_API_KEY', 'ALPHAVANTAGE_KEY', 'ALPHA_VANTAGE', 'ALPHAVANTAGE']
+            if os.getenv(name)
+        ],
+        'alpaca_present': alpaca_present,
         'market_service_ready': MARKET_SERVICE_READY,
         'providers': [p.value for p in market_data.providers] if market_data else []
     })
