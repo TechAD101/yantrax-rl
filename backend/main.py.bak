@@ -1,0 +1,227 @@
+"""main.py - Restored from main_enhanced.py for stable operation.
+
+This file uses the enhanced AI firm implementation (from main_enhanced.py)
+as the standard entrypoint for the Render WSGI application. It contains
+health endpoints, AI firm status endpoints, persona analysis endpoints,
+market price integration (Alpha Vantage or yfinance), journal and
+commentary endpoints.
+"""
+
+from services.market_data_service_v2 import MarketDataService
+import os
+import sys
+import logging
+import json
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Any
+import numpy as np
+from functools import wraps
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, current_dir)
+                'projected_tam_5yr': 150000000000
+                'expected_impact': strategic_decision.expected_impact,
+            return jsonify(price_data)
+*** End Patch
+            logger.error(f"Error fetching {symbol}: {str(e)}")
+            results[symbol] = {
+                'error': str(e),
+                'symbol': symbol,
+                'status': 'error'
+            }
+
+    return jsonify({
+        'data': results,
+        'timestamp': datetime.now().isoformat(),
+        'symbols_requested': len(valid_symbols),
+        'symbols_successful': sum(1 for r in results.values() if r.get('status') != 'error')
+    })
+
+@app.route('/run-cycle', methods=['POST'])
+@handle_errors
+def run_rl_cycle():
+    """Execute integrated RL cycle"""
+    try:
+        config = request.get_json() if request.is_json else {}
+        result = yantrax_system.execute_god_cycle()
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"RL cycle error: {str(e)}")
+        return jsonify({
+            'error': 'RL cycle execution failed',
+            'message': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Handle all unhandled exceptions"""
+    if isinstance(e, HTTPException):
+        return e
+
+    logger.error(f"Unhandled exception: {str(e)}")
+    logger.error(f"Traceback: {traceback.format_exc()}")
+
+    return jsonify({
+        'error': 'Unexpected error occurred',
+        'message': str(e),
+        'type': type(e).__name__,
+        'timestamp': datetime.now().isoformat()
+    }), 500
+
+
+@app.route('/metrics', methods=['GET'])
+def metrics_endpoint():
+    """Expose Prometheus metrics"""
+    try:
+        data = get_metrics_text()
+        return app.response_class(data, mimetype='text/plain; version=0.0.4; charset=utf-8')
+    except Exception:
+        return '', 500
+@app.route('/journal', methods=['GET'])
+@handle_errors
+def get_journal():
+    """Get trading journal entries"""
+    try:
+        # Return actual trade history if available
+        if yantrax_system.trade_history:
+            return jsonify(yantrax_system.trade_history[-10:])  # Last 10 trades
+        
+        # Fallback to demo data
+        integration_status = "integrated" if (AI_FIRM_READY and RL_ENV_READY) else "simulated"
+        journal_entries = [
+            {
+                'id': i, 
+                'timestamp': (datetime.now() - timedelta(hours=i)).isoformat(), 
+                'action': ['BUY', 'SELL', 'HOLD'][i % 3], 
+                'reward': round(750 + (i * 50), 2),
+                'balance': round(132240.84 + (i * 250), 2),
+                'notes': f'{integration_status} - Cycle {i+1}',
+                'mode': integration_status
+            } for i in range(5)
+        ]
+        return jsonify(journal_entries)
+    except Exception as e:
+        logger.error(f"Journal error: {str(e)}")
+        return jsonify([])
+
+@app.route('/commentary', methods=['GET'])
+@handle_errors
+def get_commentary():
+    """Get AI commentary"""
+    try:
+        if AI_FIRM_READY and RL_ENV_READY:
+            commentaries = [
+                {
+                    'id': 1, 'agent': 'Warren Persona', 
+                    'comment': 'Fundamental analysis complete - strong economic moat with 18% ROE',
+                    'confidence': 0.89, 'timestamp': datetime.now().isoformat(),
+                    'sentiment': 'bullish', 'persona': True
+                },
+                {
+                    'id': 2, 'agent': 'Cathie Persona', 
+                    'comment': 'Innovation metrics exceptional - disruption score 0.88',
+                    'confidence': 0.91, 'timestamp': datetime.now().isoformat(),
+                    'sentiment': 'bullish', 'persona': True
+                },
+                {
+                    'id': 3, 'agent': 'Autonomous CEO', 
+                    'comment': '24-agent coordination achieving consensus - RL environment active',
+                    'confidence': 0.85, 'timestamp': datetime.now().isoformat(),
+                    'sentiment': 'confident', 'ceo': True
+                },
+                {
+                    'id': 4, 'agent': 'RL Core',
+                    'comment': f'Market mood: {yantrax_system.current_state["mood"]} | Cycle: {yantrax_system.current_state["cycle"]}',
+                    'confidence': 0.93, 'timestamp': datetime.now().isoformat(),
+                    'sentiment': 'operational', 'rl': True
+                }
+            ]
+        else:
+            commentaries = [
+                {
+                    'id': 1, 'agent': 'System Status', 
+                    'comment': f'Integration mode: {"AI Firm only" if AI_FIRM_READY else "Legacy"}',
+                    'confidence': 0.75, 'timestamp': datetime.now().isoformat(),
+                    'sentiment': 'neutral'
+                }
+            ]
+        
+        return jsonify(commentaries)
+    except Exception as e:
+        logger.error(f"Commentary error: {str(e)}")
+        return jsonify([])
+
+# Error handlers
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({
+        'error': 'Endpoint not found',
+        'available_endpoints': [
+            '/', '/health', '/god-cycle', '/market-price', '/multi-asset-data',
+            '/run-cycle', '/journal', '/commentary',
+            '/api/ai-firm/status', '/api/ai-firm/personas/warren', 
+            '/api/ai-firm/personas/cathie', '/api/ai-firm/ceo-decisions'
+        ],
+        'integration_status': 'integrated' if (AI_FIRM_READY and RL_ENV_READY) else 'partial',
+        'timestamp': datetime.now().isoformat()
+    }), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({
+        'error': 'Internal server error',
+        'message': 'An unexpected error occurred',
+        'integration_active': AI_FIRM_READY and RL_ENV_READY,
+        'timestamp': datetime.now().isoformat()
+    }), 500
+
+<<<<<<< HEAD
+=======
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Handle all unhandled exceptions"""
+    if isinstance(e, HTTPException):
+        return e
+
+    logger.error(f"Unhandled exception: {str(e)}")
+    logger.error(f"Traceback: {traceback.format_exc()}")
+
+    return jsonify({
+        'error': 'Unexpected error occurred',
+        'message': str(e),
+        'type': type(e).__name__,
+        'timestamp': datetime.now().isoformat()
+    }), 500
+
+
+@app.route('/metrics', methods=['GET'])
+def metrics_endpoint():
+    """Expose Prometheus metrics"""
+    try:
+        data = get_metrics_text()
+        return app.response_class(data, mimetype='text/plain; version=0.0.4; charset=utf-8')
+    except Exception:
+        return '', 500
+
+# Production-ready startup
+>>>>>>> origin/fix/wsgi-and-frontend-api
+if __name__ == '__main__':
+    print("\n" + "="*60)
+    print("🚀 YantraX RL v4.2 - AI FIRM ↔ RL CORE INTEGRATION")
+    print("="*60)
+    print(f"🤖 AI Firm Ready: {AI_FIRM_READY}")
+    print(f"🎮 RL Core Ready: {RL_ENV_READY}")
+    
+    if AI_FIRM_READY and RL_ENV_READY:
+        print("✅ FULLY INTEGRATED: AI Firm decisions → RL Environment")
+        print("✅ 24-AGENT COORDINATION → MarketSimEnv.step()")
+        print("✅ REAL REWARDS from RL environment")
+    elif AI_FIRM_READY:
+        print("⚠️  PARTIAL: AI Firm active, RL env not loaded")
+    else:
+        print("⚠️  FALLBACK MODE: Legacy 4-agent system")
+    
+    print("="*60)
+    
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)

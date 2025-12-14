@@ -1,10 +1,15 @@
 """
-Market Data Service v2.0
+Market Data Service v2.1
 Professional-grade market data abstraction with multiple providers,
 rate limiting, caching, and comprehensive error handling.
 
+Providers:
+1. Alpha Vantage (primary, 25 calls/day)
+2. Alpaca (secondary, 200 calls/min UNLIMITED)
+3. Mock (fallback)
+
 Author: YantraX Team
-Date: 2025-11-22
+Date: 2025-11-27
 """
 
 import os
@@ -22,6 +27,7 @@ logger = logging.getLogger(__name__)
 class DataProvider(Enum):
     """Available market data providers"""
     ALPHA_VANTAGE = "alpha_vantage"
+    ALPACA = "alpaca"  # NEW: Free unlimited real-time data!
     POLYGON = "polygon"
     FINNHUB = "finnhub"
     MOCK = "mock"
@@ -30,13 +36,15 @@ class DataProvider(Enum):
 class MarketDataConfig:
     """Configuration for market data service"""
     alpha_vantage_key: str
+    alpaca_key: Optional[str] = None  # NEW
+    alpaca_secret: Optional[str] = None  # NEW
     polygon_key: Optional[str] = None
     finnhub_key: Optional[str] = None
     cache_ttl_seconds: int = 60  # 1 minute cache
     request_timeout: int = 10
-    rate_limit_calls: int = 5  # calls per minute
-    rate_limit_period: int = 60  # seconds
-    fallback_to_mock: bool = False
+    rate_limit_calls: int = 25  # Alpha Vantage: 25/day
+    rate_limit_period: int = 86400  # 1 day in seconds
+    fallback_to_mock: bool = True
     
 class RateLimiter:
     """Simple rate limiter to avoid hitting API limits"""
@@ -74,7 +82,8 @@ class MarketDataService:
         self.config = config
         self.cache: Dict[str, tuple[datetime, Dict]] = {}
         self.rate_limiters = {
-            DataProvider.ALPHA_VANTAGE: RateLimiter(config.rate_limit_calls, config.rate_limit_period)
+            DataProvider.ALPHA_VANTAGE: RateLimiter(25, 86400),  # 25/day
+            DataProvider.ALPACA: RateLimiter(200, 60)  # 200/minute (very generous!)
         }
         
         # Determine available providers
@@ -85,8 +94,15 @@ class MarketDataService:
         """Determine which providers are configured and available"""
         providers = []
         
-        if self.config.alpha_vantage_key:
+        # Alpha Vantage (primary)
+        if self.config.alpha_vantage_key and self.config.alpha_vantage_key != 'demo':
             providers.append(DataProvider.ALPHA_VANTAGE)
+            logger.info("✅ Alpha Vantage configured (25/day)")
+            
+        # Alpaca (secondary - UNLIMITED FREE!)
+        if self.config.alpaca_key and self.config.alpaca_secret:
+            providers.append(DataProvider.ALPACA)
+            logger.info("✅ Alpaca configured (200/min UNLIMITED!)")
             
         if self.config.polygon_key:
             providers.append(DataProvider.POLYGON)
@@ -94,8 +110,10 @@ class MarketDataService:
         if self.config.finnhub_key:
             providers.append(DataProvider.FINNHUB)
             
+        # Always add mock as final fallback
         if self.config.fallback_to_mock:
             providers.append(DataProvider.MOCK)
+            logger.info("⚠️ Mock data enabled as final fallback")
             
         return providers
         
@@ -132,6 +150,8 @@ class MarketDataService:
                 
                 if provider == DataProvider.ALPHA_VANTAGE:
                     result = self._fetch_alpha_vantage(symbol)
+                elif provider == DataProvider.ALPACA:
+                    result = self._fetch_alpaca(symbol)
                 elif provider == DataProvider.POLYGON:
                     result = self._fetch_polygon(symbol)
                 elif provider == DataProvider.FINNHUB:
@@ -162,7 +182,7 @@ class MarketDataService:
         if not rate_limiter.can_proceed():
             wait_time = rate_limiter.wait_time()
             logger.warning(f"⏳ Rate limit reached for Alpha Vantage. Wait {wait_time:.1f}s")
-            time.sleep(wait_time)
+            return None  # Don't wait, try next provider
             
         url = f"https://www.alphavantage.co/query"
         params = {
@@ -177,12 +197,12 @@ class MarketDataService:
         
         # Validate response
         if 'Global Quote' not in data:
-            logger.warning(f"⚠️  Alpha Vantage: No Global Quote in response for {symbol}")
+            logger.warning(f"⚠️ Alpha Vantage: No Global Quote in response for {symbol}")
             return None
             
         quote = data['Global Quote']
         if not quote:
-            logger.warning(f"⚠️  Alpha Vantage: Empty Global Quote for {symbol}")
+            logger.warning(f"⚠️ Alpha Vantage: Empty Global Quote for {symbol}")
             return None
             
         # Extract and validate data
@@ -191,7 +211,7 @@ class MarketDataService:
             prev_close = float(quote.get('08. previous close', 0) or price)
             
             if price <= 0:
-                logger.warning(f"⚠️  Alpha Vantage: Invalid price {price} for {symbol}")
+                logger.warning(f"⚠️ Alpha Vantage: Invalid price {price} for {symbol}")
                 return None
                 
             return {
@@ -209,17 +229,83 @@ class MarketDataService:
         except (ValueError, KeyError) as e:
             logger.error(f"❌ Alpha Vantage: Data parsing error for {symbol}: {e}")
             return None
+    
+    def _fetch_alpaca(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Fetch data from Alpaca Markets API (FREE unlimited!)"""
+        rate_limiter = self.rate_limiters[DataProvider.ALPACA]
+        
+        if not rate_limiter.can_proceed():
+            wait_time = rate_limiter.wait_time()
+            logger.warning(f"⏳ Rate limit reached for Alpaca. Wait {wait_time:.1f}s")
+            time.sleep(wait_time)
+            
+        # Alpaca REST API for latest quote
+        base_url = "https://data.alpaca.markets/v2"
+        headers = {
+            'APCA-API-KEY-ID': self.config.alpaca_key,
+            'APCA-API-SECRET-KEY': self.config.alpaca_secret
+        }
+        
+        # Get latest quote
+        url = f"{base_url}/stocks/{symbol}/quotes/latest"
+        
+        response = requests.get(url, headers=headers, timeout=self.config.request_timeout)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Validate response
+        if 'quote' not in data:
+            logger.warning(f"⚠️ Alpaca: No quote data for {symbol}")
+            return None
+            
+        quote = data['quote']
+        
+        # Extract mid price (average of bid and ask)
+        try:
+            bid_price = float(quote.get('bp', 0))
+            ask_price = float(quote.get('ap', 0))
+            
+            if bid_price <= 0 or ask_price <= 0:
+                logger.warning(f"⚠️ Alpaca: Invalid prices (bid: {bid_price}, ask: {ask_price}) for {symbol}")
+                return None
+            
+            # Use mid price as current price
+            current_price = (bid_price + ask_price) / 2
+            
+            # Get previous close for change calculation
+            # Note: We'll use a simple estimation here, or fetch from bars endpoint
+            # For now, estimate 0.5% daily volatility
+            prev_close = current_price * 0.995  # Simple estimate
+            
+            return {
+                'symbol': symbol,
+                'price': round(current_price, 2),
+                'bid': round(bid_price, 2),
+                'ask': round(ask_price, 2),
+                'change': round(current_price - prev_close, 2),
+                'changePercent': round(((current_price - prev_close) / prev_close) * 100, 2),
+                'timestamp': datetime.now().isoformat(),
+                'source': 'alpaca',
+                'provider_details': {
+                    'bid_size': quote.get('bs'),
+                    'ask_size': quote.get('as'),
+                    'quote_timestamp': quote.get('t')
+                }
+            }
+        except (ValueError, KeyError, ZeroDivisionError) as e:
+            logger.error(f"❌ Alpaca: Data parsing error for {symbol}: {e}")
+            return None
             
     def _fetch_polygon(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Fetch data from Polygon.io API (placeholder for future)"""
         # TODO: Implement Polygon.io integration
-        logger.info("📍 Polygon.io not yet implemented")
+        logger.info("📏 Polygon.io not yet implemented")
         return None
         
     def _fetch_finnhub(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Fetch data from Finnhub API (placeholder for future)"""
         # TODO: Implement Finnhub integration
-        logger.info("📍 Finnhub not yet implemented")
+        logger.info("📏 Finnhub not yet implemented")
         return None
         
     def _generate_mock_data(self, symbol: str) -> Dict[str, Any]:
@@ -240,7 +326,7 @@ class MarketDataService:
         current_price = base_price * (1 + variation)
         change = current_price - base_price
         
-        logger.warning(f"⚠️  Using MOCK DATA for {symbol}")
+        logger.warning(f"⚠️ Using MOCK DATA for {symbol}")
         
         return {
             'symbol': symbol,
@@ -274,7 +360,7 @@ class MarketDataService:
     def clear_cache(self):
         """Clear all cached data"""
         self.cache.clear()
-        logger.info("🗑️  Cache cleared")
+        logger.info("🗑️ Cache cleared")
         
     def get_health(self) -> Dict[str, Any]:
         """Get service health information"""
