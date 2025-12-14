@@ -242,6 +242,17 @@ except ImportError as e:
 app = Flask(__name__)
 CORS(app, origins=['*'])
 
+
+def _get_git_version() -> Dict[str, str]:
+    """Return git short sha and branch if available."""
+    try:
+        import subprocess
+        sha = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], text=True).strip()
+        branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], text=True).strip()
+        return {'sha': sha, 'branch': branch}
+    except Exception:
+        return {'sha': 'unknown', 'branch': 'unknown'}
+
 # Error tracking
 error_counts = {
     'total_requests': 0,
@@ -1010,6 +1021,17 @@ def internal_error(error):
         'error': 'Internal server error',
         'timestamp': datetime.now().isoformat()
     }), 500
+
+
+@app.route('/version', methods=['GET'])
+@handle_errors
+def get_version():
+    v = _get_git_version()
+    return jsonify({
+        'version': v['sha'],
+        'branch': v['branch'],
+        'app': 'yantrax-backend'
+    })
 
 if __name__ == '__main__':
     print("\n" + "="*60)
