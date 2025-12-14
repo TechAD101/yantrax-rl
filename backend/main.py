@@ -20,13 +20,20 @@ try:
 except ImportError as e:
     print(f"❌ Flask import error: {e}")
     sys.exit(1)
-
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,  # Changed to DEBUG for more details
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Load local .env for developer convenience (kept out of git)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
+    logger.debug("Loaded local .env (if present)")
+except Exception:
+    logger.debug("python-dotenv not available or failed to load .env")
 
 # ==================== CRITICAL DIAGNOSTIC ====================
 
@@ -814,6 +821,18 @@ def get_multi_asset_data():
         'symbols_requested': len(symbols),
         'symbols_successful': sum(1 for r in results.values() if r.get('status') != 'error'),
         'service': 'v2' if MARKET_SERVICE_READY else 'fallback'
+    })
+
+
+@app.route('/env-status', methods=['GET'])
+@handle_errors
+def env_status():
+    """Return non-sensitive environment status to diagnose deployments."""
+    return jsonify({
+        'alpha_vantage_present': bool(os.getenv('ALPHA_VANTAGE_KEY')),
+        'alpaca_present': bool(os.getenv('ALPACA_API_KEY') and os.getenv('ALPACA_SECRET_KEY')),
+        'market_service_ready': MARKET_SERVICE_READY,
+        'providers': [p.value for p in market_data.providers] if market_data else []
     })
 
 @app.route('/run-cycle', methods=['POST'])
