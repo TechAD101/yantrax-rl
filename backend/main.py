@@ -139,15 +139,68 @@ if AI_FIRM_READY:
 market_data = None
 if MARKET_SERVICE_READY:
     try:
-        market_data = MarketDataService()
-        logger.info("✅ MarketDataService v2 initialized")
-        logger.info("📊 Primary: Alpha Vantage | Fallbacks: Polygon, Finnhub, Mock")
+        # Build config from environment variables (alpha vantage key, etc.)
+        try:
+            from services.market_data_service_v2 import MarketDataConfig
+            av_key = os.getenv('ALPHA_VANTAGE_KEY') or os.getenv('ALPHA_VANTAGE') or ''
+            polygon = os.getenv('POLYGON_KEY') or os.getenv('POLYGON') or None
+            finnhub = os.getenv('FINNHUB_KEY') or os.getenv('FINNHUB') or None
+            cfg = MarketDataConfig(alpha_vantage_key=av_key, polygon_key=polygon, finnhub_key=finnhub, fallback_to_mock=True)
+            market_data = MarketDataService(cfg)
+            logger.info("✅ MarketDataService v2 initialized with config from env")
+            logger.info("📊 Providers in use: %s", [p.value for p in market_data.providers])
+        except Exception as e_cfg:
+            logger.error(f"⚠️  Failed to initialize MarketDataService with config: {e_cfg}")
+            market_data = None
     except Exception as e:
         logger.error(f"⚠️  MarketDataService v2 init failed: {e}")
         MARKET_SERVICE_READY = False
         market_data = None
 else:
     logger.info("📊 Using fallback market data (MarketDataService v2 not available)")
+
+
+def unified_get_market_price(symbol: str) -> Dict[str, Any]:
+    """Try yfinance first, then alpha_vantage via MarketDataService, then mock."""
+    symbol = symbol.upper()
+
+    # 1) Try yfinance quick fetch
+    try:
+        import yfinance as yf
+        t = yf.Ticker(symbol)
+        # Use recent intraday data if available
+        hist = t.history(period='1d', interval='1m')
+        if hist is not None and not hist.empty:
+            last = hist['Close'].iloc[-1]
+            if last is not None and last > 0:
+                return {
+                    'symbol': symbol,
+                    'price': round(float(last), 2),
+                    'change': None,
+                    'timestamp': datetime.now().isoformat(),
+                    'source': 'yfinance'
+                }
+    except Exception as e:
+        logger.debug(f"yfinance lookup failed for {symbol}: {e}")
+
+    # 2) Try MarketDataService (Alpha Vantage or other providers)
+    if MARKET_SERVICE_READY and market_data:
+        try:
+            if hasattr(market_data, 'get_stock_price'):
+                return market_data.get_stock_price(symbol)
+            elif hasattr(market_data, 'get_price'):
+                return market_data.get_price(symbol)
+        except Exception as e:
+            logger.error(f"MarketDataService lookup failed for {symbol}: {e}")
+
+    # 3) Fallback mock
+    return {
+        'symbol': symbol,
+        'price': round(np.random.uniform(100, 500), 2),
+        'change': round(np.random.uniform(-10, 10), 2),
+        'timestamp': datetime.now().isoformat(),
+        'source': 'mock_fallback'
+    }
 
 class YantraXEnhancedSystem:
     """Enhanced trading system with AI Firm + RL Core integration"""
@@ -520,21 +573,8 @@ def ai_firm_status():
 @handle_errors
 def get_market_price():
     symbol = request.args.get('symbol', 'AAPL').upper()
-    
-    if MARKET_SERVICE_READY and market_data:
-        try:
-            return jsonify(market_data.get_price(symbol))
-        except Exception as e:
-            logger.error(f"Market data error: {e}")
-    
-    # Fallback to mock data
-    return jsonify({
-        'symbol': symbol,
-        'price': round(np.random.uniform(100, 500), 2),
-        'change': round(np.random.uniform(-10, 10), 2),
-        'timestamp': datetime.now().isoformat(),
-        'source': 'mock_fallback'
-    })
+    data = unified_get_market_price(symbol)
+    return jsonify(data)
 
 @app.route('/multi-asset-data', methods=['GET'])
 @handle_errors
