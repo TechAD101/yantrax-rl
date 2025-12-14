@@ -164,10 +164,21 @@ error_counts = {
     'api_call_errors': 0
 }
 
+# Simple Prometheus-like metrics registry (lightweight)
+metrics_registry = {
+    'yantrax_requests_total': 0,
+    'yantrax_agent_latency_seconds_count': 0,
+    'yantrax_agent_latency_seconds_sum': 0.0
+}
+
 def handle_errors(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         error_counts['total_requests'] += 1
+        try:
+            metrics_registry['yantrax_requests_total'] += 1
+        except Exception:
+            pass
         try:
             result = func(*args, **kwargs)
             error_counts['successful_requests'] += 1
@@ -198,6 +209,72 @@ if AI_FIRM_READY:
         AI_FIRM_READY = False
         logger.info("🔄 Falling back to legacy mode")
 
+# FIXED #3: Market Data Service initialization with safety check
+market_data = None
+if MARKET_SERVICE_READY:
+    try:
+        # Build config from environment variables (alpha vantage key, etc.)
+        try:
+            from services.market_data_service_v2 import MarketDataConfig
+            av_key = os.getenv('ALPHA_VANTAGE_KEY') or os.getenv('ALPHA_VANTAGE') or ''
+            polygon = os.getenv('POLYGON_KEY') or os.getenv('POLYGON') or None
+            finnhub = os.getenv('FINNHUB_KEY') or os.getenv('FINNHUB') or None
+            cfg = MarketDataConfig(alpha_vantage_key=av_key, polygon_key=polygon, finnhub_key=finnhub, fallback_to_mock=True)
+            market_data = MarketDataService(cfg)
+            logger.info("✅ MarketDataService v2 initialized with config from env")
+            logger.info("📊 Providers in use: %s", [p.value for p in market_data.providers])
+        except Exception as e_cfg:
+            logger.error(f"⚠️  Failed to initialize MarketDataService with config: {e_cfg}")
+            market_data = None
+    except Exception as e:
+        logger.error(f"⚠️  MarketDataService v2 init failed: {e}")
+        MARKET_SERVICE_READY = False
+        market_data = None
+else:
+    logger.info("📊 Using fallback market data (MarketDataService v2 not available)")
+
+
+def unified_get_market_price(symbol: str) -> Dict[str, Any]:
+    """Try yfinance first, then alpha_vantage via MarketDataService, then mock."""
+    symbol = symbol.upper()
+
+    # 1) Try yfinance quick fetch
+    try:
+        import yfinance as yf
+        t = yf.Ticker(symbol)
+        # Use recent intraday data if available
+        hist = t.history(period='1d', interval='1m')
+        if hist is not None and not hist.empty:
+            last = hist['Close'].iloc[-1]
+            if last is not None and last > 0:
+                return {
+                    'symbol': symbol,
+                    'price': round(float(last), 2),
+                    'change': None,
+                    'timestamp': datetime.now().isoformat(),
+                    'source': 'yfinance'
+                }
+    except Exception as e:
+        logger.debug(f"yfinance lookup failed for {symbol}: {e}")
+
+    # 2) Try MarketDataService (Alpha Vantage or other providers)
+    if MARKET_SERVICE_READY and market_data:
+        try:
+            if hasattr(market_data, 'get_stock_price'):
+                return market_data.get_stock_price(symbol)
+            elif hasattr(market_data, 'get_price'):
+                return market_data.get_price(symbol)
+        except Exception as e:
+            logger.error(f"MarketDataService lookup failed for {symbol}: {e}")
+
+    # 3) Fallback mock
+    return {
+        'symbol': symbol,
+        'price': round(np.random.uniform(100, 500), 2),
+        'change': round(np.random.uniform(-10, 10), 2),
+        'timestamp': datetime.now().isoformat(),
+        'source': 'mock_fallback'
+    }
 class YantraXEnhancedSystem:
     """Enhanced trading system with AI Firm + RL Core integration"""
     
@@ -643,40 +720,72 @@ def detailed_health():
 @app.route('/god-cycle', methods=['GET'])
 @handle_errors
 def god_cycle():
+    start_ts = datetime.now()
     result = yantrax_system.execute_god_cycle()
+    # Update prometheus-like metrics
+    try:
+        elapsed = (datetime.now() - start_ts).total_seconds()
+        metrics_registry['yantrax_agent_latency_seconds_count'] += 1
+        metrics_registry['yantrax_agent_latency_seconds_sum'] += elapsed
+    except Exception:
+        pass
     result['version'] = '4.6.0'
     result['integration_active'] = AI_FIRM_READY and RL_ENV_READY
     return jsonify(result)
 
+
+@app.route('/metrics', methods=['GET'])
+@handle_errors
+def metrics():
+    # Return simple text metrics in Prometheus exposition format
+    try:
+        output = []
+        output.append(f"# HELP yantrax_requests_total Total number of yantrax requests")
+        output.append(f"# TYPE yantrax_requests_total counter")
+        output.append(f"yantrax_requests_total {int(metrics_registry.get('yantrax_requests_total', 0))}")
+        output.append(f"# HELP yantrax_agent_latency_seconds Histogram for agent latency")
+        output.append(f"# TYPE yantrax_agent_latency_seconds histogram")
+        output.append(f"yantrax_agent_latency_seconds_count {int(metrics_registry.get('yantrax_agent_latency_seconds_count', 0))}")
+        output.append(f"yantrax_agent_latency_seconds_sum {metrics_registry.get('yantrax_agent_latency_seconds_sum', 0.0)}")
+        return ("\n".join(output), 200, {'Content-Type': 'text/plain; charset=utf-8'})
+    except Exception as e:
+        logger.error(f"Metrics exposition error: {e}")
+        return ("", 500, {'Content-Type': 'text/plain; charset=utf-8'})
+
+
+@app.route('/api/ai-firm/status', methods=['GET'])
+@handle_errors
+def ai_firm_status():
+    if not AI_FIRM_READY:
+        return jsonify({
+            'status': 'fallback_mode',
+            'message': 'AI Firm not loaded',
+            'agents': len(yantrax_system.legacy_agents)
+        })
+    
+    try:
+        ceo_status = ceo.get_ceo_status()
+        return jsonify({
+            'status': 'operational',
+            'total_agents': 24,
+            'ceo': ceo_status,
+            'personas': {'warren': True, 'cathie': True},
+            'rl_integration': RL_ENV_READY,
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"AI Firm status error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# FIXED #5: Market price endpoint with fallback
 @app.route('/market-price', methods=['GET'])
 @handle_errors
 def get_market_price():
     """Get market price with proper MarketDataService v2 integration"""
     symbol = request.args.get('symbol', 'AAPL').upper()
-    
-    if MARKET_SERVICE_READY and market_data:
-        try:
-            result = market_data.get_stock_price(symbol)
-            logger.info(f"📊 Market data for {symbol}: ${result.get('price', 0)} from {result.get('source', 'unknown')}")
-            return jsonify(result)
-        except Exception as e:
-            logger.error(f"Market data error for {symbol}: {e}")
-            return jsonify({
-                'symbol': symbol,
-                'price': round(np.random.uniform(100, 500), 2),
-                'change': round(np.random.uniform(-10, 10), 2),
-                'timestamp': datetime.now().isoformat(),
-                'source': 'mock_emergency_fallback',
-                'error': str(e)
-            })
-    else:
-        return jsonify({
-            'symbol': symbol,
-            'price': round(np.random.uniform(100, 500), 2),
-            'change': round(np.random.uniform(-10, 10), 2),
-            'timestamp': datetime.now().isoformat(),
-            'source': 'mock_no_service'
-        })
+    data = unified_get_market_price(symbol)
+    logger.info(f"📊 Market price returned for {symbol}: {data.get('price')} (source: {data.get('source')})")
+    return jsonify(data)
 
 @app.route('/multi-asset-data', methods=['GET'])
 @handle_errors
