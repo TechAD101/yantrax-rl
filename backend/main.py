@@ -100,6 +100,7 @@ logger.info(f"  ALPACA_SECRET_KEY present: {bool(alpaca_secret_env)} (first 10 c
 MARKET_SERVICE_READY = False
 market_data = None
 MARKET_DATA_CONFIG = None
+MARKET_SERVICE_INIT_ERROR = None
 
 try:
     from services.market_data_service_v2 import MarketDataService, MarketDataConfig
@@ -151,8 +152,9 @@ try:
             alpha_key = working_alpha
         else:
             logger.warning("  ⚠️ No working Alpha Vantage key found among candidates; will attempt with provided key if any")
-        # CRITICAL FIX: Pass credentials directly to config constructor
-            config = MarketDataConfig(
+
+        # CRITICAL FIX: Pass credentials directly to config constructor (always create config)
+        config = MarketDataConfig(
             alpha_vantage_key=alpha_key if alpha_key else 'demo',
             alpaca_key=alpaca_key if alpaca_key else None,
             alpaca_secret=alpaca_secret if alpaca_secret else None,
@@ -189,10 +191,12 @@ try:
 except ImportError as e:
     logger.error(f"❌ MarketDataService v2 import failed: {e}")
     logger.error(f"   Import error details: {str(e)}")
+    MARKET_SERVICE_INIT_ERROR = str(e)
     MARKET_SERVICE_READY = False
 except Exception as e:
     logger.error(f"❌ MarketDataService v2 initialization failed: {e}")
     logger.error(f"   Traceback: {str(e)}")
+    MARKET_SERVICE_INIT_ERROR = str(e)
     MARKET_SERVICE_READY = False
 
 logger.info("="*80 + "\n")
@@ -331,9 +335,11 @@ if MARKET_SERVICE_READY:
             logger.info("📊 Providers in use: %s", [p.value for p in market_data.providers])
         except Exception as e_cfg:
             logger.error(f"⚠️  Failed to initialize MarketDataService with config: {e_cfg}")
+            MARKET_SERVICE_INIT_ERROR = str(e_cfg)
             market_data = None
     except Exception as e:
         logger.error(f"⚠️  MarketDataService v2 init failed: {e}")
+        MARKET_SERVICE_INIT_ERROR = str(e)
         MARKET_SERVICE_READY = False
         market_data = None
 else:
@@ -355,6 +361,16 @@ def unified_get_market_price(symbol: str) -> Dict[str, Any]:
                 return market_data.get_price(symbol)
         except Exception as e:
             logger.error(f"MarketDataService lookup failed for {symbol}: {e}")
+
+    # If alpaca is preferred, try Alpaca directly before yfinance
+    if preferred == 'alpaca' and MARKET_SERVICE_READY and market_data:
+        try:
+            if hasattr(market_data, '_fetch_alpaca'):
+                res = market_data._fetch_alpaca(symbol)
+                if res and res.get('price', 0) > 0:
+                    return res
+        except Exception as e:
+            logger.error(f"Preferred Alpaca lookup failed for {symbol}: {e}")
 
     # 1) Try yfinance quick fetch
     try:
@@ -685,12 +701,14 @@ def debug_status():
                 'fallback_to_mock': MARKET_DATA_CONFIG.fallback_to_mock if MARKET_DATA_CONFIG else False
             },
             'providers_available': [p.value for p in market_data.providers] if market_data else [],
+            'init_error': MARKET_SERVICE_INIT_ERROR
         },
         'environment': {
             'ALPHA_VANTAGE_KEY': 'SET' if os.getenv('ALPHA_VANTAGE_KEY') else 'MISSING',
             'ALPACA_API_KEY': 'SET' if os.getenv('ALPACA_API_KEY') else 'MISSING',
             'ALPACA_SECRET_KEY': 'SET' if os.getenv('ALPACA_SECRET_KEY') else 'MISSING'
         },
+        'preferred_data_source': os.getenv('MARKET_DATA_SOURCE') or None,
         'ai_firm': {
             'ready': AI_FIRM_READY
         },
@@ -957,6 +975,7 @@ def env_status():
         ],
         'alpaca_present': alpaca_present,
         'market_service_ready': MARKET_SERVICE_READY,
+        'preferred_data_source': os.getenv('MARKET_DATA_SOURCE') or None,
         'providers': [p.value for p in market_data.providers] if market_data else []
     })
 
