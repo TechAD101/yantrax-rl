@@ -190,16 +190,8 @@ export const optimizePortfolio = async (assets, constraints = {}) => {
     if (response.ok) {
       return await response.json();
     } else {
-      // Return mock optimization for now
-      return {
-        allocation: assets.reduce((acc, asset, i) => {
-          acc[asset] = 1.0 / assets.length;
-          return acc;
-        }, {}),
-        expected_return: 0.12,
-        volatility: 0.18,
-        sharpe_ratio: 1.25
-      };
+      // No mock fallback: signal failure to caller
+      throw new Error(`Optimization API returned status ${response.status}`);
     }
   } catch (error) {
     console.error("Portfolio optimization failed:", error);

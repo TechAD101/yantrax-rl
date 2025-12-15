@@ -51,9 +51,17 @@ new_method = '''def get_stock_price(self, symbol: str) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"❌ Alpha Vantage error for {symbol}: {str(e)}")
         
-        # Fallback to mock data
-        logger.warning(f"⚠️  Using MOCK DATA for {symbol} (Alpha Vantage failed)")
-        return self.get_mock_price_data(symbol)
+        # No mock fallback: return explicit error
+        logger.error(f"❌ All providers failed for {symbol} - no mock fallback is available")
+        return {
+            'symbol': symbol,
+            'price': 0,
+            'change': 0,
+            'changePercent': 0,
+            'timestamp': datetime.now().isoformat(),
+            'source': 'error',
+            'error': 'Unable to fetch market data from providers'
+        }
     
     def get_mock_price_data'''
 

@@ -22,11 +22,6 @@ const LiveMarketData = ({ marketData, loading = false }) => {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-gray-100">Live Market Data</h2>
         <div className="flex items-center space-x-2">
-          {marketData?.source === 'mock_data' && (
-            <span className="px-2 py-1 bg-orange-900/50 text-orange-300 text-xs rounded border border-orange-700">
-              Demo Mode
-            </span>
-          )}
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
         </div>
       </div>
@@ -39,8 +34,8 @@ const LiveMarketData = ({ marketData, loading = false }) => {
             <span className="font-mono text-blue-300 text-lg font-bold">
               {marketData?.symbol || 'Loading...'}
             </span>
-            <div className="text-xs text-gray-500">
-              {marketData?.currency || 'USD'}
+            <div className="text-xs text-gray-600">
+              {marketData?.error ? 'Data Unavailable' : 'Live Feed'}
             </div>
           </div>
         </div>
@@ -122,7 +117,7 @@ const LiveMarketData = ({ marketData, loading = false }) => {
             </span>
           </div>
           <div className="text-xs text-gray-500">
-            {marketData?.source === 'mock_data' ? 'Demo Data' : 'Live Feed'}
+            {marketData?.error ? 'Data Unavailable' : 'Live Feed'}
           </div>
         </div>
       </div>

@@ -42,7 +42,7 @@ class PerplexityMarketDataProvider:
         self.enabled = bool(api_key)
         
         if not self.enabled:
-            logger.warning("⚠️ Perplexity API key not found - using mock data")
+            logger.warning("⚠️ Perplexity API key not found - provider disabled (no mock fallback)")
         else:
             logger.info("✅ Perplexity API initialized for market data")
     
@@ -145,15 +145,15 @@ class PerplexityMarketDataProvider:
             return f"Error analyzing {symbol}"
     
     def _mock_price(self, symbol: str) -> Dict[str, Any]:
-        """Fallback to mock data"""
-        price = round(random.uniform(50, 500), 2)
-        logger.warning(f"⚠️ {symbol}: ${price} (mock data)")
+        """Mock fallback removed — return explicit error payload instead."""
+        logger.error(f"❌ Perplexity provider disabled and no mock fallback available for {symbol}")
         return {
             'symbol': symbol,
-            'price': price,
-            'source': 'mock_fallback',
-            'status': 'success',
-            'timestamp': datetime.now().isoformat()
+            'price': 0,
+            'source': 'error',
+            'status': 'error',
+            'timestamp': datetime.now().isoformat(),
+            'error': 'Perplexity provider not configured and no mock fallback available'
         }
 
 # ==================== 24-AGENT SYSTEM ====================

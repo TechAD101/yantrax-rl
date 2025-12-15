@@ -16,7 +16,7 @@ config = MarketDataConfig(
     cache_ttl_seconds=60,
     rate_limit_calls=5,
     rate_limit_period=60,
-    fallback_to_mock=True
+    fallback_to_mock=False
 )
 
 print(f"📋 Configuration:")
@@ -43,8 +43,10 @@ try:
     
     if result.get('source') == 'alpha_vantage':
         print("\n✅ Alpha Vantage integration working!")
-    elif result.get('source') == 'mock_data':
-        print("\n⚠️  Using mock data (Alpha Vantage might be rate limited or failing)")
+    elif result.get('source') == 'alpaca':
+        print("\n✅ Alpaca integration working (fallback)")
+    elif result.get('source') == 'error':
+        print("\n❌ No providers available; mock data is disabled")
     else:
         print(f"\n❓ Unexpected source: {result.get('source')}")
         

@@ -152,7 +152,7 @@ try:
         else:
             logger.warning("  ⚠️ No working Alpha Vantage key found among candidates; will attempt with provided key if any")
         # CRITICAL FIX: Pass credentials directly to config constructor
-        config = MarketDataConfig(
+            config = MarketDataConfig(
             alpha_vantage_key=alpha_key if alpha_key else 'demo',
             alpaca_key=alpaca_key if alpaca_key else None,
             alpaca_secret=alpaca_secret if alpaca_secret else None,
@@ -161,7 +161,7 @@ try:
             cache_ttl_seconds=60,
             rate_limit_calls=25,
             rate_limit_period=86400,
-            fallback_to_mock=True
+            fallback_to_mock=False
         )
         
         logger.info(f"  Config created:")
@@ -178,7 +178,7 @@ try:
         MARKET_SERVICE_READY = True
         logger.info(f"✅ MarketDataService initialized successfully")
         logger.info(f"📊 Available providers: {[p.value for p in market_data.providers]}")
-        logger.info("📡 Data Pipeline: Alpha Vantage (25/day) → Alpaca (unlimited) → Mock (fallback)")
+        logger.info("📡 Data Pipeline: Alpha Vantage (25/day) → Alpaca (unlimited) — no mock fallback")
     else:
         logger.error("❌ NO API KEYS FOUND!")
         logger.error("   - Check ALPHA_VANTAGE_KEY environment variable")
@@ -324,7 +324,7 @@ if MARKET_SERVICE_READY:
                 alpaca_secret=alpaca_secret_env,
                 polygon_key=polygon,
                 finnhub_key=finnhub,
-                fallback_to_mock=True
+                fallback_to_mock=False
             )
             market_data = MarketDataService(cfg)
             logger.info("✅ MarketDataService v2 initialized with config from env")
@@ -386,12 +386,12 @@ def unified_get_market_price(symbol: str) -> Dict[str, Any]:
             logger.error(f"MarketDataService lookup failed for {symbol}: {e}")
 
     # 3) Fallback mock
+    # No mock fallback: return an explicit error payload for upstream handling
     return {
+        'error': 'no_market_data',
+        'message': 'No market data providers available or all providers failed',
         'symbol': symbol,
-        'price': round(np.random.uniform(100, 500), 2),
-        'change': round(np.random.uniform(-10, 10), 2),
-        'timestamp': datetime.now().isoformat(),
-        'source': 'mock_fallback'
+        'timestamp': datetime.now().isoformat()
     }
 class YantraXEnhancedSystem:
     """Enhanced trading system with AI Firm + RL Core integration"""
@@ -657,7 +657,7 @@ def health_check():
         'data_sources': {
             'primary': 'Alpha Vantage (25/day)' if MARKET_SERVICE_READY else 'None',
             'secondary': 'Alpaca (unlimited)' if MARKET_SERVICE_READY else 'None',
-            'fallback': 'Mock data' if MARKET_SERVICE_READY else 'Enabled'
+            'fallback': ('Mock data' if (MARKET_DATA_CONFIG and MARKET_DATA_CONFIG.fallback_to_mock) else 'Disabled')
         },
         'components': {
             'total_agents': 24 if AI_FIRM_READY else 4,
@@ -906,6 +906,10 @@ def get_market_price():
     """Get market price with proper MarketDataService v2 integration"""
     symbol = request.args.get('symbol', 'AAPL').upper()
     data = unified_get_market_price(symbol)
+    if 'error' in data:
+        logger.warning(f"Market price lookup for {symbol} failed: {data.get('message')}")
+        return jsonify(data), 503
+
     logger.info(f"📊 Market price returned for {symbol}: {data.get('price')} (source: {data.get('source')})")
     return jsonify(data)
 
@@ -923,8 +927,8 @@ def get_multi_asset_data():
             else:
                 results[symbol] = {
                     'symbol': symbol,
-                    'price': round(np.random.uniform(100, 500), 2),
-                    'source': 'mock_fallback'
+                    'error': 'no_market_data',
+                    'message': 'Market data service not configured',
                 }
         except Exception as e:
             logger.error(f"Error fetching {symbol}: {str(e)}")
@@ -1039,7 +1043,7 @@ if __name__ == '__main__':
     print("="*60)
     print(f"🤖 AI Firm: {'✅ READY' if AI_FIRM_READY else '❌ FALLBACK'}")
     print(f"🎮 RL Core: {'✅ READY' if RL_ENV_READY else '❌ NOT LOADED'}")
-    print(f"📊 Market Data: {'✅ v2 CONFIGURED' if MARKET_SERVICE_READY else '❌ MOCK ONLY'}")
+    print(f"📊 Market Data: {'✅ v2 CONFIGURED' if MARKET_SERVICE_READY else '❌ NOT CONFIGURED (no mock fallback)'}")
     
     if MARKET_SERVICE_READY and market_data:
         print(f"📡 Available Providers: {[p.value for p in market_data.providers]}")

@@ -56,12 +56,12 @@ Click "Logs" tab - watch for:
 🔑 Alpaca API Key: SET
 🔑 Alpaca Secret: SET
 ✅ MarketDataService v2 initialized with config
-📊 Data Sources: Alpha Vantage → Alpaca → Mock
+📊 Data Sources: Alpha Vantage → Alpaca (no mock fallback)
 
 ❌ WRONG (if you see this, env vars missing!):
 🔑 Alpaca API Key: MISSING
 🔑 Alpaca Secret: MISSING
-⚠️ No API keys found - will use mock data only
+⚠️ No API keys found - market requests will fail (no mock fallback)
 
 **Step 7: TEST IMMEDIATELY**
 
@@ -80,13 +80,14 @@ curl "https://yantrax-backend.onrender.com/market-price?symbol=AAPL"
   "ask": 175.45
 }
 
-❌ IF YOU SEE:
+❌ IF YOU SEE AN ERROR RESPONSE (e.g., when providers fail):
 {
-  "source": "mock_data",  <-- STILL BROKEN
-  "price": 437.28          <-- RANDOM FAKE NUMBER
+  "error": "no_market_data",
+  "message": "No market data providers available or all providers failed",
+  "symbol": "AAPL"
 }
 
-→ Environment variables NOT set correctly on Render!
+→ Environment variables NOT set correctly on Render or providers failing!
 
 ═══════════════════════════════════════════════════════════
 

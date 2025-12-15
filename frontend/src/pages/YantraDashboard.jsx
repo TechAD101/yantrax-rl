@@ -456,17 +456,16 @@ const SignalCard = ({ signal }) => (
 );
 
 const AssetCard = ({ symbol }) => {
-  // Simulated price data - in production, fetch real data
-  const mockPrice = (Math.random() * 1000 + 100).toFixed(2);
-  const mockChange = ((Math.random() - 0.5) * 10).toFixed(2);
-  const isPositive = parseFloat(mockChange) >= 0;
+  // No mock pricing shown — show placeholder until real data is available
+  const displayPrice = '—';
+  const displayChange = '—';
 
   return (
     <div className="bg-gray-900/40 rounded-lg p-3 border border-gray-700/20">
       <div className="font-semibold text-sm text-gray-200 mb-1">{symbol}</div>
-      <div className="text-lg font-bold text-white">${mockPrice}</div>
-      <div className={`text-xs font-medium ${isPositive ? "text-green-400" : "text-red-400"}`}>
-        {isPositive ? "+" : ""}{mockChange} ({isPositive ? "+" : ""}{(mockChange/mockPrice*100).toFixed(2)}%)
+      <div className="text-lg font-bold text-white">{displayPrice}</div>
+      <div className={`text-xs font-medium text-gray-400`}>
+        {displayChange}
       </div>
     </div>
   );

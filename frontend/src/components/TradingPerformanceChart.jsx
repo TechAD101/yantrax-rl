@@ -1,22 +1,25 @@
 import React from 'react'
 
 const TradingPerformanceChart = ({ portfolioData, aiData, loading = false }) => {
-  // Generate mock chart data based on real portfolio balance
+  // Generate simple deterministic chart data from real portfolio balance when available.
+  // Avoid using randomized mock data.
   const generateChartData = () => {
     const balance = portfolioData?.totalValue ? 
-      parseFloat(portfolioData.totalValue.replace(/[$,]/g, '')) : 125000
-    
+      parseFloat(String(portfolioData.totalValue).replace(/[$,]/g, '')) : null
+
+    if (!balance) return []
+
     const points = []
-    const baseBalance = balance * 0.85 // Start 15% lower to show growth
-    
+    const baseBalance = balance * 0.9 // Start slightly lower to show trend
+
     for (let i = 0; i < 30; i++) {
-      const variation = Math.sin(i * 0.2) * 0.05 + (i * 0.01) // Upward trend with variation
-      const value = baseBalance * (1 + variation)
+      const trend = 1 + (i / 29) * 0.05 // gentle upward trend
+      const value = baseBalance * trend
       points.push({
         day: i + 1,
         balance: value,
-        x: (i / 29) * 100, // Percentage position
-        y: 100 - ((value - baseBalance * 0.8) / (balance * 0.4)) * 100
+        x: (i / 29) * 100,
+        y: 100 - ((value - baseBalance) / (balance * 0.4)) * 100
       })
     }
     return points

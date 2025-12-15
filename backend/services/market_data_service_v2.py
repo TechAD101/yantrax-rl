@@ -30,7 +30,7 @@ class DataProvider(Enum):
     ALPACA = "alpaca"  # NEW: Free unlimited real-time data!
     POLYGON = "polygon"
     FINNHUB = "finnhub"
-    MOCK = "mock"
+    # MOCK provider removed to ensure only real providers are used in production
 
 @dataclass
 class MarketDataConfig:
@@ -110,10 +110,9 @@ class MarketDataService:
         if self.config.finnhub_key:
             providers.append(DataProvider.FINNHUB)
             
-        # Always add mock as final fallback
+        # Mock fallback is deprecated. If fallback flag is accidentally set, warn but do not add a provider.
         if self.config.fallback_to_mock:
-            providers.append(DataProvider.MOCK)
-            logger.info("⚠️ Mock data enabled as final fallback")
+            logger.warning("⚠️ fallback_to_mock is enabled but mock provider has been deprecated; ignoring flag")
             
         return providers
         
@@ -156,8 +155,9 @@ class MarketDataService:
                     result = self._fetch_polygon(symbol)
                 elif provider == DataProvider.FINNHUB:
                     result = self._fetch_finnhub(symbol)
-                elif provider == DataProvider.MOCK:
-                    result = self._generate_mock_data(symbol)
+                elif provider == getattr(DataProvider, 'MOCK', None):
+                    # Should not happen; mock provider deprecated
+                    result = None
                 else:
                     continue
                     
@@ -309,34 +309,8 @@ class MarketDataService:
         return None
         
     def _generate_mock_data(self, symbol: str) -> Dict[str, Any]:
-        """Generate mock data as last resort fallback"""
-        import random
-        
-        base_prices = {
-            'AAPL': 175.50,
-            'MSFT': 330.25,
-            'GOOGL': 135.75,
-            'TSLA': 245.60,
-            'NVDA': 495.30,
-            'AMZN': 145.80
-        }
-        
-        base_price = base_prices.get(symbol, 100.0)
-        variation = random.uniform(-0.02, 0.02)  # +/- 2%
-        current_price = base_price * (1 + variation)
-        change = current_price - base_price
-        
-        logger.warning(f"⚠️ Using MOCK DATA for {symbol}")
-        
-        return {
-            'symbol': symbol,
-            'price': round(current_price, 2),
-            'change': round(change, 2),
-            'changePercent': round((change / base_price) * 100, 2),
-            'timestamp': datetime.now().isoformat(),
-            'source': 'mock_data',
-            'warning': 'This is simulated data for development purposes'
-        }
+        """Mock generator removed to prevent simulated data in production."""
+        raise NotImplementedError("Mock data generation has been removed. Configure a real provider.")
         
     def _generate_error_response(self, symbol: str) -> Dict[str, Any]:
         """Generate error response when all providers fail"""
