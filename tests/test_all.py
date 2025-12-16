@@ -47,8 +47,16 @@ class TestBackendAPI:
             assert 'status' in data
     
     def test_market_price_endpoint(self, client):
-        response = client.get('/market-price?symbol=AAPL')
-        assert response.status_code == 200
+        # Avoid external network calls in CI by mocking the market data provider
+        with patch('main.unified_get_market_price') as mock_price:
+            mock_price.return_value = {
+                'symbol': 'AAPL',
+                'price': 123.45,
+                'source': 'test',
+                'timestamp': datetime.now().isoformat()
+            }
+            response = client.get('/market-price?symbol=AAPL')
+            assert response.status_code == 200
     
     def test_rl_cycle_endpoint(self, client):
         response = client.post('/run-cycle', json={})
