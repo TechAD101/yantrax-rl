@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
-import requests
+import requests  # type: ignore[import]
 from datetime import datetime
 import os
 import json

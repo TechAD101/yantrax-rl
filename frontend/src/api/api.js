@@ -262,6 +262,40 @@ export const getMarketPrice = async (symbol = "AAPL") => {
   }
 };
 
+/**
+ * Create an EventSource connected to /market-price-stream for the given symbol.
+ * onMessage receives parsed JSON payloads.
+ * Returns an object with a `close()` method to stop the connection.
+ */
+export const streamMarketPrice = ({ symbol = "AAPL", interval = 5, count = 0, onMessage = null, onOpen = null, onError = null } = {}) => {
+  if (!symbol) throw new Error('streamMarketPrice requires a symbol');
+  const normalizedBase = (BASE_URL || '').replace(/\/$/, '');
+  const url = `${normalizedBase}/market-price-stream?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&count=${encodeURIComponent(count)}`;
+  let es;
+  try {
+    es = new EventSource(url);
+  } catch (err) {
+    if (typeof onError === 'function') onError(err);
+    throw err;
+  }
+
+  es.onopen = (evt) => { if (typeof onOpen === 'function') onOpen(evt); };
+  es.onmessage = (evt) => {
+    try {
+      const payload = JSON.parse(evt.data);
+      if (typeof onMessage === 'function') onMessage(payload);
+    } catch (err) {
+      if (typeof onError === 'function') onError(err);
+      console.error('streamMarketPrice JSON parse error', err);
+    }
+  };
+  es.onerror = (evt) => { if (typeof onError === 'function') onError(evt); };
+
+  return {
+    close: () => { try { es.close(); } catch (e) {} }
+  };
+};
+
 // Test API connectivity
 export const testConnection = async () => {
   try {

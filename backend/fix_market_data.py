@@ -16,7 +16,7 @@ new_method = '''def get_stock_price(self, symbol: str) -> Dict[str, Any]:
             
         # Try Alpha Vantage FIRST (primary source)
         try:
-            import requests
+            import requests  # type: ignore[import]
             api_key = os.environ.get('ALPHA_VANTAGE_KEY', '9RIUV')
             url = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={api_key}'
             

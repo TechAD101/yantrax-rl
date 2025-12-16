@@ -52,7 +52,7 @@ class PerplexityMarketDataProvider:
             return self._mock_price(symbol)
         
         try:
-            import requests
+            import requests  # type: ignore[import]
             
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
@@ -108,7 +108,7 @@ class PerplexityMarketDataProvider:
             return f"Mock analysis for {symbol}: Bullish sentiment detected"
         
         try:
-            import requests
+            import requests  # type: ignore[import]
             
             headers = {
                 "Authorization": f"Bearer {self.api_key}",

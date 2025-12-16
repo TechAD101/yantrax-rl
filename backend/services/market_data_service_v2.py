@@ -15,7 +15,7 @@ Date: 2025-11-27
 import os
 import time
 import logging
-import requests
+import requests  # type: ignore[import]
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 from functools import lru_cache
@@ -174,6 +174,11 @@ class MarketDataService:
         # All providers failed
         logger.error(f"💥 ALL PROVIDERS FAILED for {symbol}")
         return self._generate_error_response(symbol)
+
+    # Backwards-compatible alias used by some callers
+    def get_price(self, symbol: str) -> Dict[str, Any]:
+        """Alias for get_stock_price for backwards compatibility."""
+        return self.get_stock_price(symbol)
         
     def _fetch_alpha_vantage(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Fetch data from Alpha Vantage API"""

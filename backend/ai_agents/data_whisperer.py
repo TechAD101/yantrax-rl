@@ -1,7 +1,7 @@
 # ai_agents/data_whisperer.py - Enhanced Data Analysis Agent
 
 import random
-import requests
+import requests  # type: ignore[import]
 from typing import Dict, Optional
 from services.market_data_service import get_latest_price
 import threading

@@ -9,13 +9,14 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 import numpy as np
 from functools import wraps
+from flask import Response
 
 # FIXED #2: Use insert(0) for module priority
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from flask import Flask, jsonify, request
-    from flask_cors import CORS
+    from flask import Flask, jsonify, request  # type: ignore[import]
+    from flask_cors import CORS  # type: ignore[import]
     print("✅ Flask dependencies loaded")
 except ImportError as e:
     print(f"❌ Flask import error: {e}")
@@ -29,12 +30,13 @@ logger = logging.getLogger(__name__)
 
 # Load local .env for developer convenience (kept out of git)
 try:
-    from dotenv import load_dotenv
+    from dotenv import load_dotenv  # type: ignore[import]
     load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
     logger.debug("Loaded local .env (if present)")
 except Exception:
     logger.debug("python-dotenv not available or failed to load .env")
 
+import requests  # type: ignore[import]
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -121,7 +123,7 @@ try:
         logger.info("\n🔨 CREATING MarketDataConfig...")
         # Try to detect a working Alpha Vantage key among common env var names
         def _select_working_alpha_key(candidates):
-            import requests
+            import requests  # type: ignore[import]
             for candidate in candidates:
                 if not candidate:
                     continue
@@ -152,7 +154,7 @@ try:
             alpha_key = working_alpha
         else:
             logger.warning("  ⚠️ No working Alpha Vantage key found among candidates; will attempt with provided key if any")
-
+        
         # CRITICAL FIX: Pass credentials directly to config constructor (always create config)
         config = MarketDataConfig(
             alpha_vantage_key=alpha_key if alpha_key else 'demo',
@@ -374,7 +376,7 @@ def unified_get_market_price(symbol: str) -> Dict[str, Any]:
 
     # 1) Try yfinance quick fetch
     try:
-        import yfinance as yf
+        import yfinance as yf  # type: ignore[import]
         t = yf.Ticker(symbol)
         # Use recent intraday data if available
         hist = t.history(period='1d', interval='1m')
@@ -413,8 +415,13 @@ class YantraXEnhancedSystem:
     """Enhanced trading system with AI Firm + RL Core integration"""
     
     def __init__(self):
+        from typing import Any, Optional
+
         self.portfolio_balance = 132240.84
         self.trade_history = []
+        # `env` may be unavailable in some deployments; annotate to quiet static checks
+        self.env: Optional[Any] = None
+        self.current_state: Optional[Dict[str, Any]] = None
         
         # Initialize RL environment if available
         if RL_ENV_READY:
@@ -460,6 +467,12 @@ class YantraXEnhancedSystem:
     def _execute_integrated_cycle(self) -> Dict[str, Any]:
         """Fully integrated: AI Firm → RL Environment"""
         try:
+            # Guard: ensure RL env and current state present
+            if not self.env or not self.current_state:
+                logger.warning("RL environment not ready; falling back to AI Firm cycle")
+                return self._execute_ai_firm_cycle()
+            # For static analyzers, make explicit we're not None beyond this point
+            assert self.current_state is not None
             context = {
                 'decision_type': 'trading',
                 'market_price': self.current_state['price'],
@@ -739,7 +752,7 @@ def test_alpaca():
         })
     
     try:
-        import requests
+        import requests  # type: ignore[import]
         
         logger.info(f"  Alpaca Key (first 10): {alpaca_key[:10] if alpaca_key else 'NONE'}")
         logger.info(f"  Making request to Alpaca...")
@@ -796,7 +809,7 @@ def test_alpha():
         })
     
     try:
-        import requests
+        import requests  # type: ignore[import]
         
         logger.info(f"  Alpha Key (first 10): {alpha_key[:10] if alpha_key else 'NONE'}")
         logger.info(f"  Making request to Alpha Vantage...")
@@ -831,6 +844,56 @@ def test_alpha():
             'symbol': symbol,
             'timestamp': datetime.now().isoformat()
         })
+
+@app.route('/market-price-stream', methods=['GET'])
+def market_price_stream():
+    """Server-Sent Events stream of market prices for a symbol.
+
+    Query params:
+      - symbol (default AAPL)
+      - interval (seconds between events, default 5)
+      - count (optional, number of events to emit; if omitted stream indefinitely)
+    """
+    symbol = (request.args.get('symbol') or 'AAPL').upper()
+    try:
+        interval = float(request.args.get('interval', os.getenv('MARKET_DATA_STREAM_INTERVAL', '5')))
+    except Exception:
+        interval = 5.0
+    count_param = request.args.get('count')
+    try:
+        count = int(count_param) if count_param else None
+    except Exception:
+        count = None
+
+    def event_generator():
+        sent = 0
+        # Initial event
+        while True:
+            try:
+                data = unified_get_market_price(symbol)
+                payload = {
+                    'symbol': symbol,
+                    'data': data,
+                    'timestamp': datetime.now().isoformat()
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+                sent += 1
+                if count is not None and sent >= count:
+                    break
+                # Sleep, but break if client disconnects (Flask will close generator)
+                try:
+                    import time
+                    time.sleep(interval)
+                except GeneratorExit:
+                    break
+            except GeneratorExit:
+                break
+            except Exception as e:
+                err = {'error': 'stream_error', 'message': str(e), 'timestamp': datetime.now().isoformat()}
+                yield f"data: {json.dumps(err)}\n\n"
+                break
+
+    return Response(event_generator(), mimetype='text/event-stream')
 
 @app.route('/health', methods=['GET'])
 @handle_errors  
@@ -870,7 +933,7 @@ def god_cycle():
     except Exception:
         pass
     result['version'] = '4.6.0'
-    result['integration_active'] = AI_FIRM_READY and RL_ENV_READY
+    result['inassign him next tastive'] = AI_FIRM_READY and RL_ENV_READY
     return jsonify(result)
 
 

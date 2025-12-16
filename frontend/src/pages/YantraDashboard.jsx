@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import AIFirmDashboard from '../components/AIFirmDashboard';
+import AssetMonitor from '../components/AssetMonitor';
 import {
   getGodCycle,
   getJournal,
@@ -328,7 +329,7 @@ const YantraDashboard = () => {
                   <h4 className="text-sm font-semibold text-gray-300 mb-3">Asset Monitor</h4>
                   <div className="grid grid-cols-2 gap-3">
                     {selectedAssets.map((asset) => (
-                      <AssetCard key={asset} symbol={asset} />
+                      <AssetMonitor key={asset} symbol={asset} />
                     ))}
                   </div>
                 </div>
@@ -455,21 +456,7 @@ const SignalCard = ({ signal }) => (
   </div>
 );
 
-const AssetCard = ({ symbol }) => {
-  // No mock pricing shown — show placeholder until real data is available
-  const displayPrice = '—';
-  const displayChange = '—';
 
-  return (
-    <div className="bg-gray-900/40 rounded-lg p-3 border border-gray-700/20">
-      <div className="font-semibold text-sm text-gray-200 mb-1">{symbol}</div>
-      <div className="text-lg font-bold text-white">{displayPrice}</div>
-      <div className={`text-xs font-medium text-gray-400`}>
-        {displayChange}
-      </div>
-    </div>
-  );
-};
 
 const AnalyticsCard = ({ title, value, indicator, subtext }) => {
   const indicatorColors = {
