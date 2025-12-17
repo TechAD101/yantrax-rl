@@ -124,11 +124,15 @@ try:
         logger.info("\n🔨 CREATING MarketDataConfig (FMP-only)...")
 
         config = MarketDataConfig(
-            fmp_api_key=fmp_key,
-            cache_ttl_seconds=5,
-            rate_limit_calls=300,
-            rate_limit_period=60,
-            batch_size=50
+            alpha_vantage_key=alpha_key if alpha_key else 'demo',
+            alpaca_key=alpaca_key if alpaca_key else None,
+            alpaca_secret=alpaca_secret if alpaca_secret else None,
+            polygon_key=None,
+            finnhub_key=None,
+            cache_ttl_seconds=60,
+            rate_limit_calls=25,
+            rate_limit_period=86400,
+            fallback_to_mock=False
         )
 
         logger.info(f"  Config created:")

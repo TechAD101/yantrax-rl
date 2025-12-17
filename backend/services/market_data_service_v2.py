@@ -30,7 +30,7 @@ class DataProvider(Enum):
 class MarketDataConfig:
     """Configuration for market data service (FMP-only)"""
     # Read FMP API key from env by default but allow override in tests/config
-    fmp_api_key: str = os.getenv("FMP_API_KEY", "14uTc09TMyUVJEuFKriHayCTnLcyGhyy")
+    fmp_api_key: str = os.getenv("FMP_API_KEY")
     # Very short TTL for live data to keep UI responsive
     cache_ttl_seconds: int = 5  # seconds
     request_timeout: int = 10
