@@ -23,8 +23,8 @@ print("🔍 Testing Core Dependencies:")
 try:
     import flask
     import numpy as np
-    import yfinance
-    print("✅ Flask, NumPy, yfinance - OK")
+    import requests
+    print("✅ Flask, NumPy, requests - OK")
 except ImportError as e:
     print(f"❌ Core dependencies failed: {e}")
     sys.exit(1)

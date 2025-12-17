@@ -4,9 +4,7 @@ Professional-grade market data abstraction with multiple providers,
 rate limiting, caching, and comprehensive error handling.
 
 Providers:
-1. Alpha Vantage (primary, 25 calls/day)
-2. Alpaca (secondary, 200 calls/min UNLIMITED)
-3. Mock (fallback)
+- FinancialModelingPrep (FMP) - batch quote API (primary and only provider)
 
 Author: YantraX Team
 Date: 2025-11-27
@@ -32,7 +30,7 @@ class DataProvider(Enum):
 class MarketDataConfig:
     """Configuration for market data service (FMP-only)"""
     # Read FMP API key from env by default but allow override in tests/config
-    fmp_api_key: str = os.getenv("FMP_API_KEY", "14uTc09TMyUVJEuFKriHayCTnLcyGhyy")
+    fmp_api_key: str = os.getenv("FMP_API_KEY", "14uTc09TMyUVJEuFKriHayCTnLcyGhyv")
     # Very short TTL for live data to keep UI responsive
     cache_ttl_seconds: int = 5  # seconds
     request_timeout: int = 10

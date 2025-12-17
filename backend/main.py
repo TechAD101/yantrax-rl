@@ -78,23 +78,21 @@ logger.info("="*80)
 
 # Log all environment variables
 logger.info("📋 ENVIRONMENT VARIABLES CHECK:")
-def _get_alpha_vantage_key() -> str:
-    """Return the Alpha Vantage key from any commonly used env var name."""
+
+def _get_fmp_key() -> str:
+    """Return the FinancialModelingPrep key from commonly used env var names."""
     return (
-        os.getenv('ALPHA_VANTAGE_KEY') or
-        os.getenv('ALPHAVANTAGE_API_KEY') or
-        os.getenv('ALPHAVANTAGE_KEY') or
-        os.getenv('ALPHA_VANTAGE') or
-        os.getenv('ALPHAVANTAGE') or
-        os.getenv('ALPHAVANTAGE_APIKEY') or
+        os.getenv('FMP_API_KEY') or
+        os.getenv('FMP_KEY') or
+        os.getenv('FMP') or
         ''
     )
 
-alpha_key_env = _get_alpha_vantage_key()
+fmp_key_env = _get_fmp_key()
 alpaca_key_env = os.getenv('ALPACA_API_KEY', '')
 alpaca_secret_env = os.getenv('ALPACA_SECRET_KEY', '')
 
-logger.info(f"  ALPHA_VANTAGE_KEY present: {bool(alpha_key_env)} (first 10 chars: {alpha_key_env[:10] if alpha_key_env else 'EMPTY'})")
+logger.info(f"  FMP_API_KEY present: {bool(fmp_key_env)} (first 10 chars: {fmp_key_env[:10] if fmp_key_env else 'EMPTY'})")
 logger.info(f"  ALPACA_API_KEY present: {bool(alpaca_key_env)} (first 10 chars: {alpaca_key_env[:10] if alpaca_key_env else 'EMPTY'})")
 logger.info(f"  ALPACA_SECRET_KEY present: {bool(alpaca_secret_env)} (first 10 chars: {alpaca_secret_env[:10] if alpaca_secret_env else 'EMPTY'})")
 
@@ -110,12 +108,12 @@ try:
     logger.info("✅ MarketDataService v2 imported successfully")
     
     # Get API keys from environment (accept many common names)
-    alpha_key = _get_alpha_vantage_key()
+    fmp_key_env = _get_fmp_key()
     alpaca_key = os.getenv('ALPACA_API_KEY', '')
     alpaca_secret = os.getenv('ALPACA_SECRET_KEY', '')
-    
+
     logger.info(f"\n🔑 API KEYS CHECK:")
-    logger.info(f"  Alpha Vantage: {'✅ SET' if alpha_key else '❌ MISSING'}")
+    logger.info(f"  FMP: {'✅ SET' if fmp_key_env else '❌ MISSING'}")
     logger.info(f"  Alpaca API Key: {'✅ SET' if alpaca_key else '❌ MISSING'}")
     logger.info(f"  Alpaca Secret: {'✅ SET' if alpaca_secret else '❌ MISSING'}")
     
@@ -148,13 +146,7 @@ try:
     else:
         logger.error("❌ NO FMP API KEY FOUND! Set FMP_API_KEY in environment or pass via MarketDataConfig.")
         MARKET_SERVICE_READY = False
-    else:
-        logger.error("❌ NO API KEYS FOUND!")
-        logger.error("   - Check ALPHA_VANTAGE_KEY environment variable")
-        logger.error("   - Check ALPACA_API_KEY environment variable")
-        logger.error("   - Check ALPACA_SECRET_KEY environment variable")
-        MARKET_SERVICE_READY = False
-        
+
 except ImportError as e:
     logger.error(f"❌ MarketDataService v2 import failed: {e}")
     logger.error(f"   Import error details: {str(e)}")
@@ -314,62 +306,20 @@ else:
 
 
 def unified_get_market_price(symbol: str) -> Dict[str, Any]:
-    """Try yfinance first, then alpha_vantage via MarketDataService, then mock."""
+    """Get current market price for a symbol using configured provider (FMP-only).
+
+    Returns an error payload if the provider is unavailable or fails.
+    """
     symbol = symbol.upper()
-    # Honor MARKET_DATA_SOURCE if the deploy configured a preferred provider
-    preferred = (os.getenv('MARKET_DATA_SOURCE') or '').lower()
 
-    # If alpha_vantage is preferred and service is ready, try it first
-    if preferred == 'alpha_vantage' and MARKET_SERVICE_READY and market_data:
-        try:
-            if hasattr(market_data, 'get_stock_price'):
-                return market_data.get_stock_price(symbol)
-            elif hasattr(market_data, 'get_price'):
-                return market_data.get_price(symbol)
-        except Exception as e:
-            logger.error(f"MarketDataService lookup failed for {symbol}: {e}")
-
-    # If alpaca is preferred, try Alpaca directly before yfinance
-    if preferred == 'alpaca' and MARKET_SERVICE_READY and market_data:
-        try:
-            if hasattr(market_data, '_fetch_alpaca'):
-                res = market_data._fetch_alpaca(symbol)
-                if res and res.get('price', 0) > 0:
-                    return res
-        except Exception as e:
-            logger.error(f"Preferred Alpaca lookup failed for {symbol}: {e}")
-
-    # 1) Try yfinance quick fetch
-    try:
-        import yfinance as yf  # type: ignore[import]
-        t = yf.Ticker(symbol)
-        # Use recent intraday data if available
-        hist = t.history(period='1d', interval='1m')
-        if hist is not None and not hist.empty:
-            last = hist['Close'].iloc[-1]
-            if last is not None and last > 0:
-                return {
-                    'symbol': symbol,
-                    'price': round(float(last), 2),
-                    'change': None,
-                    'timestamp': datetime.now().isoformat(),
-                    'source': 'yfinance'
-                }
-    except Exception as e:
-        logger.debug(f"yfinance lookup failed for {symbol}: {e}")
-
-    # 2) Try MarketDataService (Alpha Vantage or other providers) if not already tried
     if MARKET_SERVICE_READY and market_data:
         try:
-            if hasattr(market_data, 'get_stock_price'):
-                return market_data.get_stock_price(symbol)
-            elif hasattr(market_data, 'get_price'):
-                return market_data.get_price(symbol)
+            # MarketDataService.get_stock_price uses FMP batch endpoint under the hood
+            return market_data.get_stock_price(symbol)
         except Exception as e:
             logger.error(f"MarketDataService lookup failed for {symbol}: {e}")
 
-    # 3) Fallback mock
-    # No mock fallback: return an explicit error payload for upstream handling
+    # No providers available or call failed
     return {
         'error': 'no_market_data',
         'message': 'No market data providers available or all providers failed',
@@ -649,9 +599,9 @@ def health_check():
             )
         },
         'data_sources': {
-            'primary': 'Alpha Vantage (25/day)' if MARKET_SERVICE_READY else 'None',
-            'secondary': 'Alpaca (unlimited)' if MARKET_SERVICE_READY else 'None',
-            'fallback': ('Mock data' if (MARKET_DATA_CONFIG and MARKET_DATA_CONFIG.fallback_to_mock) else 'Disabled')
+            'primary': 'FMP (batch quote API)' if MARKET_SERVICE_READY else 'None',
+            'secondary': 'Alpaca (optional)' if MARKET_SERVICE_READY else 'None',
+            'fallback': 'Disabled'
         },
         'components': {
             'total_agents': 24 if AI_FIRM_READY else 4,
@@ -673,19 +623,18 @@ def debug_status():
         'market_service': {
             'initialized': MARKET_SERVICE_READY,
             'config': {
-                'alpha_vantage_key_set': bool(MARKET_DATA_CONFIG.alpha_vantage_key if MARKET_DATA_CONFIG else False),
-                'alpaca_key_set': bool(MARKET_DATA_CONFIG.alpaca_key if MARKET_DATA_CONFIG else False),
-                'alpaca_secret_set': bool(MARKET_DATA_CONFIG.alpaca_secret if MARKET_DATA_CONFIG else False),
-                'fallback_to_mock': MARKET_DATA_CONFIG.fallback_to_mock if MARKET_DATA_CONFIG else False
+                'fmp_api_key_set': bool(MARKET_DATA_CONFIG.fmp_api_key if MARKET_DATA_CONFIG else False),
+                'batch_size': MARKET_DATA_CONFIG.batch_size if MARKET_DATA_CONFIG else None
             },
             'providers_available': [p.value for p in market_data.providers] if market_data else [],
             'init_error': MARKET_SERVICE_INIT_ERROR
         },
         'environment': {
-            'ALPHA_VANTAGE_KEY': 'SET' if os.getenv('ALPHA_VANTAGE_KEY') else 'MISSING',
+            'FMP_API_KEY': 'SET' if os.getenv('FMP_API_KEY') else 'MISSING',
             'ALPACA_API_KEY': 'SET' if os.getenv('ALPACA_API_KEY') else 'MISSING',
             'ALPACA_SECRET_KEY': 'SET' if os.getenv('ALPACA_SECRET_KEY') else 'MISSING'
         },
+
         'preferred_data_source': os.getenv('MARKET_DATA_SOURCE') or None,
         'ai_firm': {
             'ready': AI_FIRM_READY
@@ -986,12 +935,12 @@ def get_multi_asset_data():
 @handle_errors
 def env_status():
     """Return non-sensitive environment status to diagnose deployments."""
-    alpha_present = bool(_get_alpha_vantage_key())
+    fmp_present = bool(_get_fmp_key())
     alpaca_present = bool(os.getenv('ALPACA_API_KEY') and os.getenv('ALPACA_SECRET_KEY'))
     return jsonify({
-        'alpha_vantage_present': alpha_present,
-        'alpha_vantage_env_names': [
-            name for name in ['ALPHA_VANTAGE_KEY', 'ALPHAVANTAGE_API_KEY', 'ALPHAVANTAGE_KEY', 'ALPHA_VANTAGE', 'ALPHAVANTAGE']
+        'fmp_present': fmp_present,
+        'fmp_env_names': [
+            name for name in ['FMP_API_KEY', 'FMP_KEY', 'FMP']
             if os.getenv(name)
         ],
         'alpaca_present': alpaca_present,

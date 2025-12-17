@@ -16,7 +16,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 try:
     from flask import Flask, jsonify, request
     from flask_cors import CORS
-    import yfinance as yf
+    # yfinance removed: FMP is used instead
     print("✅ Core dependencies loaded")
 except ImportError as e:
     print(f"❌ Import error: {e}")
@@ -374,9 +374,9 @@ class MarketDataManager:
             self.request_timeout = int(os.environ.get('MARKET_DATA_REQUEST_TIMEOUT', 10))
         except Exception:
             self.request_timeout = 10
-        self.source = os.environ.get('MARKET_DATA_SOURCE', 'yfinance')
-        self.alpha_vantage_key = os.environ.get('ALPHA_VANTAGE_KEY')
-        logger.info(f"MarketDataManager init: source={self.source}, alpha_key={'SET' if self.alpha_vantage_key else 'NONE'}")
+        self.source = os.environ.get('MARKET_DATA_SOURCE', 'fmp')
+        self.fmp_api_key = os.environ.get('FMP_API_KEY')
+        logger.info(f"MarketDataManager init: source={self.source}, fmp_key={'SET' if self.fmp_api_key else 'NONE'}")
     def _from_cache(self, symbol: str):
         entry = self.cache.get(symbol)
         if not entry:

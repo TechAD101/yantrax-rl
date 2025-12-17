@@ -17,7 +17,7 @@ sys.path.insert(0, current_dir)
 try:
     from flask import Flask, jsonify, request
     from flask_cors import CORS
-    import yfinance as yf
+    # yfinance removed: FMP is used instead
     print("✅ Core dependencies loaded")
 except ImportError as e:
     print(f"❌ Import error: {e}")
