@@ -12,15 +12,15 @@ print("\n🧪 Testing MarketDataService v2...\n")
 
 # Create configuration
 config = MarketDataConfig(
-    alpha_vantage_key=os.environ.get('ALPHA_VANTAGE_KEY', '9RIUV'),
-    cache_ttl_seconds=60,
-    rate_limit_calls=5,
+    fmp_api_key=os.environ.get('FMP_API_KEY', '14uTc09TMyUVJEuFKriHayCTnLcyGhyy'),
+    cache_ttl_seconds=5,
+    rate_limit_calls=300,
     rate_limit_period=60,
-    fallback_to_mock=False
+    batch_size=50
 )
 
 print(f"📋 Configuration:")
-print(f"   API Key: {config.alpha_vantage_key[:10]}...")
+print(f"   FMP API Key: {config.fmp_api_key[:10]}...")
 print(f"   Cache TTL: {config.cache_ttl_seconds}s")
 print(f"   Rate Limit: {config.rate_limit_calls} calls/{config.rate_limit_period}s\n")
 
@@ -41,12 +41,10 @@ try:
     print(f"   Source: {result.get('source')}")
     print(f"   Cached: {result.get('cached', False)}")
     
-    if result.get('source') == 'alpha_vantage':
-        print("\n✅ Alpha Vantage integration working!")
-    elif result.get('source') == 'alpaca':
-        print("\n✅ Alpaca integration working (fallback)")
+    if result.get('source') == 'fmp':
+        print("\n✅ FMP integration working!")
     elif result.get('source') == 'error':
-        print("\n❌ No providers available; mock data is disabled")
+        print("\n❌ No providers available; FMP may be misconfigured")
     else:
         print(f"\n❓ Unexpected source: {result.get('source')}")
         
@@ -76,5 +74,42 @@ try:
     print(f"\n✅ Health check passed!")
 except Exception as e:
     print(f"❌ Health check failed: {e}")
+
+# New unit test: FMP batch provider (monkeypatched)
+print("\n🧪 Testing FMP batch provider with monkeypatched requests...\n")
+
+def _run_fmp_batch_unit_test():
+    sample = [
+        {"symbol": "AAPL", "price": 199.99, "bid": 199.9, "ask": 200.1, "changesPercentage": 0.5},
+        {"symbol": "TSLA", "price": 950.50, "bid": 949.8, "ask": 951.2, "changesPercentage": -0.8},
+        {"symbol": "BTC",  "price": 62000.0, "bid": 61900, "ask": 62100, "changesPercentage": 1.2}
+    ]
+
+    class DummyResp:
+        def __init__(self, json_data): self._json = json_data
+        def raise_for_status(self): return
+        def json(self): return self._json
+
+    def fake_get(url, params=None, timeout=10):
+        # Return subset for requested symbols
+        return DummyResp(sample)
+
+    # Monkeypatch the requests.get used by market_data_service_v2
+    import services.market_data_service_v2 as msvc
+    orig_get = msvc.requests.get
+    msvc.requests.get = fake_get
+
+    try:
+        cfg = MarketDataConfig(fmp_api_key='testkey', cache_ttl_seconds=1)
+        s = MarketDataService(cfg)
+        res = s.get_batch_prices(['AAPL', 'TSLA', 'BTC'])
+        assert res['AAPL']['price'] == round(199.99, 2)
+        assert res['TSLA']['price'] == round(950.50, 2)
+        assert res['BTC']['price'] == round(62000.0, 2)
+        print("✅ FMP batch unit test passed")
+    finally:
+        msvc.requests.get = orig_get
+
+_run_fmp_batch_unit_test()
 
 print("\n✨ All tests completed!\n")

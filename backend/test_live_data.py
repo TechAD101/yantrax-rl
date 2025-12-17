@@ -3,11 +3,10 @@
 Live Data Validation Script for YantraX RL
 
 Tests:
-1. Alpha Vantage connectivity
-2. Alpaca connectivity  
-3. Failover mechanism
-4. Data quality validation
-5. Performance benchmarking
+1. FinancialModelingPrep (FMP) connectivity
+2. Batch quote validation
+3. Data quality validation
+4. Performance benchmarking
 
 Usage:
     python backend/test_live_data.py
@@ -58,45 +57,31 @@ except ImportError as e:
     sys.exit(1)
 
 def test_env_variables():
-    """Test 1: Verify environment variables"""
+    """Test 1: Verify environment variables (FMP)"""
     print_header("TEST 1: Environment Variables")
-    
-    alpha_key = os.getenv('ALPHA_VANTAGE_KEY', '')
-    alpaca_key = os.getenv('ALPACA_API_KEY', '')
-    alpaca_secret = os.getenv('ALPACA_SECRET_KEY', '')
-    
-    if alpha_key and alpha_key != 'demo':
-        print_success(f"Alpha Vantage Key: SET ({alpha_key[:8]}...)")
+
+    fmp_key = os.getenv('FMP_API_KEY', '')
+
+    if fmp_key:
+        print_success(f"FMP API Key: SET ({fmp_key[:8]}...)")
     else:
-        print_warning("Alpha Vantage Key: NOT SET or using demo")
-    
-    if alpaca_key:
-        print_success(f"Alpaca API Key: SET ({alpaca_key[:8]}...)")
-    else:
-        print_error("Alpaca API Key: MISSING")
-        
-    if alpaca_secret:
-        print_success(f"Alpaca Secret: SET ({alpaca_secret[:8]}...)")
-    else:
-        print_error("Alpaca Secret: MISSING")
-    
-    return bool(alpha_key or (alpaca_key and alpaca_secret))
+        print_error("FMP API Key: MISSING")
+
+    return bool(fmp_key)
 
 def test_service_initialization():
     """Test 2: Service initialization"""
     print_header("TEST 2: MarketDataService Initialization")
-    
+
     try:
         config = MarketDataConfig(
-            alpha_vantage_key=os.getenv('ALPHA_VANTAGE_KEY', 'demo'),
-            alpaca_key=os.getenv('ALPACA_API_KEY'),
-            alpaca_secret=os.getenv('ALPACA_SECRET_KEY'),
-            cache_ttl_seconds=60,
-            rate_limit_calls=25,
-            rate_limit_period=86400,
-            fallback_to_mock=True
+            fmp_api_key=os.getenv('FMP_API_KEY', '14uTc09TMyUVJEuFKriHayCTnLcyGhyy'),
+            cache_ttl_seconds=5,
+            rate_limit_calls=300,
+            rate_limit_period=60,
+            batch_size=50
         )
-        
+
         service = MarketDataService(config)
         print_success("MarketDataService initialized successfully")
         print_info(f"Configured providers: {[p.value for p in service.providers]}")
@@ -105,65 +90,40 @@ def test_service_initialization():
         print_error(f"Initialization failed: {e}")
         return None
 
-def test_alpha_vantage(service):
-    """Test 3: Alpha Vantage connectivity"""
-    print_header("TEST 3: Alpha Vantage Data Fetch")
-    
-    if not os.getenv('ALPHA_VANTAGE_KEY') or os.getenv('ALPHA_VANTAGE_KEY') == 'demo':
-        print_warning("Alpha Vantage key not configured - skipping test")
-        return None
-    
-    try:
-        start_time = time.time()
-        result = service._fetch_alpha_vantage('AAPL')
-        elapsed = time.time() - start_time
-        
-        if result and result.get('price', 0) > 0:
-            print_success(f"Alpha Vantage fetch successful in {elapsed:.2f}s")
-            print_info(f"Symbol: {result['symbol']}")
-            print_info(f"Price: ${result['price']}")
-            print_info(f"Change: ${result['change']} ({result['changePercent']}%)")
-            print_info(f"Source: {result['source']}")
-            return result
-        else:
-            print_error("Alpha Vantage returned invalid data")
-            return None
-    except Exception as e:
-        print_error(f"Alpha Vantage test failed: {e}")
+def test_fmp(service):
+    """Test 3: FinancialModelingPrep (FMP) connectivity"""
+    print_header("TEST 3: FMP Data Fetch")
+
+    if not os.getenv('FMP_API_KEY'):
+        print_warning("FMP key not configured - skipping test")
         return None
 
-def test_alpaca(service):
-    """Test 4: Alpaca connectivity"""
-    print_header("TEST 4: Alpaca Data Fetch")
-    
-    if not (os.getenv('ALPACA_API_KEY') and os.getenv('ALPACA_SECRET_KEY')):
-        print_warning("Alpaca credentials not configured - skipping test")
-        return None
-    
     try:
         start_time = time.time()
-        result = service._fetch_alpaca('AAPL')
+        result = service.get_stock_price('AAPL')
         elapsed = time.time() - start_time
-        
+
         if result and result.get('price', 0) > 0:
-            print_success(f"Alpaca fetch successful in {elapsed:.2f}s")
+            print_success(f"FMP fetch successful in {elapsed:.2f}s")
             print_info(f"Symbol: {result['symbol']}")
             print_info(f"Price: ${result['price']}")
-            print_info(f"Bid/Ask: ${result.get('bid', 'N/A')} / ${result.get('ask', 'N/A')}")
+            print_info(f"Change: ${result.get('change', 'N/A')} ({result.get('changePercent', 'N/A')}%)")
             print_info(f"Source: {result['source']}")
             return result
         else:
-            print_error("Alpaca returned invalid data")
+            print_error("FMP returned invalid data")
             return None
     except Exception as e:
-        print_error(f"Alpaca test failed: {e}")
+        print_error(f"FMP test failed: {e}")
         return None
+
+# Alpaca tests removed - FMP is the single provider now
 
 def test_intelligent_fetch(service):
     """Test 5: Intelligent provider selection"""
     print_header("TEST 5: Intelligent Provider Fallback")
     
-    symbols = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'NVDA']
+    symbols = ['AAPL', 'TSLA', 'NVDA', 'MSFT', 'SOL', 'BNB', 'BTC']
     results = []
     
     for symbol in symbols:

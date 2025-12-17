@@ -119,70 +119,35 @@ try:
     logger.info(f"  Alpaca API Key: {'✅ SET' if alpaca_key else '❌ MISSING'}")
     logger.info(f"  Alpaca Secret: {'✅ SET' if alpaca_secret else '❌ MISSING'}")
     
-    if alpha_key or (alpaca_key and alpaca_secret):
-        logger.info("\n🔨 CREATING MarketDataConfig...")
-        # Try to detect a working Alpha Vantage key among common env var names
-        def _select_working_alpha_key(candidates):
-            import requests  # type: ignore[import]
-            for candidate in candidates:
-                if not candidate:
-                    continue
-                try:
-                    url = 'https://www.alphavantage.co/query'
-                    params = {'function': 'GLOBAL_QUOTE', 'symbol': 'AAPL', 'apikey': candidate}
-                    r = requests.get(url, params=params, timeout=5)
-                    r.raise_for_status()
-                    j = r.json()
-                    if isinstance(j, dict) and 'Global Quote' in j and j['Global Quote']:
-                        return candidate
-                except Exception:
-                    continue
-            return None
+    # Use FinancialModelingPrep (FMP) as the single, authoritative provider
+    fmp_key = os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY') or os.getenv('FMP') or '14uTc09TMyUVJEuFKriHayCTnLcyGhyy'
 
-        # Gather candidate keys in priority order (prefer explicit ALPHA_VANTAGE_KEY)
-        candidates = [
-            os.getenv('ALPHA_VANTAGE_KEY'),
-            os.getenv('ALPHAVANTAGE_API_KEY'),
-            os.getenv('ALPHAVANTAGE_KEY'),
-            os.getenv('ALPHA_VANTAGE'),
-            os.getenv('ALPHAVANTAGE'),
-            os.getenv('ALPHAVANTAGE_APIKEY')
-        ]
-        working_alpha = _select_working_alpha_key(candidates)
-        if working_alpha:
-            logger.info(f"  ✅ Detected working Alpha Vantage key (first 8 chars): {working_alpha[:8]}")
-            alpha_key = working_alpha
-        else:
-            logger.warning("  ⚠️ No working Alpha Vantage key found among candidates; will attempt with provided key if any")
-        
-        # CRITICAL FIX: Pass credentials directly to config constructor (always create config)
+    if fmp_key:
+        logger.info("\n🔨 CREATING MarketDataConfig (FMP-only)...")
+
         config = MarketDataConfig(
-            alpha_vantage_key=alpha_key if alpha_key else 'demo',
-            alpaca_key=alpaca_key if alpaca_key else None,
-            alpaca_secret=alpaca_secret if alpaca_secret else None,
-            polygon_key=None,
-            finnhub_key=None,
-            cache_ttl_seconds=60,
-            rate_limit_calls=25,
-            rate_limit_period=86400,
-            fallback_to_mock=False
+            fmp_api_key=fmp_key,
+            cache_ttl_seconds=5,
+            rate_limit_calls=300,
+            rate_limit_period=60,
+            batch_size=50
         )
-        
+
         logger.info(f"  Config created:")
-        logger.info(f"    - alpha_vantage_key: {bool(config.alpha_vantage_key)}")
-        logger.info(f"    - alpaca_key: {bool(config.alpaca_key)}")
-        logger.info(f"    - alpaca_secret: {bool(config.alpaca_secret)}")
-        logger.info(f"    - fallback_to_mock: {config.fallback_to_mock}")
-        
+        logger.info(f"    - fmp_api_key: {'✅ SET' if config.fmp_api_key else '❌ MISSING'}")
+        logger.info(f"    - cache_ttl_seconds: {config.cache_ttl_seconds}")
         MARKET_DATA_CONFIG = config
-        
-        logger.info("\n🚀 INITIALIZING MarketDataService...")
+
+        logger.info("\n🚀 INITIALIZING MarketDataService (FMP-only)...")
         market_data = MarketDataService(config)
-        
+
         MARKET_SERVICE_READY = True
         logger.info(f"✅ MarketDataService initialized successfully")
         logger.info(f"📊 Available providers: {[p.value for p in market_data.providers]}")
-        logger.info("📡 Data Pipeline: Alpha Vantage (25/day) → Alpaca (unlimited) — no mock fallback")
+        logger.info("📡 Data Pipeline: FinancialModelingPrep (FMP) - batch quote API")
+    else:
+        logger.error("❌ NO FMP API KEY FOUND! Set FMP_API_KEY in environment or pass via MarketDataConfig.")
+        MARKET_SERVICE_READY = False
     else:
         logger.error("❌ NO API KEYS FOUND!")
         logger.error("   - Check ALPHA_VANTAGE_KEY environment variable")
@@ -786,49 +751,42 @@ def test_alpaca():
             'timestamp': datetime.now().isoformat()
         })
 
-@app.route('/test-alpha', methods=['GET'])
+@app.route('/test-fmp', methods=['GET'])
 @handle_errors
-def test_alpha():
-    """Force test Alpha Vantage API directly"""
+def test_fmp():
+    """Force test FinancialModelingPrep (FMP) API directly"""
     symbol = request.args.get('symbol', 'AAPL').upper()
-    
-    logger.info(f"\n🧪 FORCE TEST: Alpha Vantage API for {symbol}")
-    
-    # Support alternate env var names when testing Alpha directly
-    alpha_key = _get_alpha_vantage_key()
-    
-    if not alpha_key:
-        logger.error("❌ Alpha Vantage credentials missing!")
+
+    logger.info(f"\n🧪 FORCE TEST: FMP API for {symbol}")
+
+    fmp_key = os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY')
+
+    if not fmp_key:
+        logger.error("❌ FMP credentials missing!")
         return jsonify({
             'status': 'error',
-            'message': 'Alpha Vantage credentials not configured',
-            'alpha_key_set': False,
-            'tried_envs': [
-                'ALPHA_VANTAGE_KEY', 'ALPHAVANTAGE_API_KEY', 'ALPHAVANTAGE_KEY', 'ALPHA_VANTAGE', 'ALPHAVANTAGE'
-            ]
+            'message': 'FMP credentials not configured',
+            'fmp_key_set': False,
+            'tried_envs': ['FMP_API_KEY', 'FMP_KEY']
         })
-    
+
     try:
         import requests  # type: ignore[import]
-        
-        logger.info(f"  Alpha Key (first 10): {alpha_key[:10] if alpha_key else 'NONE'}")
-        logger.info(f"  Making request to Alpha Vantage...")
-        
-        url = f"https://www.alphavantage.co/query"
-        params = {
-            'function': 'GLOBAL_QUOTE',
-            'symbol': symbol,
-            'apikey': alpha_key
-        }
-        
+
+        logger.info(f"  FMP Key (first 10): {fmp_key[:10] if fmp_key else 'NONE'}")
+        logger.info(f"  Making request to FMP (quote endpoint)...")
+
+        url = f"https://financialmodelingprep.com/api/v3/quote/{symbol}"
+        params = {'apikey': fmp_key}
+
         logger.info(f"  URL: {url}")
         logger.info(f"  Params: {list(params.keys())}")
-        
+
         response = requests.get(url, params=params, timeout=10)
-        
+
         logger.info(f"  Status: {response.status_code}")
         logger.info(f"  Response: {response.text[:200]}")
-        
+
         return jsonify({
             'status': 'success',
             'symbol': symbol,
@@ -837,7 +795,7 @@ def test_alpha():
             'timestamp': datetime.now().isoformat()
         })
     except Exception as e:
-        logger.error(f"❌ Alpha test failed: {str(e)}")
+        logger.error(f"❌ FMP test failed: {str(e)}")
         return jsonify({
             'status': 'error',
             'message': str(e),
@@ -1097,7 +1055,7 @@ def get_commentary():
 def not_found(error):
     return jsonify({
         'error': 'Not found',
-        'endpoints': ['/', '/health', '/debug', '/test-alpaca', '/test-alpha', '/god-cycle', '/market-price', '/run-cycle', '/journal', '/commentary'],
+        'endpoints': ['/', '/health', '/debug', '/test-alpaca', '/test-fmp', '/god-cycle', '/market-price', '/run-cycle', '/journal', '/commentary'],
         'timestamp': datetime.now().isoformat()
     }), 404
 
@@ -1132,8 +1090,8 @@ if __name__ == '__main__':
     
     print("\n🧪 DIAGNOSTIC ENDPOINTS:")
     print("  /debug - Full config status")
-    print("  /test-alpha?symbol=AAPL - Test Alpha Vantage directly")
-    print("  /test-alpaca?symbol=AAPL - Test Alpaca directly")
+    print("  /test-fmp?symbol=AAPL - Test FinancialModelingPrep directly")
+    print("  /test-alpaca?symbol=AAPL - Test Alpaca directly (optional)")
     print("="*60 + "\n")
     
     port = int(os.environ.get('PORT', 5000))

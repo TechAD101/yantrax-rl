@@ -25,11 +25,11 @@ if 'from services.market_data_service_v2' not in content:
 old_init = r'market_data = MarketDataManager\(\)'
 new_init = '''# Initialize Market Data Service v2 with configuration
 market_data_config = MarketDataConfig(
-    alpha_vantage_key=os.environ.get('ALPHA_VANTAGE_KEY', '9RIUV'),
-    cache_ttl_seconds=60,
-    rate_limit_calls=5,
+    fmp_api_key=os.environ.get('FMP_API_KEY', '14uTc09TMyUVJEuFKriHayCTnLcyGhyy'),
+    cache_ttl_seconds=5,
+    rate_limit_calls=300,
     rate_limit_period=60,
-    fallback_to_mock=True
+    batch_size=50
 )
 market_data_service = MarketDataService(market_data_config)
 logger.info("🚀 Market Data Service v2 initialized successfully")
