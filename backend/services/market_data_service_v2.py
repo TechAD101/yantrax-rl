@@ -26,25 +26,21 @@ logger = logging.getLogger(__name__)
 
 class DataProvider(Enum):
     """Available market data providers"""
-    ALPHA_VANTAGE = "alpha_vantage"
-    ALPACA = "alpaca"  # NEW: Free unlimited real-time data!
-    POLYGON = "polygon"
-    FINNHUB = "finnhub"
-    # MOCK provider removed to ensure only real providers are used in production
+    FMP = "fmp"
 
 @dataclass
 class MarketDataConfig:
-    """Configuration for market data service"""
-    alpha_vantage_key: str
-    alpaca_key: Optional[str] = None  # NEW
-    alpaca_secret: Optional[str] = None  # NEW
-    polygon_key: Optional[str] = None
-    finnhub_key: Optional[str] = None
-    cache_ttl_seconds: int = 60  # 1 minute cache
+    """Configuration for market data service (FMP-only)"""
+    # Read FMP API key from env by default but allow override in tests/config
+    fmp_api_key: str = os.getenv("FMP_API_KEY", "14uTc09TMyUVJEuFKriHayCTnLcyGhyy")
+    # Very short TTL for live data to keep UI responsive
+    cache_ttl_seconds: int = 5  # seconds
     request_timeout: int = 10
-    rate_limit_calls: int = 25  # Alpha Vantage: 25/day
-    rate_limit_period: int = 86400  # 1 day in seconds
-    fallback_to_mock: bool = True
+    # Soft rate limiting for FMP (calls per period)
+    rate_limit_calls: int = 300
+    rate_limit_period: int = 60  # 60 seconds
+    # Maximum symbols per batch request to keep URL lengths small
+    batch_size: int = 50
     
 class RateLimiter:
     """Simple rate limiter to avoid hitting API limits"""
@@ -81,39 +77,24 @@ class MarketDataService:
     def __init__(self, config: MarketDataConfig):
         self.config = config
         self.cache: Dict[str, tuple[datetime, Dict]] = {}
+        # Only FMP in production
         self.rate_limiters = {
-            DataProvider.ALPHA_VANTAGE: RateLimiter(25, 86400),  # 25/day
-            DataProvider.ALPACA: RateLimiter(200, 60)  # 200/minute (very generous!)
+            DataProvider.FMP: RateLimiter(self.config.rate_limit_calls, self.config.rate_limit_period)
         }
-        
+
         # Determine available providers
         self.providers = self._get_available_providers()
         logger.info(f"🚀 MarketDataService initialized with providers: {[p.value for p in self.providers]}")
         
     def _get_available_providers(self) -> List[DataProvider]:
-        """Determine which providers are configured and available"""
-        providers = []
-        
-        # Alpha Vantage (primary)
-        if self.config.alpha_vantage_key and self.config.alpha_vantage_key != 'demo':
-            providers.append(DataProvider.ALPHA_VANTAGE)
-            logger.info("✅ Alpha Vantage configured (25/day)")
-            
-        # Alpaca (secondary - UNLIMITED FREE!)
-        if self.config.alpaca_key and self.config.alpaca_secret:
-            providers.append(DataProvider.ALPACA)
-            logger.info("✅ Alpaca configured (200/min UNLIMITED!)")
-            
-        if self.config.polygon_key:
-            providers.append(DataProvider.POLYGON)
-            
-        if self.config.finnhub_key:
-            providers.append(DataProvider.FINNHUB)
-            
-        # Mock fallback is deprecated. If fallback flag is accidentally set, warn but do not add a provider.
-        if self.config.fallback_to_mock:
-            logger.warning("⚠️ fallback_to_mock is enabled but mock provider has been deprecated; ignoring flag")
-            
+        """Determine which providers are configured and available (FMP-only)."""
+        providers: List[DataProvider] = []
+        fmp_key = getattr(self.config, "fmp_api_key", None)
+        if fmp_key:
+            providers.append(DataProvider.FMP)
+            logger.info("✅ FinancialModelingPrep (FMP) configured")
+        else:
+            logger.error("❌ FMP API key not configured. Set FMP_API_KEY in environment or pass via MarketDataConfig.fmp_api_key")
         return providers
         
     def _check_cache(self, symbol: str) -> Optional[Dict[str, Any]]:
@@ -131,48 +112,31 @@ class MarketDataService:
         return None
         
     def get_stock_price(self, symbol: str) -> Dict[str, Any]:
-        """
-        Get stock price with intelligent fallback strategy.
-        Tries providers in order until one succeeds.
-        """
+        """Get a single symbol price using FMP batch endpoint (production ready)."""
         symbol = symbol.upper()
-        
+
         # Check cache first
         cached = self._check_cache(symbol)
         if cached:
             return cached
-            
-        # Try each provider in order
-        for provider in self.providers:
-            try:
-                logger.info(f"🔄 Trying {provider.value} for {symbol}...")
-                
-                if provider == DataProvider.ALPHA_VANTAGE:
-                    result = self._fetch_alpha_vantage(symbol)
-                elif provider == DataProvider.ALPACA:
-                    result = self._fetch_alpaca(symbol)
-                elif provider == DataProvider.POLYGON:
-                    result = self._fetch_polygon(symbol)
-                elif provider == DataProvider.FINNHUB:
-                    result = self._fetch_finnhub(symbol)
-                elif provider == getattr(DataProvider, 'MOCK', None):
-                    # Should not happen; mock provider deprecated
-                    result = None
-                else:
-                    continue
-                    
-                if result and result.get('price', 0) > 0:
-                    # Cache successful result
-                    self.cache[symbol] = (datetime.now(), result)
-                    logger.info(f"✅ SUCCESS with {provider.value} for {symbol}: ${result['price']}")
-                    return result
-                    
-            except Exception as e:
-                logger.error(f"❌ {provider.value} failed for {symbol}: {str(e)}")
-                continue
-                
-        # All providers failed
-        logger.error(f"💥 ALL PROVIDERS FAILED for {symbol}")
+
+        # Ensure FMP provider is available
+        if DataProvider.FMP not in self.providers:
+            logger.error("❌ No configured provider available for market data")
+            return self._generate_error_response(symbol)
+
+        # Attempt to fetch from FMP (single symbol via batch endpoint)
+        try:
+            result = self._fetch_fmp_single(symbol)
+            if result and result.get('price', 0) > 0:
+                self.cache[symbol] = (datetime.now(), result)
+                logger.info(f"✅ SUCCESS with fmp for {symbol}: ${result['price']}")
+                return result
+            else:
+                logger.error(f"❌ FMP returned no price for {symbol}")
+        except Exception as e:
+            logger.error(f"❌ FMP provider failed for {symbol}: {e}")
+
         return self._generate_error_response(symbol)
 
     # Backwards-compatible alias used by some callers
@@ -180,142 +144,78 @@ class MarketDataService:
         """Alias for get_stock_price for backwards compatibility."""
         return self.get_stock_price(symbol)
         
-    def _fetch_alpha_vantage(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Fetch data from Alpha Vantage API"""
-        rate_limiter = self.rate_limiters[DataProvider.ALPHA_VANTAGE]
-        
-        if not rate_limiter.can_proceed():
-            wait_time = rate_limiter.wait_time()
-            logger.warning(f"⏳ Rate limit reached for Alpha Vantage. Wait {wait_time:.1f}s")
-            return None  # Don't wait, try next provider
-            
-        url = f"https://www.alphavantage.co/query"
-        params = {
-            'function': 'GLOBAL_QUOTE',
-            'symbol': symbol,
-            'apikey': self.config.alpha_vantage_key
-        }
-        
-        response = requests.get(url, params=params, timeout=self.config.request_timeout)
-        response.raise_for_status()
-        data = response.json()
-        
-        # Validate response
-        if 'Global Quote' not in data:
-            logger.warning(f"⚠️ Alpha Vantage: No Global Quote in response for {symbol}")
-            return None
-            
-        quote = data['Global Quote']
-        if not quote:
-            logger.warning(f"⚠️ Alpha Vantage: Empty Global Quote for {symbol}")
-            return None
-            
-        # Extract and validate data
-        try:
-            price = float(quote.get('05. price', 0))
-            prev_close = float(quote.get('08. previous close', 0) or price)
-            
-            if price <= 0:
-                logger.warning(f"⚠️ Alpha Vantage: Invalid price {price} for {symbol}")
-                return None
-                
-            return {
-                'symbol': symbol,
-                'price': round(price, 2),
-                'change': round(price - prev_close, 2),
-                'changePercent': round(((price - prev_close) / prev_close) * 100, 2) if prev_close > 0 else 0,
-                'timestamp': datetime.now().isoformat(),
-                'source': 'alpha_vantage',
-                'provider_details': {
-                    'volume': quote.get('06. volume'),
-                    'latest_trading_day': quote.get('07. latest trading day')
-                }
-            }
-        except (ValueError, KeyError) as e:
-            logger.error(f"❌ Alpha Vantage: Data parsing error for {symbol}: {e}")
-            return None
-    
-    def _fetch_alpaca(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Fetch data from Alpaca Markets API (FREE unlimited!)"""
-        rate_limiter = self.rate_limiters[DataProvider.ALPACA]
-        
-        if not rate_limiter.can_proceed():
-            wait_time = rate_limiter.wait_time()
-            logger.warning(f"⏳ Rate limit reached for Alpaca. Wait {wait_time:.1f}s")
-            time.sleep(wait_time)
-            
-        # Alpaca REST API for latest quote
-        base_url = "https://data.alpaca.markets/v2"
-        headers = {
-            'APCA-API-KEY-ID': self.config.alpaca_key,
-            'APCA-API-SECRET-KEY': self.config.alpaca_secret
-        }
-        
-        # Get latest quote
-        url = f"{base_url}/stocks/{symbol}/quotes/latest"
-        
-        response = requests.get(url, headers=headers, timeout=self.config.request_timeout)
-        response.raise_for_status()
-        data = response.json()
-        
-        # Validate response
-        if 'quote' not in data:
-            logger.warning(f"⚠️ Alpaca: No quote data for {symbol}")
-            return None
-            
-        quote = data['quote']
-        
-        # Extract mid price (average of bid and ask)
-        try:
-            bid_price = float(quote.get('bp', 0))
-            ask_price = float(quote.get('ap', 0))
-            
-            if bid_price <= 0 or ask_price <= 0:
-                logger.warning(f"⚠️ Alpaca: Invalid prices (bid: {bid_price}, ask: {ask_price}) for {symbol}")
-                return None
-            
-            # Use mid price as current price
-            current_price = (bid_price + ask_price) / 2
-            
-            # Get previous close for change calculation
-            # Note: We'll use a simple estimation here, or fetch from bars endpoint
-            # For now, estimate 0.5% daily volatility
-            prev_close = current_price * 0.995  # Simple estimate
-            
-            return {
-                'symbol': symbol,
-                'price': round(current_price, 2),
-                'bid': round(bid_price, 2),
-                'ask': round(ask_price, 2),
-                'change': round(current_price - prev_close, 2),
-                'changePercent': round(((current_price - prev_close) / prev_close) * 100, 2),
-                'timestamp': datetime.now().isoformat(),
-                'source': 'alpaca',
-                'provider_details': {
-                    'bid_size': quote.get('bs'),
-                    'ask_size': quote.get('as'),
-                    'quote_timestamp': quote.get('t')
-                }
-            }
-        except (ValueError, KeyError, ZeroDivisionError) as e:
-            logger.error(f"❌ Alpaca: Data parsing error for {symbol}: {e}")
-            return None
-            
-    def _fetch_polygon(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Fetch data from Polygon.io API (placeholder for future)"""
-        # TODO: Implement Polygon.io integration
-        logger.info("📏 Polygon.io not yet implemented")
-        return None
-        
-    def _fetch_finnhub(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Fetch data from Finnhub API (placeholder for future)"""
-        # TODO: Implement Finnhub integration
-        logger.info("📏 Finnhub not yet implemented")
-        return None
-        
-    def _generate_mock_data(self, symbol: str) -> Dict[str, Any]:
-        """Mock generator removed to prevent simulated data in production."""
-        raise NotImplementedError("Mock data generation has been removed. Configure a real provider.")
+    def _fetch_fmp_batch(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Fetch a batch of symbols from FinancialModelingPrep in one HTTP call.
+        Returns a mapping of symbol -> data dict for found symbols.
+        """
+        results: Dict[str, Dict[str, Any]] = {}
+
+        if not symbols:
+            return results
+
+        # Rate limit check
+        rate_limiter = self.rate_limiters.get(DataProvider.FMP)
+        if rate_limiter and not rate_limiter.can_proceed():
+            logger.warning("⏳ Rate limit reached for FMP; skipping request")
+            return results
+
+        # Respect batch size
+        chunks: List[List[str]] = []
+        current = []
+        for sym in symbols:
+            current.append(sym.upper())
+            if len(current) >= self.config.batch_size:
+                chunks.append(current)
+                current = []
+        if current:
+            chunks.append(current)
+
+        for chunk in chunks:
+            symbols_csv = ",".join(chunk)
+            url = f"https://financialmodelingprep.com/api/v3/quote/{symbols_csv}"
+            params = { 'apikey': self.config.fmp_api_key }
+
+            try:
+                resp = requests.get(url, params=params, timeout=self.config.request_timeout)
+                resp.raise_for_status()
+                data = resp.json()
+
+                if not isinstance(data, list):
+                    logger.warning(f"⚠️ Unexpected FMP payload for {symbols_csv}: {type(data)}")
+                    continue
+
+                for row in data:
+                    sym = row.get('symbol', '').upper()
+                    if not sym:
+                        continue
+                    price = row.get('price')
+                    try:
+                        price_val = None if price is None else round(float(price), 2)
+                    except (ValueError, TypeError):
+                        price_val = None
+
+                    results[sym] = {
+                        'symbol': sym,
+                        'price': price_val if price_val is not None else 0,
+                        'bid': row.get('bid'),
+                        'ask': row.get('ask'),
+                        'change': row.get('change'),
+                        'changePercent': row.get('changesPercentage'),
+                        'timestamp': datetime.now().isoformat(),
+                        'source': 'fmp',
+                        'provider_details': row
+                    }
+            except Exception as e:
+                logger.error(f"❌ FMP batch request failed for {symbols_csv}: {e}")
+                continue
+
+        return results
+
+    def _fetch_fmp_single(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Helper to fetch a single symbol using the batch endpoint."""
+        res = self._fetch_fmp_batch([symbol])
+        return res.get(symbol.upper())
+
         
     def _generate_error_response(self, symbol: str) -> Dict[str, Any]:
         """Generate error response when all providers fail"""
@@ -330,10 +230,25 @@ class MarketDataService:
         }
         
     def get_batch_prices(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:
-        """Get prices for multiple symbols efficiently"""
-        results = {}
-        for symbol in symbols:
-            results[symbol] = self.get_stock_price(symbol)
+        """Get prices for multiple symbols in a single FMP batch request where possible."""
+        symbols_norm = [s.upper() for s in symbols]
+        results: Dict[str, Dict[str, Any]] = {}
+
+        if DataProvider.FMP not in self.providers:
+            for s in symbols_norm:
+                results[s] = self._generate_error_response(s)
+            return results
+
+        fetched = self._fetch_fmp_batch(symbols_norm)
+        now_ts = datetime.now().isoformat()
+        for s in symbols_norm:
+            data = fetched.get(s)
+            if data and data.get('price', 0) > 0:
+                # cache and return
+                self.cache[s] = (datetime.now(), data)
+                results[s] = data
+            else:
+                results[s] = self._generate_error_response(s)
         return results
         
     def clear_cache(self):
