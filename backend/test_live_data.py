@@ -253,37 +253,32 @@ def run_all_tests():
     # Test 1: Environment Variables
     if not test_env_variables():
         print_error("\nFATAL: No API credentials configured!")
-        print_info("Set ALPHA_VANTAGE_KEY or (ALPACA_API_KEY + ALPACA_SECRET_KEY)")
+        print_info("Set FMP_API_KEY in environment")
         return False
-    
+
     # Test 2: Service Initialization
     service = test_service_initialization()
     if not service:
         print_error("\nFATAL: Service initialization failed!")
         return False
-    
-    # Test 3: Alpha Vantage
-    alpha_result = test_alpha_vantage(service)
-    
-    # Test 4: Alpaca
-    alpaca_result = test_alpaca(service)
-    
-    if not alpha_result and not alpaca_result:
-        print_error("\nFATAL: Both Alpha Vantage and Alpaca failed!")
+
+    # Test 3: FMP
+    fmp_result = test_fmp(service)
+    if not fmp_result:
+        print_error("\nFATAL: FMP provider failed!")
         return False
-    
-    # Test 5: Intelligent Fetch
+
+    # Test 4: Intelligent Fetch (batch symbols)
     results = test_intelligent_fetch(service)
-    
-    # Test 6: Cache
+
+    # Test 5: Cache
     test_cache_mechanism(service)
-    
-    # Test 7: Data Quality
+
+    # Test 6: Data Quality
     test_data_quality(results)
-    
-    # Test 8: Health
-    test_health_endpoint(service)
-    
+
+    # Test 7: Health
+    test_health_endpoint(service)    
     # Final Summary
     print_header("🎯 Test Summary")
     print_success("All critical tests passed!")
