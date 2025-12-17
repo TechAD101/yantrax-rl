@@ -104,6 +104,8 @@ MARKET_SERVICE_INIT_ERROR = None
 
 try:
     from services.market_data_service_v2 import MarketDataService, MarketDataConfig
+    # Massive market data client (supports equities, crypto, indices, forex)
+    from services.market_data_service_massive import MassiveMarketDataService
     
     logger.info("✅ MarketDataService v2 imported successfully")
     
@@ -805,6 +807,27 @@ def market_price_stream():
                 break
 
     return Response(event_generator(), mimetype='text/event-stream')
+
+@app.route('/massive-quote', methods=['GET'])
+@handle_errors
+def massive_quote():
+    """Fetch a real-time quote from Massive Market Data service for a single symbol.
+
+    Query params:
+      - symbol: required (e.g., AAPL, BTC, EURUSD, SPX)
+    """
+    symbol = (request.args.get('symbol') or '').strip().upper()
+    if not symbol:
+        return jsonify({'status': 'error', 'message': 'symbol query parameter is required'}), 400
+
+    try:
+        # Instantiate with env var if present
+        msvc = MassiveMarketDataService(api_key=os.getenv('MASSIVE_API_KEY'))
+        data = msvc.fetch_quote(symbol)
+        return jsonify({'status': 'success', 'symbol': symbol, 'data': data, 'timestamp': datetime.now().isoformat()})
+    except Exception as e:
+        logger.error(f"❌ /massive-quote failed for {symbol}: {e}")
+        return jsonify({'status': 'error', 'message': str(e), 'symbol': symbol, 'timestamp': datetime.now().isoformat()}), 500
 
 @app.route('/health', methods=['GET'])
 @handle_errors  
