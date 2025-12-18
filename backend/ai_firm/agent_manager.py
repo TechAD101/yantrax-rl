@@ -160,8 +160,14 @@ class AgentManager:
         
         return agents
     
-    def conduct_agent_voting(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Conduct weighted voting across all agents"""
+    def conduct_agent_voting(self, context: Dict[str, Any], expert_opinions: Dict[str, str] = None) -> Dict[str, Any]:
+        """Conduct weighted voting across all agents
+        
+        Args:
+            context: Market data and context
+            expert_opinions: Optional dict of {agent_name: signal} from complex personas (e.g. Warren)
+        """
+
         
         vote_tally = {}
         total_weight = 0
@@ -170,7 +176,10 @@ class AgentManager:
         # Include all enhanced agents in voting
         for agent_name, agent_data in self.enhanced_agents.items():
             # Generate signal based on agent specialty and confidence
-            signal = self._generate_agent_signal(agent_name, agent_data)
+            if expert_opinions and agent_name in expert_opinions:
+                signal = expert_opinions[agent_name]
+            else:
+                signal = self._generate_agent_signal(agent_name, agent_data, context)
             weight = self._get_vote_weight(agent_data['role']) * agent_data['confidence']
             
             if signal not in vote_tally:
@@ -208,25 +217,50 @@ class AgentManager:
         self.voting_sessions.append(voting_result)
         return voting_result
     
-    def _generate_agent_signal(self, agent_name: str, agent_data: Dict) -> str:
-        """Generate trading signal based on agent specialty"""
+    def _generate_agent_signal(self, agent_name: str, agent_data: Dict, context: Dict = None) -> str:
+        """Generate trading signal based on agent specialty and real data"""
+
         
         confidence = agent_data['confidence']
         specialty = agent_data.get('specialty', '')
         
+        # Real logic using fundamentals if available
+        fundamentals = context.get('fundamentals', {}) if context else {}
+        pe_ratio = fundamentals.get('pe_ratio', 0)
+        roe = fundamentals.get('return_on_equity', 0)
+        
         # Specialty-based signal generation
         if 'Value' in specialty or agent_name == 'warren':
-            return 'BUY' if confidence > 0.8 else 'HOLD'
+            # Fallback if no expert opinion passed
+            if pe_ratio > 0 and pe_ratio < 20 and roe > 0.15:
+                return 'BUY'
+            elif pe_ratio > 35:
+                return 'SELL'
+            return 'HOLD'
+            
         elif 'Innovation' in specialty or agent_name == 'cathie':
-            return 'HIGH_CONVICTION_BUY' if confidence > 0.85 else 'BUY'
+            # Cathie likes growth (high PE is fine if growth is there, simplified here)
+            if pe_ratio > 50 or (roe > 0.1 and pe_ratio > 30):
+                return 'HIGH_CONVICTION_BUY' if confidence > 0.85 else 'BUY'
+            return 'HOLD'
+            
         elif 'Risk' in specialty or 'VaR' in specialty:
+            # Risk hates debt
+            debt_to_equity = fundamentals.get('debt_to_equity', 0)
+            if debt_to_equity > 2.0:
+                 return 'REJECT'
             return 'APPROVED' if confidence > 0.8 else 'CAUTION'
+            
         else:
             # Default signal generation
+            # If market is crashing (context check), sell
+            if context and context.get('market_trend') == 'bearish':
+                return 'SELL'
+            
             if confidence > 0.8:
-                return np.random.choice(['BUY', 'STRONG_BUY'], p=[0.6, 0.4])
+                return 'BUY'
             elif confidence > 0.6:
-                return np.random.choice(['BUY', 'HOLD'], p=[0.7, 0.3])
+                return 'HOLD'
             else:
                 return 'HOLD'
 

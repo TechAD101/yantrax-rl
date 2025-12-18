@@ -70,554 +70,130 @@ def _load_dotenv_fallback(filepath: str) -> None:
 # Ensure local .env is loaded even if python-dotenv is missing
 _load_dotenv_fallback(os.path.join(os.path.dirname(__file__), '.env'))
 
-# ==================== CRITICAL DIAGNOSTIC ====================
+# ==================== MAIN SYSTEM INTEGRATION ====================
 
-logger.info("\n" + "="*80)
-logger.info("🔍 YANTRAX RL v4.6 - DIAGNOSTIC MODE")
-logger.info("="*80)
+# Initialize Waterfall Market Data Service (The "Real Work")
+from services.market_data_service_waterfall import WaterfallMarketDataService
+market_provider = WaterfallMarketDataService()
 
-# Log all environment variables
-logger.info("📋 ENVIRONMENT VARIABLES CHECK:")
-
-def _get_fmp_key() -> str:
-    """Return the FinancialModelingPrep key from commonly used env var names."""
-    return (
-        os.getenv('FMP_API_KEY') or
-        os.getenv('FMP_KEY') or
-        os.getenv('FMP') or
-        ''
-    )
-
-fmp_key_env = _get_fmp_key()
-alpaca_key_env = os.getenv('ALPACA_API_KEY', '')
-alpaca_secret_env = os.getenv('ALPACA_SECRET_KEY', '')
-
-logger.info(f"  FMP_API_KEY present: {bool(fmp_key_env)} (first 10 chars: {fmp_key_env[:10] if fmp_key_env else 'EMPTY'})")
-logger.info(f"  ALPACA_API_KEY present: {bool(alpaca_key_env)} (first 10 chars: {alpaca_key_env[:10] if alpaca_key_env else 'EMPTY'})")
-logger.info(f"  ALPACA_SECRET_KEY present: {bool(alpaca_secret_env)} (first 10 chars: {alpaca_secret_env[:10] if alpaca_secret_env else 'EMPTY'})")
-
-# FIXED: Properly import and instantiate MarketDataService v2
-MARKET_SERVICE_READY = False
-market_data = None
-MARKET_DATA_CONFIG = None
-MARKET_SERVICE_INIT_ERROR = None
-
-try:
-    from services.market_data_service_v2 import MarketDataService, MarketDataConfig
-    # Massive market data client (supports equities, crypto, indices, forex)
-    from services.market_data_service_massive import MassiveMarketDataService
-    
-    logger.info("✅ MarketDataService v2 imported successfully")
-    
-    # Get API keys from environment (accept many common names)
-    fmp_key_env = _get_fmp_key()
-    alpaca_key = os.getenv('ALPACA_API_KEY', '')
-    alpaca_secret = os.getenv('ALPACA_SECRET_KEY', '')
-
-    logger.info(f"\n🔑 API KEYS CHECK:")
-    logger.info(f"  FMP: {'✅ SET' if fmp_key_env else '❌ MISSING'}")
-    logger.info(f"  Alpaca API Key: {'✅ SET' if alpaca_key else '❌ MISSING'}")
-    logger.info(f"  Alpaca Secret: {'✅ SET' if alpaca_secret else '❌ MISSING'}")
-    
-    # Use FinancialModelingPrep (FMP) as the single, authoritative provider
-    fmp_key = os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY') or os.getenv('FMP') or '14uTc09TMyUVJEuFKriHayCTnLcyGhyy'
-
-    if fmp_key:
-        logger.info("\n🔨 CREATING MarketDataConfig (FMP-only)...")
-
-        config = MarketDataConfig(
-            alpha_vantage_key=alpha_key if alpha_key else 'demo',
-            alpaca_key=alpaca_key if alpaca_key else None,
-            alpaca_secret=alpaca_secret if alpaca_secret else None,
-            polygon_key=None,
-            finnhub_key=None,
-            cache_ttl_seconds=60,
-            rate_limit_calls=25,
-            rate_limit_period=86400,
-            fallback_to_mock=False
-        )
-
-        logger.info(f"  Config created:")
-        logger.info(f"    - fmp_api_key: {'✅ SET' if config.fmp_api_key else '❌ MISSING'}")
-        logger.info(f"    - cache_ttl_seconds: {config.cache_ttl_seconds}")
-        MARKET_DATA_CONFIG = config
-
-        logger.info("\n🚀 INITIALIZING MarketDataService (FMP-only)...")
-        market_data = MarketDataService(config)
-
-        MARKET_SERVICE_READY = True
-        logger.info(f"✅ MarketDataService initialized successfully")
-        logger.info(f"📊 Available providers: {[p.value for p in market_data.providers]}")
-        logger.info("📡 Data Pipeline: FinancialModelingPrep (FMP) - batch quote API")
-    else:
-        logger.error("❌ NO FMP API KEY FOUND! Set FMP_API_KEY in environment or pass via MarketDataConfig.")
-        MARKET_SERVICE_READY = False
-
-except ImportError as e:
-    logger.error(f"❌ MarketDataService v2 import failed: {e}")
-    logger.error(f"   Import error details: {str(e)}")
-    MARKET_SERVICE_INIT_ERROR = str(e)
-    MARKET_SERVICE_READY = False
-except Exception as e:
-    logger.error(f"❌ MarketDataService v2 initialization failed: {e}")
-    logger.error(f"   Traceback: {str(e)}")
-    MARKET_SERVICE_INIT_ERROR = str(e)
-    MARKET_SERVICE_READY = False
-
-logger.info("="*80 + "\n")
-
-# AI Firm imports with enhanced error handling
+# Initialize AI Firm components
 AI_FIRM_READY = False
 try:
     from ai_firm.ceo import AutonomousCEO, CEOPersonality
     from ai_agents.personas.warren import WarrenAgent
     from ai_agents.personas.cathie import CathieAgent
     from ai_firm.agent_manager import AgentManager
-    AI_FIRM_READY = True
-    logger.info("🏢 AI FIRM ARCHITECTURE LOADED SUCCESSFULLY!")
-    logger.info("🚀 20+ AGENT COORDINATION SYSTEM ACTIVE")
-except ImportError as e:
-    logger.warning(f"⚠️ AI Firm primary import failed: {e}")
-    logger.info("🔍 Attempting alternate import paths...")
-    try:
-        import ai_firm.ceo as ceo_module
-        import ai_agents.personas.warren as warren_module 
-        import ai_agents.personas.cathie as cathie_module
-        import ai_firm.agent_manager as agent_manager_module
-        
-        AutonomousCEO = ceo_module.AutonomousCEO
-        CEOPersonality = ceo_module.CEOPersonality
-        WarrenAgent = warren_module.WarrenAgent
-        CathieAgent = cathie_module.CathieAgent
-        AgentManager = agent_manager_module.AgentManager
-        
-        AI_FIRM_READY = True
-        logger.info("🔧 AI FIRM loaded via alternate path - SUCCESS!")
-    except ImportError as e2:
-        logger.error(f"❌ AI Firm fallback also failed: {e2}")
-        logger.info("📋 Running in legacy 4-agent mode")
-        AI_FIRM_READY = False
-
-# RL Core imports
-RL_ENV_READY = False
-try:
     from rl_core.env_market_sim import MarketSimEnv
-    RL_ENV_READY = True
-    logger.info("🎮 RL CORE: MarketSimEnv loaded successfully!")
-except ImportError as e:
-    logger.warning(f"⚠️ RL Core not available: {e}")
-    RL_ENV_READY = False
+    
+    # Initialize Core Agents
+    ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
+    warren = WarrenAgent()
+    cathie = CathieAgent()
+    agent_manager = AgentManager()
+    
+    # Initialize RL Environment
+    rl_env = MarketSimEnv()
+    
+    AI_FIRM_READY = True
+    logger.info("✅ AI FIRM & RL CORE FULLY OPERATIONAL")
+except Exception as e:
+    logger.error(f"❌ AI Firm initialization failed: {e}")
+    # We continue, but god_cycle will degrade gracefully
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
 
+@app.route('/', methods=['GET'])
+def health_check():
+    """Health check - system status"""
+    return jsonify({
+        'status': 'operational',
+        'version': '5.0',
+        'data_source': 'Waterfall (YFinance/FMP/Alpaca)',
+        'ai_firm': 'active' if AI_FIRM_READY else 'degraded',
+        'timestamp': datetime.now().isoformat()
+    }), 200
 
-def _get_git_version() -> Dict[str, str]:
-    """Return git short sha and branch if available."""
-    try:
-        import subprocess
-        sha = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], text=True).strip()
-        branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], text=True).strip()
-        return {'sha': sha, 'branch': branch}
-    except Exception:
-        return {'sha': 'unknown', 'branch': 'unknown'}
+@app.route('/market-price', methods=['GET'])
+def get_market_price():
+    """Get current market price via Waterfall"""
+    symbol = request.args.get('symbol', 'AAPL').upper()
+    return jsonify(market_provider.get_price(symbol)), 200
 
-# Error tracking
-error_counts = {
-    'total_requests': 0,
-    'successful_requests': 0, 
-    'api_call_errors': 0
-}
-
-# Simple Prometheus-like metrics registry (lightweight)
-metrics_registry = {
-    'yantrax_requests_total': 0,
-    'yantrax_agent_latency_seconds_count': 0,
-    'yantrax_agent_latency_seconds_sum': 0.0
-}
-
-def handle_errors(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        error_counts['total_requests'] += 1
-        try:
-            metrics_registry['yantrax_requests_total'] += 1
-        except Exception:
-            pass
-        try:
-            result = func(*args, **kwargs)
-            error_counts['successful_requests'] += 1
-            return result
-        except Exception as e:
-            error_counts['api_call_errors'] += 1
-            logger.exception("API error occurred")
-            return jsonify({
-                'error': 'internal_server_error',
-                'message': str(e),
-                'timestamp': datetime.now().isoformat()
-            }), 500
-    return wrapper
-
-# Initialize AI Firm components
-if AI_FIRM_READY:
-    try:
-        ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
-        warren = WarrenAgent()
-        cathie = CathieAgent()
-        agent_manager = AgentManager()
-        logger.info("🏢 AI FIRM FULLY OPERATIONAL!")
-        logger.info(f"🤖 CEO ACTIVE: {ceo.personality.value}")
-        logger.info("📊 WARREN & CATHIE PERSONAS LOADED")
-        logger.info("🔄 20+ AGENT COORDINATION READY")
-    except Exception as e:
-        logger.error(f"⚠️ AI Firm initialization error: {e}")
-        AI_FIRM_READY = False
-        logger.info("🔄 Falling back to legacy mode")
-
-# FIXED #3: Market Data Service initialization with safety check
-market_data = None
-if MARKET_SERVICE_READY:
-    try:
-        # Build config from environment variables (alpha vantage key, etc.)
-        try:
-            from services.market_data_service_v2 import MarketDataConfig
-            # Use the robust key detection to pick the alpha key and include alpaca creds
-            av_key = _get_alpha_vantage_key() or os.getenv('ALPHA_VANTAGE') or ''
-            alpaca_key_env = os.getenv('ALPACA_API_KEY') or os.getenv('ALPACA_KEY')
-            alpaca_secret_env = os.getenv('ALPACA_SECRET_KEY') or os.getenv('ALPACA_SECRET')
-            polygon = os.getenv('POLYGON_KEY') or os.getenv('POLYGON') or None
-            finnhub = os.getenv('FINNHUB_KEY') or os.getenv('FINNHUB') or None
-            cfg = MarketDataConfig(
-                alpha_vantage_key=av_key,
-                alpaca_key=alpaca_key_env,
-                alpaca_secret=alpaca_secret_env,
-                polygon_key=polygon,
-                finnhub_key=finnhub,
-                fallback_to_mock=False
-            )
-            market_data = MarketDataService(cfg)
-            logger.info("✅ MarketDataService v2 initialized with config from env")
-            logger.info("📊 Providers in use: %s", [p.value for p in market_data.providers])
-        except Exception as e_cfg:
-            logger.error(f"⚠️  Failed to initialize MarketDataService with config: {e_cfg}")
-            MARKET_SERVICE_INIT_ERROR = str(e_cfg)
-            market_data = None
-    except Exception as e:
-        logger.error(f"⚠️  MarketDataService v2 init failed: {e}")
-        MARKET_SERVICE_INIT_ERROR = str(e)
-        MARKET_SERVICE_READY = False
-        market_data = None
-else:
-    logger.info("📊 Using fallback market data (MarketDataService v2 not available)")
-
-
-def unified_get_market_price(symbol: str) -> Dict[str, Any]:
-    """Get current market price for a symbol using configured provider (FMP-only).
-
-    Returns an error payload if the provider is unavailable or fails.
-    """
-    symbol = symbol.upper()
-
-    if MARKET_SERVICE_READY and market_data:
-        try:
-            # MarketDataService.get_stock_price uses FMP batch endpoint under the hood
-            return market_data.get_stock_price(symbol)
-        except Exception as e:
-            logger.error(f"MarketDataService lookup failed for {symbol}: {e}")
-
-    # No providers available or call failed
-    return {
-        'error': 'no_market_data',
-        'message': 'No market data providers available or all providers failed',
+@app.route('/god-cycle', methods=['GET'])
+def god_cycle():
+    """Execute 24-agent voting cycle with REAL DATA"""
+    symbol = request.args.get('symbol', 'AAPL').upper()
+    
+    # 1. Fetch Real Data (The "Hard" Part)
+    price_data = market_provider.get_price(symbol)
+    fundamentals = market_provider.get_fundamentals(symbol)
+    
+    current_price = price_data.get('price', 0)
+    
+    # 2. Prepare Context for Agents
+    context = {
         'symbol': symbol,
+        'decision_type': 'trading',
+        'market_data': {'current_price': current_price},
+        'fundamentals': fundamentals,
+        'market_trend': 'bullish' if fundamentals.get('return_on_equity', 0) > 0.1 else 'bearish', # Simplified trend
         'timestamp': datetime.now().isoformat()
     }
-class YantraXEnhancedSystem:
-    """Enhanced trading system with AI Firm + RL Core integration"""
     
-    def __init__(self):
-        from typing import Any, Optional
-
-        self.portfolio_balance = 132240.84
-        self.trade_history = []
-        # `env` may be unavailable in some deployments; annotate to quiet static checks
-        self.env: Optional[Any] = None
-        self.current_state: Optional[Dict[str, Any]] = None
+    expert_opinions = {}
+    
+    if AI_FIRM_READY:
+        # 3. Consult Expert Agents (Deep Analysis)
+        # Warren Analysis
+        try:
+            warren_analysis = warren.analyze_investment(context)
+            expert_opinions['warren'] = warren_analysis['recommendation']
+        except Exception as e:
+            logger.error(f"Warren failed: {e}")
+            
+        # 4. Conduct General Voting (Broad Consensus)
+        voting_result = agent_manager.conduct_agent_voting(context, expert_opinions=expert_opinions)
         
-        # Initialize RL environment if available
-        if RL_ENV_READY:
-            try:
-                self.env = MarketSimEnv()
-                self.current_state = self.env.reset()
-                logger.info("✅ RL Environment initialized successfully")
-            except Exception as e:
-                logger.error(f"RL env init error: {e}")
-                self.env = None
-                self.current_state = None
-        else:
-            self.env = None
-            self.current_state = None
-        
-        # Legacy 4-agent compatibility layer
-        self.legacy_agents = {
-            'macro_monk': {'confidence': 0.829, 'performance': 15.2, 'strategy': 'TREND_FOLLOWING'},
-            'the_ghost': {'confidence': 0.858, 'performance': 18.7, 'signal': 'CONFIDENT_BUY'},
-            'data_whisperer': {'confidence': 0.990, 'performance': 12.9, 'analysis': 'BULLISH_BREAKOUT'},
-            'degen_auditor': {'confidence': 0.904, 'performance': 22.1, 'audit': 'LOW_RISK_APPROVED'}
+        # 5. CEO Decision
+        ceo_context = {
+            'type': 'strategic_trading_decision',
+            'agent_recommendation': voting_result['winning_signal'],
+            'consensus_strength': voting_result['consensus_strength'],
+            'fundamentals': fundamentals
         }
-    
-    def _map_signal_to_action(self, signal: str) -> str:
-        """Map trading signal to RL action"""
-        signal_upper = signal.upper()
-        if "BUY" in signal_upper:
-            return "buy"
-        elif "SELL" in signal_upper:
-            return "sell"
-        else:
-            return "hold"
-    
-    def execute_god_cycle(self) -> Dict[str, Any]:
-        """Execute god cycle with appropriate integration level"""
-        if AI_FIRM_READY and RL_ENV_READY:
-            return self._execute_integrated_cycle()
-        elif AI_FIRM_READY:
-            return self._execute_ai_firm_cycle()
-        else:
-            return self._execute_legacy_cycle()
-    
-    def _execute_integrated_cycle(self) -> Dict[str, Any]:
-        """Fully integrated: AI Firm → RL Environment"""
-        try:
-            # Guard: ensure RL env and current state present
-            if not self.env or not self.current_state:
-                logger.warning("RL environment not ready; falling back to AI Firm cycle")
-                return self._execute_ai_firm_cycle()
-            # For static analyzers, make explicit we're not None beyond this point
-            assert self.current_state is not None
-            context = {
-                'decision_type': 'trading',
-                'market_price': self.current_state['price'],
-                'market_volatility': self.current_state['volatility'],
-                'market_mood': self.current_state['mood'],
-                'balance': self.current_state['balance'],
-                'position': self.current_state['position'],
-                'cycle': self.current_state['cycle'],
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            voting_result = agent_manager.conduct_agent_voting(context)
-            ceo_context = {
-                'type': 'strategic_trading_decision',
-                'agent_recommendation': voting_result['winning_signal'],
-                'consensus_strength': voting_result['consensus_strength'],
-                'market_state': self.current_state,
-                'agent_participation': voting_result['participating_agents']
-            }
-            ceo_decision = ceo.make_strategic_decision(ceo_context)
-            
-            final_signal = voting_result['winning_signal']
-            rl_action = self._map_signal_to_action(final_signal)
-            next_state, reward, done = self.env.step(rl_action)
-            
-            self.current_state = next_state
-            self.portfolio_balance = next_state['balance']
-            
-            self.trade_history.append({
-                'cycle': next_state['cycle'],
-                'action': rl_action,
-                'signal': final_signal,
-                'price': next_state['price'],
-                'reward': reward,
-                'balance': next_state['balance'],
-                'timestamp': datetime.now().isoformat()
-            })
-            
-            if done:
-                logger.info(f"Episode complete at cycle {next_state['cycle']}")
-                self.current_state = self.env.reset()
-            
-            return {
-                'status': 'success',
-                'signal': final_signal,
-                'action': rl_action,
-                'market_state': {
-                    'price': next_state['price'],
-                    'volatility': next_state['volatility'],
-                    'mood': next_state['mood'],
-                    'balance': next_state['balance'],
-                    'position': next_state['position'],
-                    'cycle': next_state['cycle']
-                },
-                'ai_firm_coordination': {
-                    'mode': 'fully_integrated',
-                    'total_agents': voting_result['participating_agents'],
-                    'consensus_strength': voting_result['consensus_strength'],
-                    'ceo_confidence': ceo_decision.confidence,
-                    'ceo_reasoning': ceo_decision.reasoning
-                },
-                'rl_metrics': {
-                    'reward': round(reward, 2),
-                    'cycle': next_state['cycle'],
-                    'done': done
-                },
-                'timestamp': datetime.now().isoformat()
-            }
-        except Exception as e:
-            logger.error(f"Integrated cycle error: {e}")
-            return self._execute_legacy_cycle()
-    
-    def _execute_ai_firm_cycle(self) -> Dict[str, Any]:
-        """AI Firm coordination without RL environment"""
-        try:
-            context = {
-                'decision_type': 'trading',
-                'market_volatility': np.random.uniform(0.1, 0.3),
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            voting_result = agent_manager.conduct_agent_voting(context)
-            
-            ceo_context = {
-                'type': 'strategic_trading_decision',
-                'agent_recommendation': voting_result['winning_signal'],
-                'consensus_strength': voting_result['consensus_strength'],
-                'agent_participation': voting_result['participating_agents']
-            }
-            ceo_decision = ceo.make_strategic_decision(ceo_context)
-            
-            reward = np.random.normal(950, 300)
-            self.portfolio_balance += reward
-            
-            return {
-                'status': 'success',
-                'signal': voting_result['winning_signal'],
-                'strategy': 'AI_FIRM_24_AGENTS',
-                'final_balance': round(self.portfolio_balance, 2),
-                'total_reward': round(reward, 2),
-                'ai_firm_coordination': {
-                    'mode': 'ai_firm_only',
-                    'total_agents': voting_result['participating_agents'],
-                    'consensus_strength': voting_result['consensus_strength'],
-                    'ceo_confidence': ceo_decision.confidence
-                },
-                'agents': self._get_agent_status(),
-                'timestamp': datetime.now().isoformat()
-            }
-        except Exception as e:
-            logger.error(f"AI Firm cycle error: {e}")
-            return self._execute_legacy_cycle()
-    
-    def _execute_legacy_cycle(self) -> Dict[str, Any]:
-        """Legacy 4-agent fallback"""
-        for state in self.legacy_agents.values():
-            variation = np.random.normal(0, 0.05)
-            state['confidence'] = np.clip(state['confidence'] + variation, 0.1, 0.99)
+        ceo_decision = ceo.make_strategic_decision(ceo_context)
         
-        signal = np.random.choice(['BUY', 'SELL', 'HOLD'], p=[0.4, 0.2, 0.4])
-        reward = np.random.normal(500, 200)
-        self.portfolio_balance += reward
-        
-        return {
+        # 6. RL Verification (Simulation)
+        # We step the RL env just to keep it alive/training, but don't let it override CEO yet
+        try:
+            rl_env.step("hold") 
+        except:
+            pass
+            
+        return jsonify({
             'status': 'success',
-            'signal': signal,
-            'strategy': 'LEGACY_4_AGENTS',
-            'final_balance': round(self.portfolio_balance, 2),
-            'total_reward': round(reward, 2),
-            'agents': {
-                name: {
-                    'confidence': round(state['confidence'], 3),
-                    'performance': state['performance']
-                }
-                for name, state in self.legacy_agents.items()
+            'symbol': symbol,
+            'signal': voting_result['winning_signal'],
+            'expert_opinions': expert_opinions,
+            'market_data': price_data,
+            'fundamentals': fundamentals,
+            'vote_summary': voting_result['vote_distribution'],
+            'consensus': voting_result['consensus_strength'],
+            'ceo_decision': {
+                'confidence': ceo_decision.confidence,
+                'reasoning': ceo_decision.reasoning
             },
-            'timestamp': datetime.now().isoformat(),
-            'note': 'Legacy mode - AI Firm & RL not loaded'
-        }
-    
-    def _get_agent_status(self) -> Dict[str, Any]:
-        """Get agent status with defensive handling"""
-        if not AI_FIRM_READY:
-            return {
-                name: {
-                    'confidence': round(state['confidence'], 3),
-                    'performance': state['performance']
-                }
-                for name, state in self.legacy_agents.items()
-            }
+            'timestamp': datetime.now().isoformat()
+        }), 200
         
-        all_agents = {}
-        
-        for name, state in self.legacy_agents.items():
-            all_agents[name] = {
-                'confidence': round(state['confidence'], 3),
-                'performance': state['performance'],
-                'department': 'legacy',
-                'status': 'operational'
-            }
-        
-        try:
-            enhanced = agent_manager.get_agent_status()
-            
-            if isinstance(enhanced, dict):
-                for name, data in enhanced.items():
-                    if isinstance(data, dict):
-                        all_agents[name] = {
-                            'confidence': round(data.get('confidence', 0.75), 3),
-                            'performance': data.get('performance', 75.0),
-                            'department': data.get('department', 'ai_firm'),
-                            'status': 'operational'
-                        }
-                    elif isinstance(data, (int, float)):
-                        all_agents[name] = {
-                            'confidence': 0.75,
-                            'count': data,
-                            'department': 'ai_firm',
-                            'status': 'operational'
-                        }
-            elif isinstance(enhanced, int):
-                all_agents['total_enhanced_agents'] = {
-                    'count': enhanced,
-                    'status': 'operational'
-                }
-        except Exception as e:
-            logger.warning(f"Agent status retrieval error: {e}")
-        
-        return all_agents
+    else:
+        return jsonify({'error': 'AI Firm not initialized'}), 500
 
-# Initialize system
-yantrax_system = YantraXEnhancedSystem()
+if __name__ == '__main__':
+    port = int(os.getenv('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
 
-# ==================== API ENDPOINTS ====================
-
-@app.route('/', methods=['GET'])
-@handle_errors
-def health_check():
-    return jsonify({
-        'message': 'YantraX RL Backend v4.6 - DIAGNOSTIC MODE',
-        'status': 'operational',
-        'version': '4.6.0',
-        'integration': {
-            'ai_firm': AI_FIRM_READY,
-            'rl_core': RL_ENV_READY,
-            'market_service_v2': MARKET_SERVICE_READY,
-            'mode': 'fully_integrated' if (AI_FIRM_READY and RL_ENV_READY) else (
-                'ai_firm_only' if AI_FIRM_READY else 'legacy'
-            )
-        },
-        'data_sources': {
-            'primary': 'FMP (batch quote API)' if MARKET_SERVICE_READY else 'None',
-            'secondary': 'Alpaca (optional)' if MARKET_SERVICE_READY else 'None',
-            'fallback': 'Disabled'
-        },
-        'components': {
-            'total_agents': 24 if AI_FIRM_READY else 4,
-            'ceo_active': AI_FIRM_READY,
-            'personas_active': AI_FIRM_READY,
-            'rl_environment': 'MarketSimEnv' if RL_ENV_READY else 'None'
-        },
-        'stats': error_counts,
-        'timestamp': datetime.now().isoformat()
-    })
 
 @app.route('/debug', methods=['GET'])
 @handle_errors
