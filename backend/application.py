@@ -52,7 +52,7 @@ def health_check():
     """Health check - system status"""
     return jsonify({
         'status': 'operational',
-        'version': '5.3-procfile-fix',
+        'version': '5.4-robust-stream',
         'data_source': 'Waterfall (YFinance/FMP/Alpaca)',
         'ai_firm': 'active' if AI_FIRM_READY else 'degraded',
         'timestamp': datetime.now().isoformat()
@@ -66,6 +66,9 @@ def get_market_price():
 
 def generate_market_stream(symbol: str, interval: float = 5.0):
     """Generator for Server-Sent Events"""
+    # Ensure interval is reasonable
+    interval = max(3.0, interval)
+    
     while True:
         try:
             # Fetch real data (cache handled by service)
@@ -82,7 +85,11 @@ def generate_market_stream(symbol: str, interval: float = 5.0):
             # SSE format: "data: {json}\n\n"
             yield f"data: {json.dumps(payload)}\n\n"
             
+            # Use non-blocking sleep if possible, but time.sleep is fine for threads
             time.sleep(interval)
+        except GeneratorExit:
+            logger.info(f"Stream client disconnected for {symbol}")
+            break
         except Exception as e:
             logger.error(f"Stream error: {e}")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
