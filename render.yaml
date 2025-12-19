@@ -5,14 +5,8 @@ services:
     env: python
     region: oregon
     branch: main
-    buildCommand: |
-      cd backend &&
-      pip install --upgrade pip &&
-      pip install -r requirements.txt &&
-      pip install gunicorn
-    startCommand: |
-      cd backend &&
-      gunicorn main:app -b 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    buildCommand: chmod +x render_deploy.sh
+    startCommand: ./render_deploy.sh
     healthCheckPath: /health
     envVars:
       - key: FLASK_ENV
