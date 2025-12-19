@@ -46,3 +46,6 @@ torch==2.2.0
 # Text Processing & Sentiment Analysis
 textblob==0.18.0
 vaderSentiment==3.3.2
+
+# Pin urllib3 to avoid conflicts with requests on some platforms
+urllib3<2.0
