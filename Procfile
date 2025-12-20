@@ -1,1 +1,1 @@
-web: cd backend && gunicorn main:app --preload --workers 2 --timeout 120
+web: cd backend && gunicorn main:app --workers 1 --threads 8 --worker-class gthread --timeout 120

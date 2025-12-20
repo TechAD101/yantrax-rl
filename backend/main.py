@@ -1,8 +1,4 @@
 
-# Apply gevent monkey patching ASAP
-from gevent import monkey
-monkey.patch_all()
-
 import os
 import sys
 import logging
@@ -61,7 +57,7 @@ def health_check():
     """Health check - system status"""
     return jsonify({
         'status': 'operational',
-        'version': '5.10-stable-stream',
+        'version': '5.11-stable-gthread-no-gevent',
         'data_source': 'Waterfall (YFinance/FMP/Alpaca)',
         'ai_firm': 'active' if AI_FIRM_READY else 'degraded',
         'timestamp': datetime.now().isoformat()
