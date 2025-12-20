@@ -52,7 +52,7 @@ def health_check():
     """Health check - system status"""
     return jsonify({
         'status': 'operational',
-        'version': '5.5-universal-fix',
+        'version': '5.5.1-dependency-fix',
         'data_source': 'Waterfall (YFinance/FMP/Alpaca)',
         'ai_firm': 'active' if AI_FIRM_READY else 'degraded',
         'timestamp': datetime.now().isoformat()

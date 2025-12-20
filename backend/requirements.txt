@@ -50,3 +50,4 @@ vaderSentiment==3.3.2
 # Pin urllib3 to avoid conflicts with requests on some platforms
 urllib3<2.0
 flask-cors
+yfinance
