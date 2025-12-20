@@ -11,9 +11,11 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 from threading import Lock
 
-# Third-party imports
-import yfinance as yf
-import requests
+# Third-party imports moved to lazy load inside methods to save memory
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +96,7 @@ class WaterfallMarketDataService:
         if self._can_use('yfinance'):
             try:
                 self._use('yfinance')
+                import yfinance as yf
                 ticker = yf.Ticker(symbol)
                 # fast_info is faster than history
                 price = ticker.fast_info.last_price
@@ -124,6 +127,7 @@ class WaterfallMarketDataService:
         if self._can_use('fmp'):
             try:
                 self._use('fmp')
+                import requests
                 url = f"https://financialmodelingprep.com/api/v3/quote/{symbol}?apikey={self.providers['fmp']['key']}"
                 resp = requests.get(url, timeout=5)
                 if resp.status_code == 200:
@@ -144,6 +148,7 @@ class WaterfallMarketDataService:
         if self._can_use('fmp'):
             try:
                 self._use('fmp')
+                import requests
                 # Get Ratios
                 url = f"https://financialmodelingprep.com/api/v3/ratios-ttm/{symbol}?apikey={self.providers['fmp']['key']}"
                 resp = requests.get(url, timeout=5)
@@ -167,6 +172,7 @@ class WaterfallMarketDataService:
         if self._can_use('yfinance'):
             try:
                 self._use('yfinance')
+                import yfinance as yf
                 t = yf.Ticker(symbol)
                 info = t.info
                 return {

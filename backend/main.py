@@ -3,6 +3,10 @@ import os
 import sys
 import logging
 import json
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import numpy as np
 import time
 from datetime import datetime, timedelta
@@ -53,7 +57,7 @@ def health_check():
     """Health check - system status"""
     return jsonify({
         'status': 'operational',
-        'version': '5.8-bugfix-stable',
+        'version': '5.9-clean',
         'data_source': 'Waterfall (YFinance/FMP/Alpaca)',
         'ai_firm': 'active' if AI_FIRM_READY else 'degraded',
         'timestamp': datetime.now().isoformat()
