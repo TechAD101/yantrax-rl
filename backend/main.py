@@ -1,5 +1,6 @@
 
 import os
+import sys
 import logging
 import json
 import numpy as np
@@ -52,7 +53,7 @@ def health_check():
     """Health check - system status"""
     return jsonify({
         'status': 'operational',
-        'version': '5.6-endpoints-restored',
+        'version': '5.8-bugfix-stable',
         'data_source': 'Waterfall (YFinance/FMP/Alpaca)',
         'ai_firm': 'active' if AI_FIRM_READY else 'degraded',
         'timestamp': datetime.now().isoformat()
@@ -176,10 +177,13 @@ def get_commentary():
     """Get AI Firm commentary and insights"""
     if AI_FIRM_READY:
         # Real or simulated commentary from agents
+        # Use getattr to avoid AttributeError if active_provider is missing
+        provider_name = getattr(market_provider, 'active_provider', 'Waterfall')
+        
         return jsonify([
             {
                 'id': 1, 'agent': 'CEO Strategic Oversight',
-                'comment': f"Market Analysis: {market_provider.active_provider} active. Monitoring volatility.",
+                'comment': f"Market Analysis: {provider_name} active. Monitoring volatility.",
                 'confidence': 0.95, 'timestamp': datetime.now().isoformat(),
                 'sentiment': 'bullish'
             },
