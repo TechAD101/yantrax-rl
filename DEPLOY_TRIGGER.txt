@@ -1,7 +1,0 @@
-DEPLOYMENT TRIGGER - v4.6
-Timestamp: 2025-12-12 03:04 AM IST
-
-Forcing redeploy of diagnostic endpoints
-v4.6 with /debug, /test-alpaca, /test-alpha endpoints
-
-Render should auto-deploy within 1-2 minutes
