@@ -99,14 +99,13 @@ const AIFirmDashboard = () => {
             AI Firm Command Center
           </h3>
           <div className="flex items-center space-x-3">
-            <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
-              firmStatus?.status === 'fully_operational' 
-                ? 'bg-green-900/50 text-green-400' 
+            <div className={`px-3 py-1 rounded-full text-xs font-semibold ${firmStatus?.status === 'fully_operational'
+                ? 'bg-green-900/50 text-green-400'
                 : 'bg-yellow-900/50 text-yellow-400'
-            }`}>
+              }`}>
               {firmStatus?.status || 'Loading...'}
             </div>
-            <button 
+            <button
               onClick={fetchAIFirmData}
               className="px-3 py-1 bg-blue-600/20 hover:bg-blue-600/30 rounded-lg text-blue-400 text-xs font-medium transition-colors"
               disabled={loading}
@@ -117,39 +116,53 @@ const AIFirmDashboard = () => {
         </div>
 
         {firmStatus && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Total Agents */}
-            <div className="bg-gray-900/60 rounded-lg p-4 border border-gray-700/30">
-              <div className="text-2xl font-bold text-white mb-1">
-                {firmStatus.ai_firm?.total_agents || firmStatus?.total_agents || 0}
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Total Agents */}
+              <div className="bg-gray-900/60 rounded-lg p-4 border border-gray-700/30">
+                <div className="text-2xl font-bold text-white mb-1">
+                  {firmStatus.ai_firm?.total_agents || firmStatus?.total_agents || 0}
+                </div>
+                <div className="text-sm text-gray-400">Total AI Agents</div>
+                <div className="text-xs text-green-400 mt-1">
+                  ✓ Multi-Agent Coordination Active
+                </div>
               </div>
-              <div className="text-sm text-gray-400">Total AI Agents</div>
-              <div className="text-xs text-green-400 mt-1">
-                ✓ Multi-Agent Coordination Active
+
+              {/* Portfolio Performance */}
+              <div className="bg-gray-900/60 rounded-lg p-4 border border-gray-700/30">
+                <div className="text-2xl font-bold text-green-400 mb-1">
+                  ${firmStatus.system_performance?.portfolio_balance?.toLocaleString() || '0'}
+                </div>
+                <div className="text-sm text-gray-400">Portfolio Value</div>
+                <div className="text-xs text-cyan-400 mt-1">
+                  Success Rate: {firmStatus.system_performance?.success_rate || 0}%
+                </div>
+              </div>
+
+              {/* Departments Active */}
+              <div className="bg-gray-900/60 rounded-lg p-4 border border-gray-700/30">
+                <div className="text-2xl font-bold text-purple-400 mb-1">
+                  {Object.keys(firmStatus.ai_firm?.departments || firmStatus?.departments || {}).length || 0}
+                </div>
+                <div className="text-sm text-gray-400">Active Departments</div>
+                <div className="text-xs text-orange-400 mt-1">
+                  🏢 Full Firm Coordination
+                </div>
               </div>
             </div>
 
-            {/* Portfolio Performance */}
-            <div className="bg-gray-900/60 rounded-lg p-4 border border-gray-700/30">
-              <div className="text-2xl font-bold text-green-400 mb-1">
-                ${firmStatus.system_performance?.portfolio_balance?.toLocaleString() || '0'}
+            {/* CEO Reasoning & Ghost Whispers (NEW) */}
+            {firmStatus.ai_firm?.ceo_metrics?.recent_decisions_log && (
+              <div className="bg-gray-900/80 rounded-lg p-4 border border-purple-500/30">
+                <h4 className="text-sm font-bold text-purple-300 mb-2 flex items-center">
+                  <span className="mr-2">👻</span> Latest Ghost Insight & CEO Reasoning
+                </h4>
+                <div className="text-xs text-gray-300 leading-relaxed font-mono">
+                  {firmStatus.ai_firm.ceo_metrics.recent_decisions_log[0]?.reasoning || "No recent strategic deliberations."}
+                </div>
               </div>
-              <div className="text-sm text-gray-400">Portfolio Value</div>
-              <div className="text-xs text-cyan-400 mt-1">
-                Success Rate: {firmStatus.system_performance?.success_rate || 0}%
-              </div>
-            </div>
-
-            {/* Departments Active */}
-            <div className="bg-gray-900/60 rounded-lg p-4 border border-gray-700/30">
-              <div className="text-2xl font-bold text-purple-400 mb-1">
-                {Object.keys(firmStatus.ai_firm?.departments || firmStatus?.departments || {}).length || 0}
-              </div>
-              <div className="text-sm text-gray-400">Active Departments</div>
-              <div className="text-xs text-orange-400 mt-1">
-                🏢 Full Firm Coordination
-              </div>
-            </div>
+            )}
           </div>
         )}
       </div>
@@ -172,15 +185,14 @@ const AIFirmDashboard = () => {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-300">Recommendation:</span>
-                <span className={`text-sm font-bold px-2 py-1 rounded ${
-                  warrenAnalysis.warren_analysis?.recommendation?.includes('BUY') 
+                <span className={`text-sm font-bold px-2 py-1 rounded ${warrenAnalysis.warren_analysis?.recommendation?.includes('BUY')
                     ? 'bg-green-900/50 text-green-400'
                     : 'bg-gray-700/50 text-gray-300'
-                }`}>
+                  }`}>
                   {warrenAnalysis.warren_analysis?.recommendation || 'ANALYZING'}
                 </span>
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-300">Confidence:</span>
                 <span className="text-sm font-bold text-green-400">
@@ -220,15 +232,14 @@ const AIFirmDashboard = () => {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-300">Recommendation:</span>
-                <span className={`text-sm font-bold px-2 py-1 rounded ${
-                  cathieAnalysis.cathie_analysis?.recommendation?.includes('BUY')
+                <span className={`text-sm font-bold px-2 py-1 rounded ${cathieAnalysis.cathie_analysis?.recommendation?.includes('BUY')
                     ? 'bg-purple-900/50 text-purple-400'
                     : 'bg-gray-700/50 text-gray-300'
-                }`}>
+                  }`}>
                   {cathieAnalysis.cathie_analysis?.recommendation || 'ANALYZING'}
                 </span>
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-300">Confidence:</span>
                 <span className="text-sm font-bold text-purple-400">
@@ -257,7 +268,7 @@ const AIFirmDashboard = () => {
       {firmStatus?.ai_firm && (
         <div className="bg-gradient-to-br from-blue-800/20 to-indigo-900/20 rounded-xl border border-blue-700/50 p-6 backdrop-blur-sm">
           <h4 className="text-lg font-bold text-blue-400 mb-4">Firm Coordination Metrics</h4>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="text-center">
               <div className="text-xl font-bold text-blue-400">
@@ -265,7 +276,7 @@ const AIFirmDashboard = () => {
               </div>
               <div className="text-xs text-gray-400">CEO Decisions</div>
             </div>
-            
+
             <div className="text-center">
               <div className="text-xl font-bold text-green-400">
                 {(() => {
@@ -278,14 +289,14 @@ const AIFirmDashboard = () => {
               </div>
               <div className="text-xs text-gray-400">Active Personas</div>
             </div>
-            
+
             <div className="text-center">
               <div className="text-xl font-bold text-purple-400">
                 {firmStatus.ai_firm?.recent_coordination_sessions || firmStatus.ai_firm?.recent_voting_sessions || firmStatus.ai_firm?.recent_voting_sessions || 0}
               </div>
               <div className="text-xs text-gray-400">Coordination Sessions</div>
             </div>
-            
+
             <div className="text-center">
               <div className="text-xl font-bold text-orange-400">
                 {Object.keys(firmStatus.ai_firm.departments || {}).length}

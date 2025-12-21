@@ -11,6 +11,9 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
 from enum import Enum
 import hashlib
+from .debate_engine import DebateEngine
+from .agent_manager import AgentManager
+from .ghost_layer import GhostLayer
 
 class CEOPersonality(Enum):
     CONSERVATIVE = "conservative"
@@ -41,27 +44,46 @@ class AutonomousCEO:
         self.learning_rate = 0.1
         self.confidence_threshold = 0.75
         self.created_at = datetime.now()
+        self.agent_manager = AgentManager()
+        self.debate_engine = DebateEngine(self.agent_manager)
+        self.ghost_layer = GhostLayer()
         
     def make_strategic_decision(self, context: Dict[str, Any]) -> CEODecision:
         """Make strategic decision based on context and memory"""
         
-        # Analyze context with memory
+        # 1. Conduct Multi-Agent Debate
+        ticker = context.get('ticker', 'UNKNOWN')
+        debate_result = self.debate_engine.conduct_debate(ticker, context)
+        
+        # 2. Analyze context with memory
         memory_insights = self.memory_system.recall_relevant_memories(context)
         
-        # Apply personality-based decision making
-        confidence = self._calculate_confidence(context, memory_insights)
-        reasoning = self._generate_reasoning(context, memory_insights)
+        # 3. Apply personality-based decision making, incorporating debate consensus
+        base_confidence = self._calculate_confidence(context, memory_insights)
+        debate_confidence = debate_result['consensus_score']
         
-        # Create decision
+        # Blend CEO confidence with agent consensus (70/30 weight)
+        final_confidence = (base_confidence * 0.7) + (debate_confidence * 0.3)
+        
+        reasoning = self._generate_reasoning(context, memory_insights, debate_result)
+        
+        # 4. The Ghost Observation (Divine Doubt)
+        ghost_nudge = self.ghost_layer.observe(context, debate_result['consensus_score'])
+        if ghost_nudge:
+            reasoning += f" | {ghost_nudge['origin']}: {ghost_nudge['whisper']} [{ghost_nudge['influence_level']}]"
+            if ghost_nudge['influence_level'] == 'VETO_RECOMMENDED':
+                final_confidence *= 0.5 # Severe confidence penalty on Ghost Veto
+        
+        # 5. Create decision
         decision = CEODecision(
             id=str(uuid.uuid4()),
             timestamp=datetime.now(),
             decision_type=context.get('type', 'strategic'),
             context=context,
             reasoning=reasoning,
-            confidence=confidence,
-            expected_impact=self._assess_impact(context, confidence),
-            agent_overrides=self._determine_overrides(context, confidence),
+            confidence=round(final_confidence, 2),
+            expected_impact=self._assess_impact(context, final_confidence),
+            agent_overrides=self._determine_overrides(context, final_confidence),
             memory_references=[m['id'] for m in memory_insights]
         )
         
@@ -125,26 +147,37 @@ class AutonomousCEO:
         
         return confidence
     
-    def _generate_reasoning(self, context: Dict, memories: List[Dict]) -> str:
+    def _generate_reasoning(self, context: Dict, memories: List[Dict], debate_result: Dict = None) -> str:
         """Generate human-readable reasoning for decision"""
         reasoning_parts = []
         
+        # Debate Insights
+        if debate_result:
+            winning_sig = debate_result['winning_signal']
+            consensus = debate_result['consensus_score']
+            reasoning_parts.append(f"The Firm reached a {consensus*100}% consensus for a {winning_sig} signal")
+            
+            # Extract key arguments
+            for arg in debate_result['arguments']:
+                if arg['agent'] in ['warren', 'cathie'] and arg['signal'] == winning_sig:
+                    reasoning_parts.append(f"Expert opinion from {arg['agent'].capitalize()}: {arg['reasoning']}")
+        
         # Context analysis
         if context.get('market_trend') == 'bullish':
-            reasoning_parts.append("Market shows bullish signals")
+            reasoning_parts.append("Macro context supports bullish bias")
         elif context.get('market_trend') == 'bearish':
-            reasoning_parts.append("Market conditions indicate caution")
+            reasoning_parts.append("Macro context suggests portfolio defense")
             
         # Memory insights
         if memories:
-            reasoning_parts.append(f"Historical analysis of {len(memories)} similar situations")
+            reasoning_parts.append(f"Reflecting on {len(memories)} similar historical cycles")
             
         # Personality influence
         personality_reasoning = {
-            CEOPersonality.CONSERVATIVE: "Prioritizing capital preservation",
-            CEOPersonality.AGGRESSIVE: "Focusing on growth opportunities",
-            CEOPersonality.BALANCED: "Balancing risk and opportunity",
-            CEOPersonality.ADAPTIVE: "Adapting strategy to current conditions"
+            CEOPersonality.CONSERVATIVE: "CEO Bias: Prioritizing capital preservation",
+            CEOPersonality.AGGRESSIVE: "CEO Bias: Focusing on growth opportunities",
+            CEOPersonality.BALANCED: "CEO Bias: Balances risk and opportunity",
+            CEOPersonality.ADAPTIVE: "CEO Bias: Adapting strategy to current conditions"
         }
         
         reasoning_parts.append(personality_reasoning[self.personality])
@@ -198,6 +231,10 @@ class AutonomousCEO:
             'personality': self.personality.value,
             'total_decisions': len(self.decision_history),
             'recent_decisions': len(recent_decisions),
+            'recent_decisions_log': [
+                {'timestamp': d.timestamp.isoformat(), 'type': d.decision_type, 'reasoning': d.reasoning, 'confidence': d.confidence}
+                for d in self.decision_history[-5:]
+            ],
             'average_confidence': sum(d.confidence for d in recent_decisions) / len(recent_decisions) if recent_decisions else 0,
             'memory_items': len(self.memory_system.memories),
             'uptime_days': (datetime.now() - self.created_at).days

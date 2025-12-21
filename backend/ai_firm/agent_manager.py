@@ -219,50 +219,58 @@ class AgentManager:
     
     def _generate_agent_signal(self, agent_name: str, agent_data: Dict, context: Dict = None) -> str:
         """Generate trading signal based on agent specialty and real data"""
-
-        
         confidence = agent_data['confidence']
         specialty = agent_data.get('specialty', '')
         
-        # Real logic using fundamentals if available
+        # Pull real data from context provided by waterfall service
         fundamentals = context.get('fundamentals', {}) if context else {}
         pe_ratio = fundamentals.get('pe_ratio', 0)
         roe = fundamentals.get('return_on_equity', 0)
+        debt_to_equity = fundamentals.get('debt_to_equity', 0)
         
-        # Specialty-based signal generation
-        if 'Value' in specialty or agent_name == 'warren':
-            # Fallback if no expert opinion passed
-            if pe_ratio > 0 and pe_ratio < 20 and roe > 0.15:
+        # Technicals (if available in context)
+        rsi = context.get('rsi', 50) if context else 50
+        trend = context.get('market_trend', 'neutral') if context else 'neutral'
+        
+        # 1. WARREN: Value/Fundamental Archetype
+        if agent_name == 'warren' or 'Value' in specialty:
+            # Warren likes low PE, high ROE, low debt
+            if 0 < pe_ratio < 22 and roe > 0.18 and debt_to_equity < 1.0:
                 return 'BUY'
-            elif pe_ratio > 35:
+            elif pe_ratio > 40 or debt_to_equity > 3.0:
                 return 'SELL'
             return 'HOLD'
             
-        elif 'Innovation' in specialty or agent_name == 'cathie':
-            # Cathie likes growth (high PE is fine if growth is there, simplified here)
-            if pe_ratio > 50 or (roe > 0.1 and pe_ratio > 30):
+        # 2. CATHIE: Growth/Disruptive Archetype
+        elif agent_name == 'cathie' or 'Innovation' in specialty:
+            # Cathie likes momentum (RSI) and isn't afraid of high PE if growth is implied
+            if rsi > 60 and trend == 'bullish':
                 return 'HIGH_CONVICTION_BUY' if confidence > 0.85 else 'BUY'
+            elif rsi < 30:
+                return 'HOLD' # Buying dips in growth
             return 'HOLD'
             
+        # 3. QUANT / SYSTEMATIC: Pure Data
+        elif 'Statistical' in specialty or 'Quant' in agent_name:
+            if trend == 'bullish' and rsi < 70:
+                return 'BUY'
+            elif trend == 'bearish' or rsi > 80:
+                return 'SELL'
+            return 'HOLD'
+
+        # 4. RISK CONTROL: Safeguards
         elif 'Risk' in specialty or 'VaR' in specialty:
-            # Risk hates debt
-            debt_to_equity = fundamentals.get('debt_to_equity', 0)
-            if debt_to_equity > 2.0:
+            if debt_to_equity > 2.5 or trend == 'bearish':
                  return 'REJECT'
             return 'APPROVED' if confidence > 0.8 else 'CAUTION'
             
-        else:
-            # Default signal generation
-            # If market is crashing (context check), sell
-            if context and context.get('market_trend') == 'bearish':
-                return 'SELL'
-            
-            if confidence > 0.8:
-                return 'BUY'
-            elif confidence > 0.6:
-                return 'HOLD'
-            else:
-                return 'HOLD'
+        # DEFAULT: Trend Following
+        if trend == 'bullish':
+            return 'BUY'
+        elif trend == 'bearish':
+            return 'SELL'
+        
+        return 'HOLD'
 
     def coordinate_decision_making(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Compatibility shim for older callers.
