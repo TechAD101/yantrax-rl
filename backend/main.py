@@ -53,11 +53,12 @@ app = Flask(__name__)
 CORS(app, origins=['*'])
 
 @app.route('/', methods=['GET'])
+@app.route('/health', methods=['GET'])
 def health_check():
     """Health check - system status"""
     return jsonify({
         'status': 'operational',
-        'version': '5.14-IaC-stable',
+        'version': '5.15-Institutional',
         'data_source': 'Waterfall (YFinance/FMP/Alpaca)',
         'ai_firm': 'active' if AI_FIRM_READY else 'degraded',
         'timestamp': datetime.now().isoformat()
