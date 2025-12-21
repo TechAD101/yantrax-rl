@@ -1,6 +1,8 @@
 """
 Market Data Service - Waterfall Strategy
 Priority: YFinance (Free) -> FMP (Fundamentals) -> Alpaca (Live Price) -> Alpha Vantage (Backup)
+Caching: 5-minute TTL for price and fundamentals
+Circuit Breaking: Auto-skip exhausted providers
 """
 
 import os
@@ -51,6 +53,11 @@ class DailyRateLimiter:
 class WaterfallMarketDataService:
     def __init__(self):
         self.providers = {}
+        self.cache = {
+            'price': {},        # ticker -> {'price': float, 'source': str, 'expiry': float}
+            'fundamentals': {}  # ticker -> {'data': dict, 'expiry': float}
+        }
+        self.cache_ttl = int(os.getenv('MARKET_DATA_CACHE_TTL', 300))  # 5 mins
         self._init_providers()
         
     def _init_providers(self):
@@ -88,11 +95,36 @@ class WaterfallMarketDataService:
         logger.info(f"🌊 Waterfall Service Initialized. Active: {[k for k,v in self.providers.items() if v['enabled']]}")
 
     def get_price(self, symbol: str) -> Dict[str, Any]:
-        """Get current price using waterfall strategy"""
+        """Get current price using waterfall strategy with caching & circuit breaking"""
         symbol = symbol.upper()
+        now = time.time()
+        
+        # 0. Check Cache First
+        if symbol in self.cache['price']:
+            cached = self.cache['price'][symbol]
+            if now < cached['expiry']:
+                # logger.debug(f"🎯 Cache hit for {symbol}")
+                return self._success(cached['source'] + " (cached)", symbol, cached['price'])
+
         errors = []
         
-        # Strategy 1: FMP (Lightweight JSON)
+        # Priority Order: Cheap/Free First
+        # 1. YFinance (Free but heavy)
+        if self._can_use('yfinance'):
+            try:
+                self._use('yfinance')
+                import yfinance as yf
+                ticker = yf.Ticker(symbol)
+                # fast_info is faster than history
+                price = ticker.fast_info.last_price
+                if price:
+                    res = self._success('yfinance', symbol, price)
+                    self._update_cache('price', symbol, res)
+                    return res
+            except Exception as e:
+                errors.append(f"yfinance: {e}")
+
+        # 2. FMP (Lightweight JSON)
         if self._can_use('fmp'):
             try:
                 self._use('fmp')
@@ -102,11 +134,13 @@ class WaterfallMarketDataService:
                 if resp.status_code == 200:
                     data = resp.json()
                     if data:
-                        return self._success('fmp', symbol, data[0]['price'])
+                        res = self._success('fmp', symbol, data[0]['price'])
+                        self._update_cache('price', symbol, res)
+                        return res
             except Exception as e:
                 errors.append(f"fmp: {e}")
 
-        # Strategy 2: Alpaca (Reliable)
+        # 3. Alpaca (Reliable Fallback)
         if self._can_use('alpaca'):
             try:
                 import requests
@@ -120,31 +154,63 @@ class WaterfallMarketDataService:
                 if resp.status_code == 200:
                     data = resp.json()
                     price = float(data['quote']['ap']) # Ask price as proxy
-                    return self._success('alpaca', symbol, price)
+                    res = self._success('alpaca', symbol, price)
+                    self._update_cache('price', symbol, res)
+                    return res
             except Exception as e:
                 errors.append(f"alpaca: {e}")
-
-        # Strategy 3: YFinance (Heavy Fallback)
-        if self._can_use('yfinance'):
-            try:
-                self._use('yfinance')
-                import yfinance as yf
-                ticker = yf.Ticker(symbol)
-                # fast_info is faster than history
-                price = ticker.fast_info.last_price
-                if price:
-                    return self._success('yfinance', symbol, price)
-            except Exception as e:
-                errors.append(f"yfinance: {e}")
 
         logger.error(f"❌ All price providers failed for {symbol}: {errors}")
         return self._error(symbol, "All providers failed")
 
+    def _update_cache(self, cache_type: str, symbol: str, result: Dict[str, Any]):
+        """Update local cache with TTL"""
+        expiry = time.time() + self.cache_ttl
+        if cache_type == 'price':
+            self.cache['price'][symbol] = {
+                'price': result.get('price'),
+                'source': result.get('source'),
+                'expiry': expiry
+            }
+        elif cache_type == 'fundamentals':
+            self.cache['fundamentals'][symbol] = {
+                'data': result,
+                'expiry': expiry
+            }
+
     def get_fundamentals(self, symbol: str) -> Dict[str, Any]:
-        """Get fundamental data (ROE, PE, etc) for agents"""
+        """Get fundamental data with caching & circuit breaking"""
         symbol = symbol.upper()
+        now = time.time()
+
+        # 0. Check Cache First
+        if symbol in self.cache['fundamentals']:
+            cached = self.cache['fundamentals'][symbol]
+            if now < cached['expiry']:
+                return cached['data']
         
-        # Strategy 1: FMP (Best for fundamentals)
+        # Strategy 1: YFinance (Free & stable for fundamentals)
+        if self._can_use('yfinance'):
+            try:
+                self._use('yfinance')
+                import yfinance as yf
+                t = yf.Ticker(symbol)
+                info = t.info
+                res = {
+                    'symbol': symbol,
+                    'pe_ratio': info.get('trailingPE', 0),
+                    'return_on_equity': info.get('returnOnEquity', 0),
+                    'profit_margin': info.get('profitMargins', 0),
+                    'debt_to_equity': info.get('debtToEquity', 0) / 100 if info.get('debtToEquity') else 0,
+                    'dividend_yield': info.get('dividendYield', 0),
+                    'source': 'yfinance'
+                }
+                self._update_cache('fundamentals', symbol, res)
+                return res
+            except Exception as e:
+                logger.warning(f"YFinance fundamentals failed: {e}")
+
+        # Strategy 2: FMP (Best data but limited)
         if self._can_use('fmp'):
             try:
                 self._use('fmp')
@@ -156,7 +222,7 @@ class WaterfallMarketDataService:
                 
                 if data and isinstance(data, list):
                     r = data[0]
-                    return {
+                    res = {
                         'symbol': symbol,
                         'pe_ratio': r.get('peRatioTTM', 0),
                         'return_on_equity': r.get('returnOnEquityTTM', 0),
@@ -165,27 +231,10 @@ class WaterfallMarketDataService:
                         'dividend_yield': r.get('dividendYielTTM', 0),
                         'source': 'fmp'
                     }
+                    self._update_cache('fundamentals', symbol, res)
+                    return res
             except Exception as e:
                 logger.warning(f"FMP fundamentals failed: {e}")
-
-        # Strategy 2: YFinance (Backup, slower)
-        if self._can_use('yfinance'):
-            try:
-                self._use('yfinance')
-                import yfinance as yf
-                t = yf.Ticker(symbol)
-                info = t.info
-                return {
-                    'symbol': symbol,
-                    'pe_ratio': info.get('trailingPE', 0),
-                    'return_on_equity': info.get('returnOnEquity', 0),
-                    'profit_margin': info.get('profitMargins', 0),
-                    'debt_to_equity': info.get('debtToEquity', 0) / 100 if info.get('debtToEquity') else 0,
-                    'dividend_yield': info.get('dividendYield', 0),
-                    'source': 'yfinance'
-                }
-            except Exception as e:
-                logger.warning(f"YFinance fundamentals failed: {e}")
 
         return {
             'symbol': symbol,

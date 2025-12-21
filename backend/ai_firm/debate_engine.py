@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
 class DebateEngine:
@@ -10,9 +10,19 @@ class DebateEngine:
         self.agent_manager = agent_manager
         self.logger = logging.getLogger(__name__)
         self.debate_history = []
+        self.debate_cache = {} # ticker -> {'result': dict, 'expiry': datetime}
+        self.cache_ttl_seconds = 30
 
     def conduct_debate(self, ticker: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Hosts a debate between agents regarding a specific ticker/asset"""
+        """Hosts a debate between agents regarding a specific ticker/asset with throttling"""
+        
+        # 0. Check Cache
+        if ticker in self.debate_cache:
+            cached = self.debate_cache[ticker]
+            if datetime.now() < cached['expiry']:
+                # self.logger.debug(f"🔇 Throttling debate for {ticker}")
+                return cached['result']
+
         self.logger.info(f"🎤 Starting debate for {ticker}")
         
         arguments = []
@@ -52,6 +62,12 @@ class DebateEngine:
             'winning_signal': winning_signal,
             'consensus_score': round(consensus_score, 2),
             'vote_distribution': {k: round(v/total_weight, 2) for k, v in vote_tally.items()} if total_weight > 0 else {}
+        }
+        
+        # Update Cache
+        self.debate_cache[ticker] = {
+            'result': debate_result,
+            'expiry': datetime.now() + timedelta(seconds=self.cache_ttl_seconds)
         }
         
         self.debate_history.append(debate_result)
