@@ -6,11 +6,17 @@ and sector rotation capabilities for emerging market opportunities.
 
 import hashlib
 import secrets
+import sys
+import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 import json
 import math
+
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from base_persona import PersonaAgent, PersonaArchetype, VoteType, PersonaVote, PersonaAnalysis
 
 @dataclass
 class CathiePersonality:
@@ -22,11 +28,18 @@ class CathiePersonality:
     future_vision: float = 0.88
     conviction_strength: float = 0.87
     
-class CathieAgent:
-    """Cathie Wood-inspired AI trading agent focused on disruptive innovation"""
+class CathieAgent(PersonaAgent):
+    """Cathie Wood-inspired AI trading agent focused on disruptive innovation with explicit voting power"""
     
     def __init__(self):
-        self.name = "Cathie"
+        # Initialize base PersonaAgent
+        super().__init__(
+            name="Cathie",
+            archetype=PersonaArchetype.GROWTH,
+            voting_weight=1.0,  # Standard weight
+            preferred_strategies=["innovation_investing", "disruptive_tech", "growth_at_scale", "sector_rotation"]
+        )
+        
         self.personality = CathiePersonality()
         self.innovation_criteria = self._initialize_innovation_criteria()
         self.sector_weights = self._initialize_sector_weights()
@@ -209,6 +222,136 @@ class CathieAgent:
             'reasoning': reasoning,
             'composite_score': composite_score
         }
+    
+    # ============ PersonaAgent Interface Implementation ============
+    
+    def analyze(self, context: Dict[str, Any]) -> PersonaAnalysis:
+        """
+        Perform Cathie's full innovation analysis (implements PersonaAgent.analyze())
+        
+        Args:
+            context: Market context with symbol, fundamentals, sector_data, market_data, etc.
+        
+        Returns:
+            PersonaAnalysis structured result
+        """
+        symbol = context.get('symbol', 'UNKNOWN')
+        
+        # Run Cathie's existing analysis pipeline
+        innovation_score = self._analyze_innovation(context)
+        growth_score = self._assess_growth_potential(context)
+        disruption_score = self._evaluate_disruption(context)
+        sector_timing = self._evaluate_sector_timing(context)
+        recommendation = self._generate_innovation_recommendation(
+            innovation_score, growth_score, disruption_score, sector_timing
+        )
+        
+        # Create structured PersonaAnalysis
+        analysis = PersonaAnalysis(
+            symbol=symbol,
+            persona_name=self.name,
+            archetype=self.archetype,
+            recommendation=recommendation['action'],
+            confidence=recommendation['confidence'],
+            reasoning=recommendation['reasoning'],
+            scores={
+                'innovation': innovation_score,
+                'growth': growth_score,
+                'disruption': disruption_score,
+                'sector_timing': sector_timing.get('score', 0.5),
+                'composite': recommendation.get('composite_score', 0)
+            },
+            risk_assessment={
+                'volatility_tolerance': 'High',
+                'innovation_risk': 'Acceptable' if innovation_score > 0.7 else 'High',
+                'time_horizon_risk': 'Long-term focused'
+            },
+            time_horizon=recommendation.get('time_horizon', 'Long-term (3-7 years)'),
+            position_sizing=recommendation.get('position_sizing')
+        )
+        
+        # Record in both Cathie memory and PersonaAgent history
+        self.memory.store_analysis(symbol, recommendation, context)
+        self.record_analysis(analysis)
+        
+        return analysis
+    
+    def vote(self, proposal: Dict[str, Any], market_context: Dict[str, Any]) -> PersonaVote:
+        """
+        Cast Cathie's vote on a trade proposal (implements PersonaAgent.vote())
+        
+        Args:
+            proposal: Trade proposal dict with symbol, action, entry_price, target_price, etc.
+            market_context: Current market conditions (innovation metrics, sector trends, etc.)
+        
+        Returns:
+            PersonaVote with vote type, confidence, reasoning, weight
+        """
+        symbol = proposal.get('symbol', 'UNKNOWN')
+        proposed_action = proposal.get('action', 'HOLD').upper()
+        
+        # Perform fresh analysis
+        context = {
+            'symbol': symbol,
+            **market_context
+        }
+        analysis = self.analyze(context)
+        
+        # Map recommendation to VoteType
+        vote_mapping = {
+            'STRONG_BUY': VoteType.STRONG_BUY,
+            'BUY': VoteType.BUY,
+            'RESEARCH': VoteType.HOLD,
+            'HOLD': VoteType.HOLD,
+            'SELL': VoteType.SELL
+        }
+        
+        vote_type = vote_mapping.get(analysis.recommendation, VoteType.ABSTAIN)
+        
+        # Check if proposal aligns with Cathie's analysis
+        if proposed_action in ['BUY', 'STRONG_BUY']:
+            if analysis.recommendation in ['BUY', 'STRONG_BUY']:
+                reasoning = f"✓ Aligned: {analysis.reasoning}. Innovation metrics support aggressive growth play."
+                confidence = analysis.confidence
+            else:
+                vote_type = VoteType.HOLD
+                reasoning = f"⚠ Cautious: Cathie sees {analysis.recommendation}. {analysis.reasoning}"
+                confidence = 0.65  # Moderate confidence in caution
+        else:
+            reasoning = analysis.reasoning
+            confidence = analysis.confidence
+        
+        # Create formal vote
+        vote = PersonaVote(
+            persona_name=self.name,
+            archetype=self.archetype,
+            vote=vote_type,
+            confidence=confidence,
+            reasoning=reasoning,
+            weight=self.get_vote_weight(market_context)
+        )
+        
+        # Record vote
+        self.record_vote(vote)
+        
+        return vote
+    
+    def _adjust_weight_for_context(self, context: Dict[str, Any], base_weight: float) -> float:
+        """
+        Adjust Cathie's voting weight based on market conditions
+        Cathie gets higher weight in bull markets and innovation-driven environments
+        """
+        market_trend = context.get('market_trend', 'neutral').lower()
+        innovation_sentiment = context.get('innovation_sentiment', 0.5)
+        
+        # Increase weight in bull markets and high-innovation environments
+        if market_trend == 'bullish':
+            base_weight *= 1.3
+        elif innovation_sentiment > 0.75:
+            base_weight *= 1.2
+        
+        return min(base_weight, 2.0)  # Cap at 2.0
+
 
 class CathieMemory:
     """Memory system for Cathie agent"""

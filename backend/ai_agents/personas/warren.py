@@ -5,11 +5,18 @@ and risk management focus. Secured with pbkdf2:sha256 for production use.
 """
 
 import hashlib
+import logging
+import sys
+import os
 import secrets
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 import json
+
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from base_persona import PersonaAgent, PersonaArchetype, VoteType, PersonaVote, PersonaAnalysis
 
 @dataclass
 class WarrenPersonality:
@@ -21,11 +28,18 @@ class WarrenPersonality:
     long_term_vision: float = 0.92
     contrarian_tendency: float = 0.75
     
-class WarrenAgent:
-    """Warren Buffett-inspired AI trading agent"""
+class WarrenAgent(PersonaAgent):
+    """Warren Buffett-inspired AI trading agent with explicit voting power"""
     
     def __init__(self):
-        self.name = "Warren"
+        # Initialize base PersonaAgent
+        super().__init__(
+            name="Warren",
+            archetype=PersonaArchetype.VALUE,
+            voting_weight=1.2,  # Slightly higher weight for value investing
+            preferred_strategies=["value_investing", "dividend_capture", "buy_and_hold"]
+        )
+        
         self.personality = WarrenPersonality()
         self.investment_criteria = self._initialize_criteria()
         self.memory = WarrenMemory()
@@ -206,6 +220,128 @@ class WarrenAgent:
             'earnings_stability': earnings_stability,
             'overall_risk': "Low" if debt_risk == "Low" and earnings_stability == "Stable" else "Moderate"
         }
+    
+    # ============ PersonaAgent Interface Implementation ============
+    
+    def analyze(self, context: Dict[str, Any]) -> PersonaAnalysis:
+        """
+        Perform Warren's full analysis (implements PersonaAgent.analyze())
+        
+        Args:
+            context: Market context with symbol, fundamental_data, market_data, etc.
+        
+        Returns:
+            PersonaAnalysis structured result
+        """
+        symbol = context.get('symbol', 'UNKNOWN')
+        
+        # Run Warren's existing analysis pipeline
+        fundamental_score = self._analyze_fundamentals(context)
+        valuation = self._assess_valuation(context)
+        moat = self._evaluate_economic_moat(context)
+        recommendation = self._generate_recommendation(fundamental_score, valuation, moat)
+        risk_assessment = self._assess_warren_risk(context.get('fundamentals', {}))
+        
+        # Create structured PersonaAnalysis
+        analysis = PersonaAnalysis(
+            symbol=symbol,
+            persona_name=self.name,
+            archetype=self.archetype,
+            recommendation=recommendation['action'],
+            confidence=recommendation['confidence'],
+            reasoning=recommendation['reasoning'],
+            scores={
+                'fundamentals': fundamental_score,
+                'valuation_score': valuation.get('margin_of_safety', 0),
+                'moat_strength': moat.get('strength', 0),
+                'criteria_met': recommendation.get('criteria_met', 0) / 3.0
+            },
+            risk_assessment=risk_assessment,
+            time_horizon="Long-term (3-5 years)",
+            position_sizing="Conservative (2-5% max position)" if recommendation['action'] in ['BUY', 'STRONG_BUY'] else None
+        )
+        
+        # Record in both Warren memory and PersonaAgent history
+        self.memory.store_analysis(symbol, recommendation, context)
+        self.record_analysis(analysis)
+        
+        return analysis
+    
+    def vote(self, proposal: Dict[str, Any], market_context: Dict[str, Any]) -> PersonaVote:
+        """
+        Cast Warren's vote on a trade proposal (implements PersonaAgent.vote())
+        
+        Args:
+            proposal: Trade proposal dict with symbol, action, entry_price, target_price, etc.
+            market_context: Current market conditions (fundamentals, market_trend, volatility, etc.)
+        
+        Returns:
+            PersonaVote with vote type, confidence, reasoning, weight
+        """
+        symbol = proposal.get('symbol', 'UNKNOWN')
+        proposed_action = proposal.get('action', 'HOLD').upper()
+        
+        # Perform fresh analysis
+        context = {
+            'symbol': symbol,
+            **market_context
+        }
+        analysis = self.analyze(context)
+        
+        # Map recommendation to VoteType
+        vote_mapping = {
+            'STRONG_BUY': VoteType.STRONG_BUY,
+            'BUY': VoteType.BUY,
+            'HOLD': VoteType.HOLD,
+            'SELL': VoteType.SELL,
+            'AVOID': VoteType.STRONG_SELL
+        }
+        
+        vote_type = vote_mapping.get(analysis.recommendation, VoteType.ABSTAIN)
+        
+        # Check if proposal aligns with Warren's analysis
+        if proposed_action in ['BUY', 'STRONG_BUY']:
+            if analysis.recommendation in ['BUY', 'STRONG_BUY']:
+                reasoning = f"✓ Aligned: {analysis.reasoning}. Fundamentals support this purchase."
+                confidence = analysis.confidence
+            else:
+                vote_type = VoteType.STRONG_SELL
+                reasoning = f"✗ Opposed: Warren sees {analysis.recommendation}. {analysis.reasoning}"
+                confidence = 0.9  # High confidence in opposition
+        else:
+            reasoning = analysis.reasoning
+            confidence = analysis.confidence
+        
+        # Create formal vote
+        vote = PersonaVote(
+            persona_name=self.name,
+            archetype=self.archetype,
+            vote=vote_type,
+            confidence=confidence,
+            reasoning=reasoning,
+            weight=self.get_vote_weight(market_context)
+        )
+        
+        # Record vote
+        self.record_vote(vote)
+        
+        return vote
+    
+    def _adjust_weight_for_context(self, context: Dict[str, Any], base_weight: float) -> float:
+        """
+        Adjust Warren's voting weight based on market conditions
+        Warren gets higher weight in bear markets and high uncertainty
+        """
+        market_trend = context.get('market_trend', 'neutral').lower()
+        volatility = context.get('volatility', 0.5)
+        
+        # Increase weight in bear markets (Warren's strength)
+        if market_trend == 'bearish':
+            base_weight *= 1.3
+        elif market_trend == 'neutral' and volatility > 0.7:
+            base_weight *= 1.2
+        
+        return min(base_weight, 2.0)  # Cap at 2.0
 
 class WarrenMemory:
     """Memory system for Warren agent"""

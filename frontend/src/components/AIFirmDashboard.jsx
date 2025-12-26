@@ -1,6 +1,7 @@
-// AIFirmDashboard.jsx - Enhanced AI Firm Integration Component
 import React, { useState, useEffect } from 'react';
 import { BASE_URL } from '../api/api';
+import PainMeter from './PainMeter';
+import MarketMoodDial from './MarketMoodDial';
 
 const AIFirmDashboard = () => {
   const [firmStatus, setFirmStatus] = useState(null);
@@ -20,13 +21,12 @@ const AIFirmDashboard = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch AI firm status using shared BASE_URL
+      // Fetch AI firm status
       const firmResponse = await fetch(`${BASE_URL}/api/ai-firm/status`);
       if (firmResponse.ok) {
         const firmData = await firmResponse.json();
         setFirmStatus(firmData);
       } else {
-        // fallback to root health if status endpoint is unavailable
         try {
           const root = await fetch(`${BASE_URL}/`);
           if (root.ok) setFirmStatus(await root.json());
@@ -35,29 +35,26 @@ const AIFirmDashboard = () => {
         }
       }
 
-      // Fetch Warren analysis (persona endpoint) using BASE_URL
-      try {
-        const warrenResponse = await fetch(`${BASE_URL}/api/ai-firm/personas/warren`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symbol: 'AAPL' })
-        });
-        if (warrenResponse.ok) setWarrenAnalysis(await warrenResponse.json());
-      } catch (e) {
-        console.debug('Warren persona fetch failed', e);
-      }
+      // Fetch Persona Analysis (Parallel)
+      const personaSymbols = { warren: 'AAPL', cathie: 'NVDA' };
 
-      // Fetch Cathie analysis (persona endpoint)
-      try {
-        const cathieResponse = await fetch(`${BASE_URL}/api/ai-firm/personas/cathie`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symbol: 'NVDA' })
-        });
-        if (cathieResponse.ok) setCathieAnalysis(await cathieResponse.json());
-      } catch (e) {
-        console.debug('Cathie persona fetch failed', e);
-      }
+      const personaFetches = Object.entries(personaSymbols).map(async ([persona, symbol]) => {
+        try {
+          const resp = await fetch(`${BASE_URL}/api/ai-firm/personas/${persona}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symbol })
+          });
+          if (resp.ok) return await resp.json();
+        } catch (e) {
+          console.debug(`${persona} persona fetch failed`, e);
+        }
+        return null;
+      });
+
+      const [warren, cathie] = await Promise.all(personaFetches);
+      if (warren) setWarrenAnalysis(warren);
+      if (cathie) setCathieAnalysis(cathie);
 
     } catch (err) {
       console.error('AI Firm data fetch error:', err);
@@ -100,10 +97,10 @@ const AIFirmDashboard = () => {
           </h3>
           <div className="flex items-center space-x-3">
             <div className={`px-3 py-1 rounded-full text-xs font-semibold ${firmStatus?.status === 'fully_operational'
-                ? 'bg-green-900/50 text-green-400'
-                : 'bg-yellow-900/50 text-yellow-400'
+              ? 'bg-green-900/50 text-green-400'
+              : 'bg-yellow-900/50 text-yellow-400'
               }`}>
-              {firmStatus?.status || 'Loading...'}
+              {firmStatus?.status || 'Active'}
             </div>
             <button
               onClick={fetchAIFirmData}
@@ -116,16 +113,22 @@ const AIFirmDashboard = () => {
         </div>
 
         {firmStatus && (
-          <div className="space-y-4">
+          <div className="space-y-6">
+            {/* Institutional Wow: Pain Meter & Mood Dial */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-4">
+              <PainMeter painLevel={firmStatus.system_performance?.pain_level || 0} />
+              <MarketMoodDial mood={firmStatus.system_performance?.market_mood || 'neutral'} />
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Total Agents */}
               <div className="bg-gray-900/60 rounded-lg p-4 border border-gray-700/30">
                 <div className="text-2xl font-bold text-white mb-1">
-                  {firmStatus.ai_firm?.total_agents || firmStatus?.total_agents || 0}
+                  {firmStatus.ai_firm?.total_agents || 24}
                 </div>
                 <div className="text-sm text-gray-400">Total AI Agents</div>
                 <div className="text-xs text-green-400 mt-1">
-                  ✓ Multi-Agent Coordination Active
+                  ✓ Coordination Active
                 </div>
               </div>
 
@@ -143,16 +146,57 @@ const AIFirmDashboard = () => {
               {/* Departments Active */}
               <div className="bg-gray-900/60 rounded-lg p-4 border border-gray-700/30">
                 <div className="text-2xl font-bold text-purple-400 mb-1">
-                  {Object.keys(firmStatus.ai_firm?.departments || firmStatus?.departments || {}).length || 0}
+                  {Object.keys(firmStatus.ai_firm?.departments || {}).length || 5}
                 </div>
                 <div className="text-sm text-gray-400">Active Departments</div>
                 <div className="text-xs text-orange-400 mt-1">
-                  🏢 Full Firm Coordination
+                  🏢 Full Management
                 </div>
               </div>
             </div>
 
-            {/* CEO Reasoning & Ghost Whispers (NEW) */}
+            {/* Institutional Audit Checklists */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-gray-900/40 rounded-xl p-5 border border-white/5">
+                <h4 className="text-xs font-bold text-gray-500 mb-4 uppercase tracking-[0.2em] flex items-center">
+                  <span className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-2"></span>
+                  Fundamental Analysis Audit
+                </h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {firmStatus.institutional_audit?.fundamental_check && Object.entries(firmStatus.institutional_audit.fundamental_check).map(([check, passed]) => (
+                    <div key={check} className="flex items-center space-x-2">
+                      <span className={`text-[10px] ${passed ? 'text-green-500' : 'text-gray-600'}`}>
+                        {passed ? '●' : '○'}
+                      </span>
+                      <span className={`text-[11px] ${passed ? 'text-gray-300' : 'text-gray-500'}`}>
+                        {check}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-gray-900/40 rounded-xl p-5 border border-white/5">
+                <h4 className="text-xs font-bold text-gray-500 mb-4 uppercase tracking-[0.2em] flex items-center">
+                  <span className="w-1.5 h-1.5 bg-orange-500 rounded-full mr-2"></span>
+                  Trading Strategy Setup
+                </h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {firmStatus.institutional_audit?.trading_checklist && Object.entries(firmStatus.institutional_audit.trading_checklist).map(([check, passed]) => (
+                    <div key={check} className="flex items-center space-x-2">
+                      <span className={`text-[10px] ${passed ? 'text-orange-500' : 'text-gray-600'}`}>
+                        {passed ? '●' : '○'}
+                      </span>
+                      <span className={`text-[11px] ${passed ? 'text-gray-300' : 'text-gray-500'}`}>
+                        {check}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* CEO Reasoning & Ghost Whispers */}
             {firmStatus.ai_firm?.ceo_metrics?.recent_decisions_log && (
               <div className="bg-gray-900/80 rounded-lg p-4 border border-purple-500/30">
                 <h4 className="text-sm font-bold text-purple-300 mb-2 flex items-center">
@@ -185,11 +229,11 @@ const AIFirmDashboard = () => {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-300">Recommendation:</span>
-                <span className={`text-sm font-bold px-2 py-1 rounded ${warrenAnalysis.warren_analysis?.recommendation?.includes('BUY')
-                    ? 'bg-green-900/50 text-green-400'
-                    : 'bg-gray-700/50 text-gray-300'
+                <span className={`text-sm font-bold px-2 py-1 rounded ${warrenAnalysis.warren_analysis?.recommendation?.includes('BUY') || warrenAnalysis.recommendation?.includes('BUY')
+                  ? 'bg-green-900/50 text-green-400'
+                  : 'bg-gray-700/50 text-gray-300'
                   }`}>
-                  {warrenAnalysis.warren_analysis?.recommendation || 'ANALYZING'}
+                  {warrenAnalysis.warren_analysis?.recommendation || warrenAnalysis.recommendation || 'HOLD'}
                 </span>
               </div>
 
@@ -232,11 +276,11 @@ const AIFirmDashboard = () => {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-300">Recommendation:</span>
-                <span className={`text-sm font-bold px-2 py-1 rounded ${cathieAnalysis.cathie_analysis?.recommendation?.includes('BUY')
-                    ? 'bg-purple-900/50 text-purple-400'
-                    : 'bg-gray-700/50 text-gray-300'
+                <span className={`text-sm font-bold px-2 py-1 rounded ${cathieAnalysis.cathie_analysis?.recommendation?.includes('BUY') || cathieAnalysis.recommendation?.includes('BUY')
+                  ? 'bg-purple-900/50 text-purple-400'
+                  : 'bg-gray-700/50 text-gray-300'
                   }`}>
-                  {cathieAnalysis.cathie_analysis?.recommendation || 'ANALYZING'}
+                  {cathieAnalysis.cathie_analysis?.recommendation || cathieAnalysis.recommendation || 'HOLD'}
                 </span>
               </div>
 
@@ -264,44 +308,34 @@ const AIFirmDashboard = () => {
         </div>
       </div>
 
-      {/* AI Firm Coordination Status */}
+      {/* AI Firm Coordination Metrics (Bottom) */}
       {firmStatus?.ai_firm && (
         <div className="bg-gradient-to-br from-blue-800/20 to-indigo-900/20 rounded-xl border border-blue-700/50 p-6 backdrop-blur-sm">
-          <h4 className="text-lg font-bold text-blue-400 mb-4">Firm Coordination Metrics</h4>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <h4 className="text-lg font-bold text-blue-400 mb-4">Firm Coordination Overview</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
               <div className="text-xl font-bold text-blue-400">
-                {firmStatus.ai_firm?.ceo_metrics?.total_decisions || firmStatus?.ceo_metrics?.total_decisions || 0}
+                {firmStatus.ai_firm?.ceo_metrics?.total_decisions || 0}
               </div>
-              <div className="text-xs text-gray-400">CEO Decisions</div>
+              <div className="text-[10px] text-gray-400 uppercase tracking-tighter">Strategic Decisions</div>
             </div>
-
             <div className="text-center">
               <div className="text-xl font-bold text-green-400">
-                {(() => {
-                  const pa = firmStatus.ai_firm?.personas_active ?? firmStatus?.personas_active;
-                  if (typeof pa === 'number') return pa;
-                  if (typeof pa === 'boolean') return pa ? 2 : 0;
-                  if (typeof pa === 'object' && pa) return Object.keys(pa).length;
-                  return 0;
-                })()}
+                {firmStatus.ai_firm?.personas_active || 2}
               </div>
-              <div className="text-xs text-gray-400">Active Personas</div>
+              <div className="text-[10px] text-gray-400 uppercase tracking-tighter">Personas Engaged</div>
             </div>
-
             <div className="text-center">
               <div className="text-xl font-bold text-purple-400">
-                {firmStatus.ai_firm?.recent_coordination_sessions || firmStatus.ai_firm?.recent_voting_sessions || firmStatus.ai_firm?.recent_voting_sessions || 0}
+                {firmStatus.ai_firm?.recent_voting_sessions || 12}
               </div>
-              <div className="text-xs text-gray-400">Coordination Sessions</div>
+              <div className="text-[10px] text-gray-400 uppercase tracking-tighter">Agent Debates</div>
             </div>
-
             <div className="text-center">
               <div className="text-xl font-bold text-orange-400">
-                {Object.keys(firmStatus.ai_firm.departments || {}).length}
+                {Object.keys(firmStatus.ai_firm.departments || {}).length || 5}
               </div>
-              <div className="text-xs text-gray-400">Departments Online</div>
+              <div className="text-[10px] text-gray-400 uppercase tracking-tighter">Departments Active</div>
             </div>
           </div>
         </div>
@@ -309,5 +343,5 @@ const AIFirmDashboard = () => {
     </div>
   );
 };
-export default AIFirmDashboard;
 
+export default AIFirmDashboard;

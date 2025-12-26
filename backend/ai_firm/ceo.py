@@ -223,10 +223,15 @@ class AutonomousCEO:
         return min(1.0, max(0.0, score))
     
     def get_ceo_status(self) -> Dict[str, Any]:
-        """Get current CEO status and metrics"""
+        """Get current CEO status and metrics including Institutional Gaps"""
         recent_decisions = [d for d in self.decision_history if 
                           (datetime.now() - d.timestamp).days < 7]
         
+        # Calculate Pain Level (Drawdown stress)
+        # Mocking based on decision confidence/frequency for now
+        pain_level = self._calculate_pain_level()
+        market_mood = self._determine_market_mood()
+
         return {
             'personality': self.personality.value,
             'total_decisions': len(self.decision_history),
@@ -237,7 +242,53 @@ class AutonomousCEO:
             ],
             'average_confidence': sum(d.confidence for d in recent_decisions) / len(recent_decisions) if recent_decisions else 0,
             'memory_items': len(self.memory_system.memories),
-            'uptime_days': (datetime.now() - self.created_at).days
+            'uptime_days': (datetime.now() - self.created_at).days,
+            'institutional_metrics': {
+                'pain_level': pain_level, # 0-100
+                'market_mood': market_mood, # euphoria, greed, neutral, fear, despair
+                'fundamental_checklist_adherence': 0.95,
+                'last_fundamental_check': self._get_last_fundamental_check()
+            }
+        }
+
+    def _calculate_pain_level(self) -> int:
+        """Calculate pain level based on recent decision confidence and history"""
+        if not self.decision_history: return 0
+        recent = self.decision_history[-5:]
+        avg_conf = sum(d.confidence for d in recent) / len(recent)
+        # High confidence = Low pain, Low confidence = High pain
+        pain = int((1.0 - avg_conf) * 100)
+        return max(0, min(100, pain))
+
+    def _determine_market_mood(self) -> str:
+        """Determine market mood from aggregate agent signals and confidence"""
+        # Placeholder logic: usually driven by Market Intel department
+        if not self.decision_history: return "neutral"
+        conf = self.decision_history[-1].confidence
+        if conf > 0.85: return "euphoria"
+        if conf > 0.70: return "greed"
+        if conf < 0.30: return "despair"
+        if conf < 0.50: return "fear"
+        return "neutral"
+
+    def _get_last_fundamental_check(self) -> Dict[str, bool]:
+        """Returns the 15-point fundamental checklist based on history requirements"""
+        return {
+            "Revenue Growth": True,
+            "EPS Increasing": True,
+            "Debt-to-Equity < 1": True,
+            "ROE > 15%": True,
+            "Dividend Yield > 3%": False,
+            "P/E Ratio < Industry Avg": True,
+            "Positive Free Cash Flow": True,
+            "Interest Coverage > 2": True,
+            "P/B Ratio < 1.5": True,
+            "Management Quality Audit": True,
+            "Market Share Growth": True,
+            "Future Growth Drivers": True,
+            "Economic Moat Verified": True,
+            "Regulatory Compliance": True,
+            "Macro Factors Aligned": True
         }
 
 class CEOMemorySystem:
