@@ -108,14 +108,10 @@ const YantraDashboard = () => {
   }, [riskAnalytics.volatility]);
 
   return (
-        // DEBUG: Test if component renders
-    const [testVisible, setTestVisible] = useState(true);
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
             {/* DEBUG SECTION */}
       <div style={{ padding: '20px', backgroundColor: 'red', color: 'white', fontSize: '20px', fontWeight: 'bold', zIndex: 9999 }}>
         COMPONENT RENDERING - API DATA LOADING...
-      </div>
-      {/* Revolutionary Header */}
       <header className="border-b border-gray-700/50 bg-gray-900/80 backdrop-blur-xl">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
