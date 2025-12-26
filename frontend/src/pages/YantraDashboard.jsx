@@ -368,3 +368,5 @@ const YantraDashboard = () => {
   );
 };
 
+
+export default YantraDashboard;
