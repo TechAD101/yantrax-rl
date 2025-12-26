@@ -4,31 +4,34 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import './index.css'
 
-// Prevent console.error from breaking the app
-const originalError = console.error
-console.error = function(...args) {
+// Override console methods to prevent crashes from complex objects
+const originalConsoleError = console.error
+const originalConsoleWarn = console.warn
+
+const safeLog = (fn, ...args) => {
   try {
-    // Try to stringify complex objects safely
     const safeArgs = args.map(arg => {
-      if (typeof arg === 'object' && arg !== null) {
+      if (arg === null) return 'null'
+      if (arg === undefined) return 'undefined'
+      if (typeof arg === 'string') return arg
+      if (typeof arg === 'number' || typeof arg === 'boolean') return String(arg)
+      if (typeof arg === 'object') {
         try {
           return JSON.stringify(arg)
         } catch (e) {
-          return String(arg)
+          return '[Circular or Complex Object]'
         }
       }
-      return arg
+      return String(arg)
     })
-    originalError.apply(console, safeArgs)
+    fn(...safeArgs)
   } catch (e) {
-    // Silently fail if we can't log
-    try {
-      originalError('Error logging failed:', e.message)
-    } catch (e2) {
-      // Give up
-    }
+    // Silently fail - don't let logging break the app
   }
 }
+
+console.error = (...args) => safeLog(originalConsoleError, ...args)
+console.warn = (...args) => safeLog(originalConsoleWarn, ...args)
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
