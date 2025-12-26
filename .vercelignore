@@ -1,0 +1,8 @@
+requirements.txt
+server.py
+main.py
+*.py
+.git
+.gitignore
+node_modules
+frontend/node_modules
