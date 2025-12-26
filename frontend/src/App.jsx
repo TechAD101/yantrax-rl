@@ -23,4 +23,4 @@ function App() {
   );
 }
 
-export default () => <ErrorBoundary><App /></ErrorBoundary>
+export default App
