@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+
 import AIFirmDashboard from '../components/AIFirmDashboard';
-import AssetMonitor from '../components/AssetMonitor';
 import {
   getGodCycle,
   getJournal,
@@ -107,10 +106,11 @@ const YantraDashboard = () => {
     if (volatility < 0.15) return { regime: "LOW_VOL", color: "text-green-400", bg: "bg-green-900/20" };
     return { regime: "NORMAL", color: "text-blue-400", bg: "bg-blue-900/20" };
   }, [riskAnalytics.volatility]);
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
-        {/* Revolutionary Header */}
-        <header className="border-b border-gray-700/50 bg-gray-900/80 backdrop-blur-xl">
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
+      {/* Revolutionary Header */}
+      <header className="border-b border-gray-700/50 bg-gray-900/80 backdrop-blur-xl">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -329,7 +329,7 @@ const YantraDashboard = () => {
                   <h4 className="text-sm font-semibold text-gray-300 mb-3">Asset Monitor</h4>
                   <div className="grid grid-cols-2 gap-3">
                     {selectedAssets.map((asset) => (
-                      <AssetMonitor key={asset} symbol={asset} />
+                      <AssetCard key={asset} symbol={asset} />
                     ))}
                   </div>
                 </div>
@@ -346,9 +346,9 @@ const YantraDashboard = () => {
               />
               <AnalyticsCard
                 title="System RL Signal"
-        value="WAIT"
+                value="WAIT"
                 indicator="neutral"
-        subtext="Real-time RL signal monitoring"
+                subtext="Real-time RL signal monitoring"
               />
               <AnalyticsCard
                 title="Next Analysis"
@@ -456,7 +456,22 @@ const SignalCard = ({ signal }) => (
   </div>
 );
 
+const AssetCard = ({ symbol }) => {
+  // Simulated price data - in production, fetch real data
+  const mockPrice = (Math.random() * 1000 + 100).toFixed(2);
+  const mockChange = ((Math.random() - 0.5) * 10).toFixed(2);
+  const isPositive = parseFloat(mockChange) >= 0;
 
+  return (
+    <div className="bg-gray-900/40 rounded-lg p-3 border border-gray-700/20">
+      <div className="font-semibold text-sm text-gray-200 mb-1">{symbol}</div>
+      <div className="text-lg font-bold text-white">${mockPrice}</div>
+      <div className={`text-xs font-medium ${isPositive ? "text-green-400" : "text-red-400"}`}>
+        {isPositive ? "+" : ""}{mockChange} ({isPositive ? "+" : ""}{(mockChange/mockPrice*100).toFixed(2)}%)
+      </div>
+    </div>
+  );
+};
 
 const AnalyticsCard = ({ title, value, indicator, subtext }) => {
   const indicatorColors = {

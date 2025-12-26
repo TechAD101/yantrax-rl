@@ -175,18 +175,44 @@ class MarketDataService:
 
             try:
                 resp = requests.get(url, params=params, timeout=self.config.request_timeout)
+
+                # If FMP responds with a 403 and mentions legacy endpoints, try fallback v4 endpoint
+                if resp.status_code == 403 and 'Legacy Endpoint' in (resp.text or ''):
+                    logger.warning(f"⚠️ FMP 403 Legacy Endpoint for {symbols_csv}, attempting v4 endpoint as fallback")
+                    alt_url = f"https://financialmodelingprep.com/api/v4/quote/{symbols_csv}"
+                    resp = requests.get(alt_url, params=params, timeout=self.config.request_timeout)
+
+                # If still not OK, try the 'quote-short' endpoint which some keys allow
+                if not resp.ok:
+                    logger.info(f"ℹ️ Trying FMP quote-short endpoint as secondary fallback for {symbols_csv}")
+                    alt_url = f"https://financialmodelingprep.com/api/v3/quote-short/{symbols_csv}"
+                    resp = requests.get(alt_url, params=params, timeout=self.config.request_timeout)
+
+                # Final fallback for single-symbol requests: stock real-time price
+                if not resp.ok and len(chunk) == 1:
+                    single = chunk[0]
+                    rt_url = f"https://financialmodelingprep.com/api/v3/stock/real-time-price/{single}"
+                    resp = requests.get(rt_url, params=params, timeout=self.config.request_timeout)
+
                 resp.raise_for_status()
                 data = resp.json()
 
-                if not isinstance(data, list):
+                # Normalize responses which might be single-object or list
+                payload_rows = data if isinstance(data, list) else (data.get('symbol') and [data]) or data.get('quote') or []
+
+                if not isinstance(payload_rows, list):
                     logger.warning(f"⚠️ Unexpected FMP payload for {symbols_csv}: {type(data)}")
                     continue
 
-                for row in data:
+                for row in payload_rows:
                     sym = row.get('symbol', '').upper()
                     if not sym:
+                        # real-time-price endpoint returns {symbol, price}
+                        sym = row.get('ticker', '') or row.get('symbol', '')
+                        sym = sym.upper() if sym else ''
+                    if not sym:
                         continue
-                    price = row.get('price')
+                    price = row.get('price') or row.get('realTimePrice') or row.get('close')
                     try:
                         price_val = None if price is None else round(float(price), 2)
                     except (ValueError, TypeError):

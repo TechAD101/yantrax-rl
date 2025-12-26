@@ -126,15 +126,11 @@ try:
         logger.info("\n🔨 CREATING MarketDataConfig (FMP-only)...")
 
         config = MarketDataConfig(
-            alpha_vantage_key=alpha_key if alpha_key else 'demo',
-            alpaca_key=alpaca_key if alpaca_key else None,
-            alpaca_secret=alpaca_secret if alpaca_secret else None,
-            polygon_key=None,
-            finnhub_key=None,
-            cache_ttl_seconds=60,
-            rate_limit_calls=25,
-            rate_limit_period=86400,
-            fallback_to_mock=False
+            fmp_api_key=fmp_key,
+            cache_ttl_seconds=5,
+            rate_limit_calls=300,
+            rate_limit_period=60,
+            batch_size=50
         )
 
         logger.info(f"  Config created:")
@@ -312,20 +308,38 @@ else:
 
 
 def unified_get_market_price(symbol: str) -> Dict[str, Any]:
-    """Get current market price for a symbol using configured provider (FMP-only).
+    """Get current market price for a symbol using configured provider (FMP-first).
 
-    Returns an error payload if the provider is unavailable or fails.
+    If FMP fails or returns no usable price, attempt Massive (polygon) as a fallback
+    if `MASSIVE_API_KEY` is configured.
     """
     symbol = symbol.upper()
 
+    # 1) Attempt primary FMP provider (via MarketDataService)
     if MARKET_SERVICE_READY and market_data:
         try:
-            # MarketDataService.get_stock_price uses FMP batch endpoint under the hood
-            return market_data.get_stock_price(symbol)
+            res = market_data.get_stock_price(symbol)
+            if res and res.get('price') and res.get('price') > 0:
+                return res
+            logger.warning(f"FMP returned no usable price for {symbol}: {res}")
         except Exception as e:
             logger.error(f"MarketDataService lookup failed for {symbol}: {e}")
 
-    # No providers available or call failed
+    # 2) Fallback: Massive / Polygon if configured
+    massive_key = os.getenv('MASSIVE_API_KEY') or os.getenv('POLYGON_API_KEY') or os.getenv('POLYGON_KEY')
+    if massive_key:
+        try:
+            msvc = MassiveMarketDataService(api_key=massive_key, base_url=os.getenv('MASSIVE_BASE_URL'))
+            data = msvc.fetch_quote(symbol)
+            if data and data.get('price'):
+                logger.info(f"✅ MASSIVE provider success for {symbol}: {data.get('price')}")
+                return data
+            else:
+                logger.warning(f"MASSIVE returned no usable price for {symbol}: {data}")
+        except Exception as e:
+            logger.error(f"MASSIVE provider lookup failed for {symbol}: {e}")
+
+    # 3) No providers available or call failed
     return {
         'error': 'no_market_data',
         'message': 'No market data providers available or all providers failed',
@@ -731,16 +745,52 @@ def test_fmp():
         logger.info(f"  FMP Key (first 10): {fmp_key[:10] if fmp_key else 'NONE'}")
         logger.info(f"  Making request to FMP (quote endpoint)...")
 
-        url = f"https://financialmodelingprep.com/api/v3/quote/{symbol}"
         params = {'apikey': fmp_key}
 
-        logger.info(f"  URL: {url}")
-        logger.info(f"  Params: {list(params.keys())}")
-
-        response = requests.get(url, params=params, timeout=10)
-
+        # Try v3 quote endpoint first
+        url_v3 = f"https://financialmodelingprep.com/api/v3/quote/{symbol}"
+        logger.info(f"  Trying v3 URL: {url_v3}")
+        response = requests.get(url_v3, params=params, timeout=10)
         logger.info(f"  Status: {response.status_code}")
         logger.info(f"  Response: {response.text[:200]}")
+
+        # If 403 with Legacy Endpoint message, try v4
+        if response.status_code == 403 and 'Legacy Endpoint' in (response.text or ''):
+            url_v4 = f"https://financialmodelingprep.com/api/v4/quote/{symbol}"
+            logger.warning(f"  FMP v3 legacy detected; trying v4 URL: {url_v4}")
+            response = requests.get(url_v4, params=params, timeout=10)
+            logger.info(f"  v4 Status: {response.status_code}")
+            logger.info(f"  v4 Response: {response.text[:200]}")
+
+        # If still not ok, try quote-short
+        if not response.ok:
+            url_qs = f"https://financialmodelingprep.com/api/v3/quote-short/{symbol}"
+            logger.info(f"  Trying quote-short URL: {url_qs}")
+            response = requests.get(url_qs, params=params, timeout=10)
+            logger.info(f"  quote-short Status: {response.status_code}")
+            logger.info(f"  quote-short Response: {response.text[:200]}")
+
+        # As a final single-symbol fallback, try real-time price
+        if not response.ok:
+            url_rt = f"https://financialmodelingprep.com/api/v3/stock/real-time-price/{symbol}"
+            logger.info(f"  Trying real-time URL: {url_rt}")
+            response = requests.get(url_rt, params=params, timeout=10)
+            logger.info(f"  real-time Status: {response.status_code}")
+            logger.info(f"  real-time Response: {response.text[:200]}")
+
+        # If FMP returned non-2xx, treat as error so callers get a clear failure
+        if not response.ok:
+            try:
+                payload = response.json()
+            except Exception:
+                payload = {'error': 'invalid_response', 'text': response.text}
+            return jsonify({
+                'status': 'error',
+                'symbol': symbol,
+                'response_status': response.status_code,
+                'response': payload,
+                'timestamp': datetime.now().isoformat()
+            }), response.status_code
 
         return jsonify({
             'status': 'success',
@@ -756,7 +806,7 @@ def test_fmp():
             'message': str(e),
             'symbol': symbol,
             'timestamp': datetime.now().isoformat()
-        })
+        }), 500
 
 @app.route('/market-price-stream', methods=['GET'])
 def market_price_stream():
@@ -821,8 +871,15 @@ def massive_quote():
         return jsonify({'status': 'error', 'message': 'symbol query parameter is required'}), 400
 
     try:
-        # Instantiate with env var if present
-        msvc = MassiveMarketDataService(api_key=os.getenv('MASSIVE_API_KEY'))
+        # Allow using POLYGON_* env var aliases or explicit MASSIVE_API_KEY
+        massive_key = os.getenv('MASSIVE_API_KEY') or os.getenv('POLYGON_API_KEY') or os.getenv('POLYGON_KEY')
+        base_url = os.getenv('MASSIVE_BASE_URL')
+        if not massive_key:
+            logger.error('MASSIVE/POLYGON API key not configured')
+            return jsonify({'status': 'error', 'message': 'MASSIVE/POLYGON API key not configured'}), 400
+
+        logger.info(f"Using Massive provider key (first 8 chars): {massive_key[:8]}")
+        msvc = MassiveMarketDataService(api_key=massive_key, base_url=base_url)
         data = msvc.fetch_quote(symbol)
         return jsonify({'status': 'success', 'symbol': symbol, 'data': data, 'timestamp': datetime.now().isoformat()})
     except Exception as e:
