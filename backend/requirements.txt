@@ -16,4 +16,8 @@ numpy==1.26.4
 # but we can list it if we want to pin version. Let's let yfinance decide.
 
 # Market Data
-yfinance
+
+# AI Firm / RAG Dependencies
+chromadb==0.4.15
+pydantic==2.4.2
+

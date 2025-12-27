@@ -66,12 +66,22 @@ logger.info("="*80)
 # Log all environment variables
 logger.info("📋 ENVIRONMENT VARIABLES CHECK:")
 
+
 def _get_fmp_key() -> str:
     """Return the FinancialModelingPrep key from commonly used env var names."""
     return (
         os.getenv('FMP_API_KEY') or
         os.getenv('FMP_KEY') or
         os.getenv('FMP') or
+        ''
+    )
+
+def _get_alpha_vantage_key() -> str:
+    """Return the Alpha Vantage key from commonly used env var names."""
+    return (
+        os.getenv('ALPHAVANTAGE_API_KEY') or
+        os.getenv('ALPHA_VANTAGE_KEY') or
+        os.getenv('ALPHA_VANTAGE') or
         ''
     )
 
@@ -151,6 +161,7 @@ logger.info("="*80 + "\n")
 
 # AI Firm imports with enhanced error handling
 AI_FIRM_READY = False
+RL_ENV_READY = False # Initialize explicitly
 PERSONA_REGISTRY = None
 KNOWLEDGE_BASE = None
 TRADE_VALIDATOR = None
@@ -183,6 +194,7 @@ try:
     rl_env = MarketSimEnv()
     
     AI_FIRM_READY = True
+    RL_ENV_READY = True
     logger.info("✅ AI FIRM & RL CORE FULLY OPERATIONAL")
     logger.info(f"✅ PersonaRegistry initialized with {len(PERSONA_REGISTRY.get_all_personas())} personas")
     logger.info(f"✅ Knowledge Base initialized with {KNOWLEDGE_BASE.get_statistics()['total_items']} items")
