@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+
 import AIFirmDashboard from '../components/AIFirmDashboard';
-import AssetMonitor from '../components/AssetMonitor';
 import {
   getGodCycle,
   getJournal,
@@ -107,10 +106,10 @@ const YantraDashboard = () => {
     if (volatility < 0.15) return { regime: "LOW_VOL", color: "text-green-400", bg: "bg-green-900/20" };
     return { regime: "NORMAL", color: "text-blue-400", bg: "bg-blue-900/20" };
   }, [riskAnalytics.volatility]);
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
-        {/* Revolutionary Header */}
-        <header className="border-b border-gray-700/50 bg-gray-900/80 backdrop-blur-xl">
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
+      <header className="border-b border-gray-700/50 bg-gray-900/80 backdrop-blur-xl">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -329,7 +328,7 @@ const YantraDashboard = () => {
                   <h4 className="text-sm font-semibold text-gray-300 mb-3">Asset Monitor</h4>
                   <div className="grid grid-cols-2 gap-3">
                     {selectedAssets.map((asset) => (
-                      <AssetMonitor key={asset} symbol={asset} />
+                      <AssetCard key={asset} symbol={asset} />
                     ))}
                   </div>
                 </div>
@@ -346,9 +345,9 @@ const YantraDashboard = () => {
               />
               <AnalyticsCard
                 title="System RL Signal"
-        value="WAIT"
+                value="WAIT"
                 indicator="neutral"
-        subtext="Real-time RL signal monitoring"
+                subtext="Real-time RL signal monitoring"
               />
               <AnalyticsCard
                 title="Next Analysis"
@@ -369,110 +368,5 @@ const YantraDashboard = () => {
   );
 };
 
-// Component Library (preserved from original)
-const AgentCard = ({ agent, status }) => {
-  const agentNames = {
-    macroMonk: "Macro Monk",
-    theGhost: "The Ghost", 
-    dataWhisperer: "Data Whisperer",
-    degenAuditor: "Degen Auditor"
-  };
-
-  const agentColors = {
-    macroMonk: "from-blue-500 to-cyan-500",
-    theGhost: "from-purple-500 to-pink-500",
-    dataWhisperer: "from-green-500 to-emerald-500", 
-    degenAuditor: "from-orange-500 to-red-500"
-  };
-
-  return (
-    <div className="bg-gray-900/60 rounded-lg p-4 border border-gray-700/30 hover:border-gray-600/50 transition-all">
-      <div className="flex items-center justify-between mb-2">
-        <h4 className="font-semibold text-sm text-gray-200">{agentNames[agent]}</h4>
-        <div className={`w-2 h-2 rounded-full ${
-          status?.status === "ACTIVE" ? "bg-green-400" : 
-          status?.status === "PROCESSING" ? "bg-yellow-400 animate-pulse" : "bg-blue-400"
-        }`}></div>
-      </div>
-      <div className="space-y-2">
-        <div className="flex justify-between text-xs">
-          <span className="text-gray-400">Confidence</span>
-          <span className="text-white font-medium">{(status?.confidence * 100)?.toFixed(0)}%</span>
-        </div>
-        <div className="w-full bg-gray-700/50 rounded-full h-1">
-          <div 
-            className={`h-1 rounded-full bg-gradient-to-r ${agentColors[agent]}`}
-            style={{ width: `${(status?.confidence * 100) || 0}%` }}
-          ></div>
-        </div>
-        <div className="text-xs text-gray-300">
-          {status?.signal || status?.analysis || status?.audit || "Monitoring"}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const RiskMetric = ({ label, value, level }) => {
-  const levelColors = {
-    low: "text-green-400",
-    medium: "text-yellow-400", 
-    high: "text-red-400"
-  };
-
-  return (
-    <div className="flex justify-between items-center">
-      <span className="text-sm text-gray-400">{label}</span>
-      <span className={`text-sm font-medium ${levelColors[level]}`}>{value}</span>
-    </div>
-  );
-};
-
-const PerformanceMetric = ({ label, value, positive }) => (
-  <div className="flex justify-between items-center">
-    <span className="text-sm text-gray-400">{label}</span>
-    <span className={`text-sm font-medium ${positive ? "text-green-400" : "text-red-400"}`}>
-      {value}
-    </span>
-  </div>
-);
-
-const SignalCard = ({ signal }) => (
-  <div className="bg-gray-900/40 rounded-lg p-3 border border-gray-700/20">
-    <div className="flex items-center justify-between mb-1">
-      <span className={`text-xs font-bold px-2 py-1 rounded ${
-        signal.signal === "BUY" || signal.signal.includes("BUY") ? "bg-green-900/50 text-green-400" :
-        signal.signal === "SELL" || signal.signal.includes("SELL") ? "bg-red-900/50 text-red-400" :
-        "bg-gray-700/50 text-gray-400"
-      }`}>
-        {signal.signal}
-      </span>
-      <span className="text-xs text-gray-500">
-        {new Date(signal.timestamp).toLocaleTimeString()}
-      </span>
-    </div>
-    <div className="text-xs text-gray-300 mb-1">{signal.asset}</div>
-    <div className="text-xs text-gray-400">Confidence: {(signal.confidence * 100).toFixed(0)}%</div>
-  </div>
-);
-
-
-
-const AnalyticsCard = ({ title, value, indicator, subtext }) => {
-  const indicatorColors = {
-    positive: "border-green-500/50 bg-green-900/20",
-    negative: "border-red-500/50 bg-red-900/20", 
-    neutral: "border-yellow-500/50 bg-yellow-900/20",
-    info: "border-blue-500/50 bg-blue-900/20"
-  };
-
-  return (
-    <div className={`rounded-xl p-4 border ${indicatorColors[indicator]} backdrop-blur-sm`}>
-      <h4 className="text-sm font-medium text-gray-300 mb-2">{title}</h4>
-      <div className="text-xl font-bold text-white mb-1">{value}</div>
-      <div className="text-xs text-gray-400">{subtext}</div>
-    </div>
-  );
-};
 
 export default YantraDashboard;
