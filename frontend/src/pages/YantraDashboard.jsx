@@ -1,5 +1,11 @@
 
+import React, { useState, useEffect, useMemo } from 'react'
 import AIFirmDashboard from '../components/AIFirmDashboard';
+import AIAgentDashboard from '../components/AIAgentDashboard';
+import TradingSignals from '../components/TradingSignals';
+import AssetMonitor from '../components/AssetMonitor';
+import RiskDashboard from '../components/RiskDashboard';
+import PerformanceTracker from '../components/PerformanceTracker';
 import {
   getGodCycle,
   getJournal,
@@ -7,6 +13,49 @@ import {
   runRLCycle,
   getMarketPrice,
 } from "../api/api";
+
+// Lightweight local UI primitives (fallbacks to avoid rendering crashes if dedicated components are missing)
+const AgentCard = ({ agent, status }) => (
+  <div className="agent-card p-3">
+    <div className="flex justify-between items-center">
+      <div>
+        <div className="text-sm font-semibold text-white">{agent}</div>
+        <div className="text-xs text-gray-400">{status?.status || 'N/A'}</div>
+      </div>
+      <div className="text-sm text-green-300">{status?.confidence ? `${(status.confidence*100).toFixed(0)}%` : '—'}</div>
+    </div>
+  </div>
+)
+
+const RiskMetric = ({ label, value }) => (
+  <div className="p-3 bg-gray-900/40 rounded">
+    <div className="text-xs text-gray-400">{label}</div>
+    <div className="font-bold text-white">{value || '—'}</div>
+  </div>
+)
+
+const PerformanceMetric = ({ label, value }) => (
+  <div className="p-3 bg-gray-900/40 rounded">
+    <div className="text-xs text-gray-400">{label}</div>
+    <div className="font-bold text-white">{value || '—'}</div>
+  </div>
+)
+
+const SignalCard = ({ signal }) => (
+  <div className="p-3 bg-gray-900/30 rounded">{signal.signal} <span className="text-xs text-gray-400">{signal.timestamp}</span></div>
+)
+
+const AssetCard = ({ symbol }) => (
+  <AssetMonitor symbol={symbol} />
+)
+
+const AnalyticsCard = ({ title, value, subtext }) => (
+  <div className="p-4 bg-gray-900/40 rounded">
+    <div className="text-sm text-gray-400">{title}</div>
+    <div className="font-bold text-white">{value}</div>
+    <div className="text-xs text-gray-500">{subtext}</div>
+  </div>
+)
 
 const YantraDashboard = () => {
   // Enhanced State Management
@@ -22,6 +71,7 @@ const YantraDashboard = () => {
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [activeTab, setActiveTab] = useState("overview"); // New tab state
   const [rlCycleData, setRlCycleData] = useState(null);
+  const [renderError, setRenderError] = useState(null)
   // Multi-Asset Market Data
   const ASSET_UNIVERSE = {
     "Stocks": ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "AMZN", "META"],
@@ -107,72 +157,75 @@ const YantraDashboard = () => {
     return { regime: "NORMAL", color: "text-blue-400", bg: "bg-blue-900/20" };
   }, [riskAnalytics.volatility]);
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
-      <header className="border-b border-gray-700/50 bg-gray-900/80 backdrop-blur-xl">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse"></div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                  YantraX RL
-                </h1>
-                <span className="text-xs text-gray-400 font-mono">v4.0.0</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <span className="text-xs text-gray-400">System:</span>
-                <span className={`text-xs font-semibold ${
-                  systemHealth === "OPERATIONAL" ? "text-green-400" : "text-yellow-400"
-                }`}>
-                  {systemHealth}
-                </span>
-              </div>
-            </div>
+  try {
+    if (renderError) throw renderError
 
-            <div className="flex items-center space-x-6">
-              {/* Market Regime Indicator */}
-              <div className={`px-3 py-1 rounded-full ${marketRegime.bg} border border-gray-600/50`}>
-                <span className={`text-xs font-semibold ${marketRegime.color}`}>
-                  {marketRegime.regime}
-                </span>
-              </div>
-
-              {/* Portfolio Summary */}
-              <div className="flex items-center space-x-4 text-sm">
-                <div className="text-center">
-                  <div className="text-gray-400 text-xs">Portfolio</div>
-                  <div className="font-bold text-green-400">
-                    ${portfolioMetrics.totalValue?.toLocaleString()}
-                  </div>
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
+        <header className="border-b border-gray-700/50 bg-gray-900/80 backdrop-blur-xl">
+          <div className="px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse"></div>
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+                    YantraX RL
+                  </h1>
+                  <span className="text-xs text-gray-400 font-mono">v4.0.0</span>
                 </div>
-                <div className="text-center">
-                  <div className="text-gray-400 text-xs">P&L</div>
-                  <div className={`font-bold ${
-                    portfolioMetrics.dailyPnL >= 0 ? "text-green-400" : "text-red-400"
+                <div className="flex items-center space-x-1">
+                  <span className="text-xs text-gray-400">System:</span>
+                  <span className={`text-xs font-semibold ${
+                    systemHealth === "OPERATIONAL" ? "text-green-400" : "text-yellow-400"
                   }`}>
-                    {portfolioMetrics.dailyPnL >= 0 ? "+" : ""}
-                    {portfolioMetrics.dailyPnL?.toFixed(2)}
-                  </div>
-                </div>
-                <div className="text-center">
-                  <div className="text-gray-400 text-xs">Sharpe</div>
-                  <div className="font-bold text-cyan-400">
-                    {portfolioMetrics.sharpeRatio?.toFixed(2)}
-                  </div>
+                    {systemHealth}
+                  </span>
                 </div>
               </div>
 
-              {/* Last Update */}
-              <div className="text-xs text-gray-400">
-                Updated: {lastUpdate.toLocaleTimeString()}
+              <div className="flex items-center space-x-6">
+                {/* Market Regime Indicator */}
+                <div className={`px-3 py-1 rounded-full ${marketRegime.bg} border border-gray-600/50`}>
+                  <span className={`text-xs font-semibold ${marketRegime.color}`}>
+                    {marketRegime.regime}
+                  </span>
+                </div>
+
+                {/* Portfolio Summary */}
+                <div className="flex items-center space-x-4 text-sm">
+                  <div className="text-center">
+                    <div className="text-gray-400 text-xs">Portfolio</div>
+                    <div className="font-bold text-green-400">
+                      ${portfolioMetrics.totalValue?.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-gray-400 text-xs">P&L</div>
+                    <div className={`font-bold ${
+                      portfolioMetrics.dailyPnL >= 0 ? "text-green-400" : "text-red-400"
+                    }`}>
+                      {portfolioMetrics.dailyPnL >= 0 ? "+" : ""}
+                      {portfolioMetrics.dailyPnL?.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-gray-400 text-xs">Sharpe</div>
+                    <div className="font-bold text-cyan-400">
+                      {portfolioMetrics.sharpeRatio?.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Last Update */}
+                <div className="text-xs text-gray-400">
+                  Updated: {lastUpdate.toLocaleTimeString()}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6">
         {/* Navigation Tabs */}
         <div className="flex items-center justify-between">
           <div className="flex space-x-2">
