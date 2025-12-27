@@ -45,6 +45,8 @@ const fetchWithRetry = async (url, options = {}, retries = MAX_RETRIES) => {
 };
 
 
+// Backwards-compatible status endpoint used by Header.subscribeToUpdates('getStatus')
+export const getStatus = () => fetchWithRetry(`${BASE_URL}/`);
 
 // Real-time data subscription helper
 export const subscribeToUpdates = (endpoint, callback, interval = UPDATE_INTERVAL) => {
