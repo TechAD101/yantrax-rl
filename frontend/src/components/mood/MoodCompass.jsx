@@ -31,17 +31,20 @@ const MoodCompass = () => {
     // Institutional: (20, 100) -> Left
 
     const getPoint = (value, angle) => {
-        const radius = (value / 100) * 80;
+        const val = typeof value === 'number' ? value : 0;
+        const radius = (val / 100) * 80;
         const radian = (angle - 90) * (Math.PI / 180);
         const x = 100 + radius * Math.cos(radian);
         const y = 100 + radius * Math.sin(radian);
         return `${x},${y}`;
     };
 
-    const p1 = getPoint(data.volatility, 0);   // Top
-    const p2 = getPoint(data.liquidity, 90);   // Right
-    const p3 = getPoint(data.retail, 180);     // Bottom
-    const p4 = getPoint(data.institutional, 270); // Left
+    if (!data) return null; // Defensive return
+
+    const p1 = getPoint(data?.volatility || 0, 0);   // Top
+    const p2 = getPoint(data?.liquidity || 0, 90);   // Right
+    const p3 = getPoint(data?.retail || 0, 180);     // Bottom
+    const p4 = getPoint(data?.institutional || 0, 270); // Left
 
     const polygonPoints = `${p1} ${p2} ${p3} ${p4}`;
 
