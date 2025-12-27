@@ -419,7 +419,13 @@ const YantraDashboard = () => {
       </div>
     </div>
   );
+  } catch (e) {
+    console.error('Render error:', e);
+    setRenderError(e);
+    return (
+      <div className="p-4 text-red-300">UI render error: {String(e)}</div>
+    );
+  }
 };
-
 
 export default YantraDashboard;
