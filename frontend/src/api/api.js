@@ -162,6 +162,22 @@ export const getMarketPrice = async (symbol = 'AAPL') => {
   }
 };
 
+// Portfolio endpoint used by the dashboard and real-time subscriptions
+export const getPortfolio = async () => {
+  try {
+    const r = await fetch(`${BASE_URL}/portfolio`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.json();
+  } catch (e) {
+    console.error('Portfolio fetch failed:', e);
+    // Return a safe minimal shape expected by the UI
+    return { total_value: 0, daily_pnl: 0, total_return: 0, total_positions: 0, positions: [], recent_trades: [] };
+  }
+};
+
+// Backwards-compatible alias for earlier naming
+export const getTradingJournal = getJournal;
+
 export const streamMarketPrice = ({ symbol = 'AAPL', interval = 5, count = 0, onMessage = null, onOpen = null, onError = null } = {}) => {
   if (!symbol) throw new Error('streamMarketPrice requires a symbol');
   const normalizedBase = (BASE_URL || '').replace(/\/$/, '');
