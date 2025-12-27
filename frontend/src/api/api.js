@@ -1,12 +1,13 @@
-// YantraX API Client v4.1.0
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://yantrax-api.onrender.com';
+// YantraX API Client v4.2.0 (Consolidated)
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://yantrax-backend.onrender.com';
 const UPDATE_INTERVAL = 15000; // 15 seconds
 
-// Retry configuration
+// Export BASE_URL so UI components can reuse the same resolved backend URL
+export { BASE_URL };
+
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
-// Error types
 export const ERROR_TYPES = {
   NETWORK: 'NETWORK_ERROR',
   API: 'API_ERROR',
@@ -31,7 +32,7 @@ const fetchWithRetry = async (url, options = {}, retries = MAX_RETRIES) => {
     return await response.json();
   } catch (error) {
     if (retries > 0) {
-      await new Promise(resolve => 
+      await new Promise(resolve =>
         setTimeout(resolve, RETRY_DELAY * (MAX_RETRIES - retries + 1))
       );
       return fetchWithRetry(url, options, retries - 1);
@@ -40,206 +41,11 @@ const fetchWithRetry = async (url, options = {}, retries = MAX_RETRIES) => {
   }
 };
 
-// API Endpoints
-export const api = {
-  // System Status
-  getStatus: () => fetchWithRetry(`${API_BASE_URL}/`),
-  
-  // AI Firm
-  getAiFirmStatus: () => fetchWithRetry(`${API_BASE_URL}/api/ai-firm/status`),
-  getGodCycle: () => fetchWithRetry(`${API_BASE_URL}/god-cycle`),
-  
-  // Trading & Analysis
-  getMarketPrice: (symbol) => 
-    fetchWithRetry(`${API_BASE_URL}/market-price?symbol=${symbol}`),
-  getPortfolio: () => fetchWithRetry(`${API_BASE_URL}/portfolio`),
-  getTradingJournal: () => fetchWithRetry(`${API_BASE_URL}/journal`),
-  
-  // Personas
-  getWarrenAnalysis: () => 
-    fetchWithRetry(`${API_BASE_URL}/api/ai-firm/personas/warren`),
-  getCathieAnalysis: () => 
-    fetchWithRetry(`${API_BASE_URL}/api/ai-firm/personas/cathie`),
-  
-  // Performance & Risk
-  getRiskMetrics: () => fetchWithRetry(`${API_BASE_URL}/risk-metrics`),
-  getPerformance: () => fetchWithRetry(`${API_BASE_URL}/performance`),
-  
-  // Utilities
-  getCommentary: () => fetchWithRetry(`${API_BASE_URL}/commentary`),
-  runTradingCycle: () => 
-    fetchWithRetry(`${API_BASE_URL}/run-cycle`, { method: 'POST' })
-};
+// --- API Methods ---
 
-// Real-time data subscription
-export const subscribeToUpdates = (endpoint, callback, interval = UPDATE_INTERVAL) => {
-  const fetch = () => {
-    api[endpoint]()
-      .then(callback)
-      .catch(error => console.error(`Update error (${endpoint}):`, error));
-  };
+export const getStatus = () => fetchWithRetry(`${BASE_URL}/`);
 
-  fetch(); // Initial fetch
-  const timer = setInterval(fetch, interval);
-  
-  // Return cleanup function
-  return () => clearInterval(timer);
-};
-
-export default api;
-// src/api/api.js - Enhanced API with Multi-Asset Support
-// Use Vite env if available, fall back to other env vars and a sensible default.
-const BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL)
-  ? import.meta.env.VITE_API_URL
-  : (process.env.VITE_API_URL || process.env.REACT_APP_API_URL || "https://yantrax-backend.onrender.com");
-
-// Export BASE_URL so UI components can reuse the same resolved backend URL
-export { BASE_URL };
-
-// Enhanced market data fetching with multiple assets
-export const getMultiAssetData = async (symbols = ["AAPL", "MSFT", "GOOGL", "TSLA"]) => {
-  try {
-    const promises = symbols.map(symbol => 
-      fetch(`${BASE_URL}/market-price?symbol=${symbol}&analysis=true`)
-        .then(res => res.json())
-        .catch(err => ({ symbol, error: err.message }))
-    );
-
-    const results = await Promise.all(promises);
-    return results.reduce((acc, result) => {
-      if (!result.error) {
-        acc[result.symbol] = result;
-      }
-      return acc;
-    }, {});
-  } catch (error) {
-    console.error("Multi-asset data fetch failed:", error);
-    return {};
-  }
-};
-
-// Enhanced RL cycle with comprehensive data
-export const runAdvancedRLCycle = async (config = {}) => {
-  try {
-    const response = await fetch(`${BASE_URL}/run-cycle`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        symbol: config.symbol || "AAPL",
-        strategy_weights: config.strategyWeights || {},
-        risk_parameters: config.riskParams || {}
-      })
-    });
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
-  } catch (error) {
-    console.error("Advanced RL cycle failed:", error);
-    throw error;
-  }
-};
-
-// Get comprehensive system health
-export const getSystemHealth = async () => {
-  try {
-    const response = await fetch(`${BASE_URL}/health`);
-    if (response.ok) {
-      return await response.json();
-    } else {
-      // Fallback to basic health check
-      const basicResponse = await fetch(`${BASE_URL}/`);
-      return { 
-        status: basicResponse.ok ? "healthy" : "degraded",
-        services: { basic: "operational" }
-      };
-    }
-  } catch (error) {
-    return { status: "error", error: error.message };
-  }
-};
-
-// Get advanced analytics
-export const getAdvancedAnalytics = async () => {
-  try {
-    const [journal, commentary, marketStats] = await Promise.allSettled([
-      getJournal(),
-      getCommentary(), 
-      fetch(`${BASE_URL}/market-stats?anomalies=true`).then(r => r.json())
-    ]);
-
-    return {
-      trading: journal.status === 'fulfilled' ? journal.value : [],
-      commentary: commentary.status === 'fulfilled' ? commentary.value : [],
-      market: marketStats.status === 'fulfilled' ? marketStats.value : {}
-    };
-  } catch (error) {
-    console.error("Advanced analytics fetch failed:", error);
-    return { trading: [], commentary: [], market: {} };
-  }
-};
-
-// Portfolio optimization endpoint
-export const optimizePortfolio = async (assets, constraints = {}) => {
-  try {
-    const response = await fetch(`${BASE_URL}/optimize-portfolio`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ assets, constraints })
-    });
-
-    if (response.ok) {
-      return await response.json();
-    } else {
-      // No mock fallback: signal failure to caller
-      throw new Error(`Optimization API returned status ${response.status}`);
-    }
-  } catch (error) {
-    console.error("Portfolio optimization failed:", error);
-    return null;
-  }
-};
-
-// Existing API functions (enhanced with better error handling)
-export const getJournal = async () => {
-  try {
-    const response = await fetch(`${BASE_URL}/journal`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
-    return Array.isArray(data) ? data : data.entries || [];
-  } catch (error) {
-    console.error("Journal fetch failed:", error);
-    return [];
-  }
-};
-
-export const getCommentary = async () => {
-  try {
-    const response = await fetch(`${BASE_URL}/commentary`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
-    return Array.isArray(data) ? data : data.commentary || [];
-  } catch (error) {
-    console.error("Commentary fetch failed:", error);
-    return [];
-  }
-};
-
-// Enhanced RL cycle that uses god-cycle for better data
-export const runRLCycle = async (config = {}) => {
-  try {
-    // Try god-cycle first for richer data
-    const response = await fetch(`${BASE_URL}/god-cycle`);
-    if (!response.ok) {
-      // Fallback to regular run-cycle
-      return await runAdvancedRLCycle(config);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error("RL cycle failed:", error);
-        throw new Error(`RL cycle request failed: ${error.message}`);
-  }
-};
-
+export const getAiFirmStatus = () => fetchWithRetry(`${BASE_URL}/api/ai-firm/status`);
 export const getGodCycle = async () => {
   try {
     const response = await fetch(`${BASE_URL}/god-cycle`);
@@ -262,11 +68,165 @@ export const getMarketPrice = async (symbol = "AAPL") => {
   }
 };
 
-/**
- * Create an EventSource connected to /market-price-stream for the given symbol.
- * onMessage receives parsed JSON payloads.
- * Returns an object with a `close()` method to stop the connection.
- */
+export const getPortfolio = () => fetchWithRetry(`${BASE_URL}/portfolio`);
+
+export const getTradingJournal = () => fetchWithRetry(`${BASE_URL}/journal`);
+export const getJournal = getTradingJournal; // Alias
+
+export const getWarrenAnalysis = () => fetchWithRetry(`${BASE_URL}/api/ai-firm/personas/warren`);
+export const getCathieAnalysis = () => fetchWithRetry(`${BASE_URL}/api/ai-firm/personas/cathie`);
+
+export const getRiskMetrics = () => fetchWithRetry(`${BASE_URL}/risk-metrics`);
+export const getPerformance = () => fetchWithRetry(`${BASE_URL}/performance`);
+
+export const getCommentary = async () => {
+  try {
+    const response = await fetch(`${BASE_URL}/commentary`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return Array.isArray(data) ? data : data.commentary || [];
+  } catch (error) {
+    console.error("Commentary fetch failed:", error);
+    return [];
+  }
+};
+
+export const runTradingCycle = () => fetchWithRetry(`${BASE_URL}/run-cycle`, { method: 'POST' });
+
+// Enhanced RL cycle
+export const runAdvancedRLCycle = async (config = {}) => {
+  try {
+    const response = await fetch(`${BASE_URL}/run-cycle`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        symbol: config.symbol || "AAPL",
+        strategy_weights: config.strategyWeights || {},
+        risk_parameters: config.riskParams || {}
+      })
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error("Advanced RL cycle failed:", error);
+    throw error;
+  }
+};
+
+export const runRLCycle = async (config = {}) => {
+  try {
+    // Try god-cycle first for richer data
+    const response = await fetch(`${BASE_URL}/god-cycle`);
+    if (!response.ok) {
+      return await runAdvancedRLCycle(config);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("RL cycle failed:", error);
+    throw new Error(`RL cycle request failed: ${error.message}`);
+  }
+};
+
+export const getMultiAssetData = async (symbols = ["AAPL", "MSFT", "GOOGL", "TSLA"]) => {
+  try {
+    const promises = symbols.map(symbol =>
+      fetch(`${BASE_URL}/market-price?symbol=${symbol}&analysis=true`)
+        .then(res => res.json())
+        .catch(err => ({ symbol, error: err.message }))
+    );
+
+    const results = await Promise.all(promises);
+    return results.reduce((acc, result) => {
+      if (!result.error) {
+        acc[result.symbol] = result;
+      }
+      return acc;
+    }, {});
+  } catch (error) {
+    console.error("Multi-asset data fetch failed:", error);
+    return {};
+  }
+};
+
+export const getSystemHealth = async () => {
+  try {
+    const response = await fetch(`${BASE_URL}/health`);
+    if (response.ok) {
+      return await response.json();
+    } else {
+      const basicResponse = await fetch(`${BASE_URL}/`);
+      return {
+        status: basicResponse.ok ? "healthy" : "degraded",
+        services: { basic: "operational" }
+      };
+    }
+  } catch (error) {
+    return { status: "error", error: error.message };
+  }
+};
+
+export const getAdvancedAnalytics = async () => {
+  try {
+    const [journal, commentary, marketStats] = await Promise.allSettled([
+      getJournal(),
+      getCommentary(),
+      fetch(`${BASE_URL}/market-stats?anomalies=true`).then(r => r.json())
+    ]);
+
+    return {
+      trading: journal.status === 'fulfilled' ? journal.value : [],
+      commentary: commentary.status === 'fulfilled' ? commentary.value : [],
+      market: marketStats.status === 'fulfilled' ? marketStats.value : {}
+    };
+  } catch (error) {
+    console.error("Advanced analytics fetch failed:", error);
+    return { trading: [], commentary: [], market: {} };
+  }
+};
+
+export const optimizePortfolio = async (assets, constraints = {}) => {
+  try {
+    const response = await fetch(`${BASE_URL}/optimize-portfolio`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assets, constraints })
+    });
+
+    if (response.ok) {
+      return await response.json();
+    } else {
+      throw new Error(`Optimization API returned status ${response.status}`);
+    }
+  } catch (error) {
+    console.error("Portfolio optimization failed:", error);
+    return null;
+  }
+};
+
+export const subscribeToUpdates = (endpoint, callback, interval = UPDATE_INTERVAL) => {
+  const fetchFn = () => {
+    // Direct call to specific endpoint functions if they exist in mapped object, 
+    // or manual fetch for custom endpoints. 
+    // Simplified: we only support subscribing to known API methods if 'endpoint' matches method name.
+    if (api[endpoint]) {
+      api[endpoint]()
+        .then(callback)
+        .catch(error => console.error(`Update error (${endpoint}):`, error));
+    } else {
+      // Fallback if endpoint is a URL path
+      fetch(`${BASE_URL}/${endpoint}`)
+        .then(r => r.json())
+        .then(callback)
+        .catch(e => console.error(`Subscription error ${endpoint}`, e));
+    }
+  };
+
+  fetchFn();
+  const timer = setInterval(fetchFn, interval);
+  return () => clearInterval(timer);
+};
+
 export const streamMarketPrice = ({ symbol = "AAPL", interval = 5, count = 0, onMessage = null, onOpen = null, onError = null } = {}) => {
   if (!symbol) throw new Error('streamMarketPrice requires a symbol');
   const normalizedBase = (BASE_URL || '').replace(/\/$/, '');
@@ -292,11 +252,10 @@ export const streamMarketPrice = ({ symbol = "AAPL", interval = 5, count = 0, on
   es.onerror = (evt) => { if (typeof onError === 'function') onError(evt); };
 
   return {
-    close: () => { try { es.close(); } catch (e) {} }
+    close: () => { try { es.close(); } catch (e) { } }
   };
 };
 
-// Test API connectivity
 export const testConnection = async () => {
   try {
     console.log('Testing connection to:', BASE_URL);
@@ -309,3 +268,29 @@ export const testConnection = async () => {
     return { connected: false, error: error.message };
   }
 };
+
+// Default object export for backward compatibility
+export const api = {
+  getStatus,
+  getAiFirmStatus,
+  getGodCycle,
+  getMarketPrice,
+  getPortfolio,
+  getTradingJournal,
+  getWarrenAnalysis,
+  getCathieAnalysis,
+  getRiskMetrics,
+  getPerformance,
+  getCommentary,
+  runTradingCycle,
+  runRLCycle,
+  getMultiAssetData,
+  getSystemHealth,
+  getAdvancedAnalytics,
+  optimizePortfolio,
+  subscribeToUpdates,
+  streamMarketPrice,
+  testConnection
+};
+
+export default api;
