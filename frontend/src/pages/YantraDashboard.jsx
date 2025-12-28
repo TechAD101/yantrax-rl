@@ -428,4 +428,6 @@ const YantraDashboard = () => {
   }
 };
 
-export default YantraDashboard;
+import withDebug from '../components/withDebug'
+
+export default withDebug('YantraDashboard', YantraDashboard);
