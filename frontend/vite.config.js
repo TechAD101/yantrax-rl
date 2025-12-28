@@ -9,6 +9,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: false,
+    // NOTE: enabled temporarily to debug production errors — revert after we capture stacks
+    sourcemap: true,
+    minify: false,
   },
 })
