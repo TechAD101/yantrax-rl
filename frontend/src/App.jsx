@@ -1,7 +1,7 @@
 // src/App.jsx
 import React, { Suspense } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
 const YantraDashboard = React.lazy(() => import("./pages/YantraDashboard"));
 const Journal = React.lazy(() => import("./pages/Journal"));
@@ -11,7 +11,6 @@ const Settings = React.lazy(() => import("./pages/Settings"));
 
 function App() {
   return (
-    <Router>
       <ErrorBoundary>
         <Suspense fallback={<div style={{padding:20,color:'#fff'}}>Loading…</div>}>
           <Routes>
@@ -25,7 +24,6 @@ function App() {
           </Routes>
         </Suspense>
       </ErrorBoundary>
-    </Router>
   );
 }
 
