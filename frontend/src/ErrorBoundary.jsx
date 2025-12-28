@@ -7,19 +7,40 @@ function serializeError(err) {
     if (typeof err === 'object') {
       // If it's a Promise or thenable, indicate that
       if (typeof err.then === 'function') return '[Thrown a Promise/Thenable]'
-      // Attempt to stringify useful properties
-      const obj = {}
-      Object.getOwnPropertyNames(err).forEach((k) => {
-        try { obj[k] = err[k] } catch (e) { obj[k] = `unserializable (${e.message})` }
-      })
-      if (obj.message || obj.stack) {
-        return `${obj.message || ''}\n${obj.stack || ''}`.trim()
+
+      // Collect own string/symbol keys
+      const names = Object.getOwnPropertyNames(err)
+      const syms = Object.getOwnPropertySymbols(err)
+      const hasOwn = names.length > 0 || syms.length > 0
+
+      // If there are own properties, try to show them
+      if (hasOwn) {
+        const obj = {}
+        names.forEach((k) => {
+          try { obj[k] = err[k] } catch (e) { obj[k] = `unserializable (${e.message})` }
+        })
+        syms.forEach((s) => {
+          try { obj[s.toString()] = err[s] } catch (e) { obj[s.toString()] = `unserializable (${e.message})` }
+        })
+        if (obj.message || obj.stack) {
+          return `${obj.message || ''}\n${obj.stack || ''}`.trim()
+        }
+        return JSON.stringify(obj, null, 2)
       }
-      return JSON.stringify(obj, null, 2)
+
+      // No own properties — it's an empty object or something with hidden props
+      const proto = Object.getPrototypeOf(err)
+      const ctor = err && err.constructor ? err.constructor.name : '(unknown)'
+      let toStr = '(toString failed)'
+      try { toStr = String(err) } catch (e) { toStr = `toString failed: ${e.message}` }
+      let valueOf = '(valueOf failed)'
+      try { valueOf = typeof err.valueOf === 'function' ? String(err.valueOf()) : '(no valueOf)' } catch (e) { valueOf = `valueOf threw: ${e.message}` }
+
+      return `Thrown object (no own props)\nconstructor: ${ctor}\nprototype: ${proto && proto.constructor ? proto.constructor.name : String(proto)}\nvalueOf: ${valueOf}\ntoString: ${toStr}\nownKeys: ${JSON.stringify(names.concat(syms.map(s=>s.toString())), null, 2)}`
     }
     return String(err)
   } catch (e) {
-    return `Could not serialize error: ${e.message}`
+    return `Could not serialize error: ${e && e.message ? e.message : String(e)}`
   }
 }
 
@@ -33,10 +54,19 @@ export default class ErrorBoundary extends React.Component {
     // Preserve original behavior but make it visible in UI
     this.setState({ error, info })
     try {
-      // Keep normal logging as well
+      // Provide an expanded debug dump to help with minified/opaque thrown values
+      const details = {
+        constructor: error && error.constructor ? error.constructor.name : '(unknown)',
+        ownKeys: typeof Reflect !== 'undefined' ? Reflect.ownKeys(error || {}) : Object.getOwnPropertyNames(error || {}),
+        prototype: Object.getPrototypeOf(error),
+        serialized: serializeError(error),
+        componentStack: info?.componentStack
+      }
       // eslint-disable-next-line no-console
-      console.error('Captured error:', error, info)
-    } catch (e) {}
+      console.error('Captured error (detailed):', details)
+    } catch (e) {
+      try { console.error('Captured error, but failed to dump details', e) } catch (er) {}
+    }
   }
 
   render() {
@@ -64,7 +94,20 @@ export default class ErrorBoundary extends React.Component {
 
               <div style={{ marginTop: 12 }}>
                 <button onClick={() => { window.location.reload() }} style={{ padding: '8px 12px', borderRadius: 6, background: '#0ea5a3', border: 'none', color: '#00363a' }}>Reload</button>
-                <button onClick={() => { navigator.clipboard?.writeText(serialized + '\n\n' + componentStack) }} style={{ marginLeft: 8, padding: '8px 12px', borderRadius: 6, background: '#334155', border: 'none', color: '#fff' }}>Copy Debug Info</button>
+                <button onClick={() => {
+                  try {
+                    const debugPayload = {
+                      serialized,
+                      componentStack,
+                      constructor: error && error.constructor ? error.constructor.name : '(unknown)',
+                      ownKeys: typeof Reflect !== 'undefined' ? Reflect.ownKeys(error || {}) : Object.getOwnPropertyNames(error || {}),
+                      prototype: Object.getPrototypeOf(error)
+                    }
+                    navigator.clipboard?.writeText(serialized + '\n\n' + componentStack + '\n\n' + JSON.stringify(debugPayload, null, 2))
+                  } catch (e) {
+                    try { navigator.clipboard?.writeText(serialized + '\n\n' + componentStack) } catch (er) {}
+                  }
+                }} style={{ marginLeft: 8, padding: '8px 12px', borderRadius: 6, background: '#334155', border: 'none', color: '#fff' }}>Copy Debug Info</button>
               </div>
             </div>
 
