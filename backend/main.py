@@ -292,12 +292,8 @@ if MARKET_SERVICE_READY:
             polygon = os.getenv('POLYGON_KEY') or os.getenv('POLYGON') or None
             finnhub = os.getenv('FINNHUB_KEY') or os.getenv('FINNHUB') or None
             cfg = MarketDataConfig(
-                alpha_vantage_key=av_key,
-                alpaca_key=alpaca_key_env,
-                alpaca_secret=alpaca_secret_env,
-                polygon_key=polygon,
-                finnhub_key=finnhub,
-                fallback_to_mock=False
+                fmp_api_key=fmp_key_env,
+                cache_ttl_seconds=5
             )
             market_data = MarketDataService(cfg)
             logger.info("✅ MarketDataService v2 initialized with config from env")
@@ -1047,10 +1043,12 @@ def ai_firm_status():
         return jsonify({
             'status': 'fully_operational',
             'ai_firm': {
-                'total_agents': 24, # canonical
-                'departments': agent_status,
+                'total_agents': agent_status.get('total_agents', 24),
+                'departments': agent_status.get('departments', {}),
+                'all_agents': agent_status.get('all_agents', []),
                 'ceo_metrics': ceo_stats,
-                'personas_active': 2
+                'personas_active': agent_status.get('personas_active', 2),
+                'recent_voting_sessions': agent_status.get('recent_voting_sessions', 0)
             },
             'institutional_services': {
                 'knowledge_base': KNOWLEDGE_BASE.get_statistics() if KNOWLEDGE_BASE else {},

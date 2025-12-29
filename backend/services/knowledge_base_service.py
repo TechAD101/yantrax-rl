@@ -48,7 +48,73 @@ class KnowledgeBaseService:
         
         self.collections = {}
         self._initialize_collections()
+        
+        # Seed if empty
+        if self.collections['investor_wisdom'].count() == 0:
+            self._seed_wisdom()
     
+    def _seed_wisdom(self):
+        """Seed the KB with foundational investment lore"""
+        wisdom = [
+             {
+                "content": "Rule No. 1: Never lose money. Rule No. 2: Never forget rule No. 1.",
+                "source": "Warren Buffett",
+                "tags": ["survival"],
+                "archetype": ["warren"]
+            },
+            {
+                "content": "Be fearful when others are greedy and greedy when others are fearful.",
+                "source": "Warren Buffett",
+                "tags": ["sentiment"],
+                "archetype": ["warren"]
+            },
+            {
+                "content": "If you don't own gold, you know neither history nor economics.",
+                "source": "Ray Dalio",
+                "tags": ["macro"],
+                "archetype": ["macros"]
+            },
+            {
+                "content": "Pain + Reflection = Progress.",
+                "source": "Ray Dalio",
+                "tags": ["mindset"],
+                "archetype": ["philosopher"]
+            },
+            {
+                "content": "The big money is not in the buying and the selling, but in the waiting.",
+                "source": "Charlie Munger",
+                "tags": ["patience"],
+                "archetype": ["warren"]
+            },
+            {
+                "content": "The market is a mirror of collective emotion. It does not think, it feels.",
+                "source": "The Ghost",
+                "tags": ["quantum_meta"],
+                "archetype": ["ghost"]
+            },
+            {
+                "content": "Chalti ka naam gaadi (Only that which moves is a car/working). Momentum is king.",
+                "source": "Hindi Wisdom",
+                "tags": ["momentum"],
+                "archetype": ["quant"]
+            },
+            {
+                "content": "Boond boond se ghada bharta hai (Drop by drop the pot fills). Consistent small gains.",
+                "source": "Hindi Wisdom",
+                "tags": ["compounding"],
+                "archetype": ["warren"]
+            }
+        ]
+        
+        for item in wisdom:
+            self.store_wisdom(
+                content=item["content"],
+                source=item["source"],
+                tags=item["tags"],
+                archetype=item["archetype"]
+            )
+        self.logger.info(f"🌱 Seeded Knowledge Base with {len(wisdom)} core principles.")
+
     def _initialize_collections(self):
         """Create or load ChromaDB collections"""
         try:
