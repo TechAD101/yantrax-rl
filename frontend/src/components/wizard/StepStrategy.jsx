@@ -5,26 +5,26 @@ const StepStrategy = ({ config, setConfig }) => {
     const strategies = [
         {
             id: 'ai_managed',
-            label: 'AI-Managed',
-            desc: 'Warren & Cathie manage portfolio with balanced oversight.',
-            icon: '🧠',
-            personas: ['warren', 'cathie'],
+            label: 'Institutional Mode',
+            desc: 'Warren, Cathie & Macro Monk manage portfolio with multi-agent consensus.',
+            icon: '🏛️',
+            personas: ['warren', 'cathie', 'macro_monk'],
             color: 'blue'
         },
         {
             id: 'degen_mode',
             label: 'Degen Mode',
-            desc: 'High risk, high conviction plays. Not for the faint hearted.',
-            icon: '🎰',
-            personas: ['degen_auditor'],
+            desc: 'High risk plays monitored by the Degen Auditor. No limiters except survival.',
+            icon: '🧨',
+            personas: ['degen_auditor', 'the_ghost'],
             color: 'purple'
         },
         {
             id: 'manual',
-            label: 'Manual Control',
-            desc: 'You are the CEO. AI acts as an advisor only.',
-            icon: '🎮',
-            personas: [],
+            label: 'CEO Mode (Manual)',
+            desc: 'You are the CEO. AI agents act as the Council of Ghosts for advice only.',
+            icon: '👨‍✈️',
+            personas: ['the_ghost'],
             color: 'gray'
         }
     ];

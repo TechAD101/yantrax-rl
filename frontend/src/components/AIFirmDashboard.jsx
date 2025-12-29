@@ -5,8 +5,8 @@ import MarketMoodDial from './MarketMoodDial';
 
 const AIFirmDashboard = () => {
   const [firmStatus, setFirmStatus] = useState(null);
-  const [warrenAnalysis, setWarrenAnalysis] = useState(null);
-  const [cathieAnalysis, setCathieAnalysis] = useState(null);
+  const [personas, setPersonas] = useState([]);
+  const [wisdom, setWisdom] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -21,40 +21,25 @@ const AIFirmDashboard = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch AI firm status
-      const firmResponse = await fetch(`${BASE_URL}/api/ai-firm/status`);
-      if (firmResponse.ok) {
-        const firmData = await firmResponse.json();
-        setFirmStatus(firmData);
-      } else {
-        try {
-          const root = await fetch(`${BASE_URL}/`);
-          if (root.ok) setFirmStatus(await root.json());
-        } catch (e) {
-          console.debug('Root health fallback failed', e);
-        }
+      // Fetch AI firm status, Personas, and Wisdom in parallel
+      const [statusRes, personaRes, wisdomRes] = await Promise.allSettled([
+        fetch(`${BASE_URL}/api/ai-firm/status`).then(r => r.json()),
+        fetch(`${BASE_URL}/api/personas`).then(r => r.json()),
+        fetch(`${BASE_URL}/api/knowledge/query`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic: 'philosophy', max_results: 1 })
+        }).then(r => r.json())
+      ]);
+
+      if (statusRes.status === 'fulfilled') setFirmStatus(statusRes.value);
+      if (personaRes.status === 'fulfilled') {
+        const personaList = personaRes.value.personas || [];
+        setPersonas(personaList);
       }
-
-      // Fetch Persona Analysis (Parallel)
-      const personaSymbols = { warren: 'AAPL', cathie: 'NVDA' };
-
-      const personaFetches = Object.entries(personaSymbols).map(async ([persona, symbol]) => {
-        try {
-          const resp = await fetch(`${BASE_URL}/api/ai-firm/personas/${persona}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ symbol })
-          });
-          if (resp.ok) return await resp.json();
-        } catch (e) {
-          console.debug(`${persona} persona fetch failed`, e);
-        }
-        return null;
-      });
-
-      const [warren, cathie] = await Promise.all(personaFetches);
-      if (warren) setWarrenAnalysis(warren);
-      if (cathie) setCathieAnalysis(cathie);
+      if (wisdomRes.status === 'fulfilled') {
+        setWisdom(wisdomRes.value.wisdom?.[0]);
+      }
 
     } catch (err) {
       console.error('AI Firm data fetch error:', err);
@@ -196,14 +181,49 @@ const AIFirmDashboard = () => {
               </div>
             </div>
 
+            {/* Council of Ghosts: 24-Agent Matrix */}
+            <div className="bg-gray-900/60 rounded-xl p-5 border border-white/5">
+              <h4 className="text-xs font-bold text-gray-500 mb-6 uppercase tracking-[0.2em] flex items-center justify-between">
+                <span className="flex items-center">
+                  <span className="w-1.5 h-1.5 bg-purple-500 rounded-full mr-2"></span>
+                  Council of Ghosts (24-Agent Matrix)
+                </span>
+                <span className="text-[10px] text-purple-400 font-mono">Consensus: {firmStatus.system_performance?.success_rate}%</span>
+              </h4>
+
+              <div className="grid grid-cols-6 md:grid-cols-12 gap-3 mb-4">
+                {firmStatus.ai_firm?.all_agents?.map((agent, i) => (
+                  <div key={agent.name} className="group relative flex flex-col items-center">
+                    <div
+                      className={`w-3 h-3 rounded-full transition-all duration-700 ${agent.confidence > 0.8 ? 'bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)]' :
+                          agent.confidence > 0.6 ? 'bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]' :
+                            'bg-gray-600 shadow-none'
+                        } ${i % 2 === 0 ? 'animate-pulse' : ''}`}
+                    ></div>
+                    {/* Tooltip on hover */}
+                    <div className="absolute bottom-full mb-2 hidden group-hover:block z-50 w-32 bg-gray-800 border border-gray-700 rounded p-2 text-[10px] shadow-xl pointer-events-none">
+                      <div className="font-bold text-white border-b border-gray-700 pb-1 mb-1">{agent.name}</div>
+                      <div className="text-gray-400">{agent.role}</div>
+                      <div className="text-cyan-400">Confidence: {(agent.confidence * 100).toFixed(0)}%</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between text-[10px] text-gray-600 mt-4 border-t border-white/5 pt-2">
+                <span>Stealth Mode Enabled</span>
+                <span>Active Neurons: {firmStatus.ai_firm?.total_agents}</span>
+              </div>
+            </div>
+
             {/* CEO Reasoning & Ghost Whispers */}
-            {firmStatus.ai_firm?.ceo_metrics?.recent_decisions_log && (
-              <div className="bg-gray-900/80 rounded-lg p-4 border border-purple-500/30">
-                <h4 className="text-sm font-bold text-purple-300 mb-2 flex items-center">
-                  <span className="mr-2">👻</span> Latest Ghost Insight & CEO Reasoning
+            {wisdom && (
+              <div className="bg-gray-900/80 rounded-lg p-4 border border-blue-500/30">
+                <h4 className="text-sm font-bold text-blue-300 mb-2 flex items-center">
+                  <span className="mr-2">📜</span> Institutional Wisdom
                 </h4>
-                <div className="text-xs text-gray-300 leading-relaxed font-mono">
-                  {firmStatus.ai_firm.ceo_metrics.recent_decisions_log[0]?.reasoning || "No recent strategic deliberations."}
+                <div className="text-xs text-gray-300 leading-relaxed italic">
+                  "{wisdom.text || "Boond boond se ghada bharta hai."}"
+                  <span className="block mt-1 text-[10px] text-gray-500">— {wisdom.metadata?.source || "YantraX Core DNA"}</span>
                 </div>
               </div>
             )}
@@ -213,99 +233,44 @@ const AIFirmDashboard = () => {
 
       {/* Named Personas Analysis */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Warren Buffett Persona */}
-        <div className="bg-gradient-to-br from-green-800/20 to-green-900/20 rounded-xl border border-green-700/50 p-6 backdrop-blur-sm">
-          <div className="flex items-center mb-4">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mr-4">
-              <span className="text-white font-bold text-lg">W</span>
+        {personas.map((persona) => (
+          <div key={persona.name} className={`bg-gradient-to-br from-gray-800/20 to-gray-900/20 rounded-xl border border-gray-700/50 p-6 backdrop-blur-sm hover:border-${persona.role === 'director' ? 'cyan' : 'gray'}-500/50 transition-all`}>
+            <div className="flex items-center mb-4">
+              <div className={`w-12 h-12 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center mr-4 border border-white/10 text-xl`}>
+                {persona.name === 'warren' ? '👴' :
+                  persona.name === 'cathie' ? '🚀' :
+                    persona.name === 'macro_monk' ? '🧘' :
+                      persona.name === 'the_ghost' ? '👻' :
+                        persona.name === 'degen_auditor' ? '🔍' : '🤖'}
+              </div>
+              <div>
+                <h4 className="text-lg font-bold text-white capitalize">{persona.name} Persona</h4>
+                <p className="text-sm text-gray-400 capitalize">{persona.role} • {persona.specialty}</p>
+              </div>
             </div>
-            <div>
-              <h4 className="text-lg font-bold text-green-400">Warren Persona</h4>
-              <p className="text-sm text-green-300/70">Value Investing • Fundamental Analysis</p>
-            </div>
-          </div>
 
-          {warrenAnalysis ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-300">Recommendation:</span>
-                <span className={`text-sm font-bold px-2 py-1 rounded ${warrenAnalysis.warren_analysis?.recommendation?.includes('BUY') || warrenAnalysis.recommendation?.includes('BUY')
-                  ? 'bg-green-900/50 text-green-400'
-                  : 'bg-gray-700/50 text-gray-300'
-                  }`}>
-                  {warrenAnalysis.warren_analysis?.recommendation || warrenAnalysis.recommendation || 'HOLD'}
-                </span>
+                <span className="text-sm text-gray-400">Mandate:</span>
+                <span className="text-xs text-gray-300">{persona.mandate}</span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-300">Confidence:</span>
-                <span className="text-sm font-bold text-green-400">
-                  {((warrenAnalysis?.warren_analysis?.confidence || warrenAnalysis?.confidence || 0) * 100).toFixed(0)}%
+                <span className="text-sm text-gray-400">Confidence:</span>
+                <span className="text-sm font-bold text-cyan-400">
+                  {(persona.confidence * 100).toFixed(0)}%
                 </span>
               </div>
 
-              <div className="bg-green-900/20 rounded-lg p-3 border border-green-700/30">
-                <p className="text-xs text-green-200 italic">
-                  "{warrenAnalysis.philosophy || 'Value investing philosophy'}"
-                </p>
-                <p className="text-xs text-green-300 mt-2">
-                  {warrenAnalysis?.warren_analysis?.reasoning || warrenAnalysis?.reasoning || 'Analyzing fundamental metrics...'}
+              <div className="bg-gray-900/40 rounded-lg p-3 border border-white/5">
+                <p className="text-xs text-gray-500 uppercase tracking-tighter mb-1 font-bold">Voice & Logic</p>
+                <p className="text-xs text-gray-300">
+                  Agents in the {persona.department.replace('_', ' ')} department are currently monitoring {persona.specialty.toLowerCase()} patterns.
                 </p>
               </div>
-            </div>
-          ) : (
-            <div className="text-center text-green-400 py-4">
-              <div className="animate-pulse">Loading Warren's Analysis...</div>
-            </div>
-          )}
-        </div>
-
-        {/* Cathie Wood Persona */}
-        <div className="bg-gradient-to-br from-purple-800/20 to-pink-900/20 rounded-xl border border-purple-700/50 p-6 backdrop-blur-sm">
-          <div className="flex items-center mb-4">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mr-4">
-              <span className="text-white font-bold text-lg">C</span>
-            </div>
-            <div>
-              <h4 className="text-lg font-bold text-purple-400">Cathie Persona</h4>
-              <p className="text-sm text-purple-300/70">Innovation Focus • Growth Analysis</p>
             </div>
           </div>
-
-          {cathieAnalysis ? (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-300">Recommendation:</span>
-                <span className={`text-sm font-bold px-2 py-1 rounded ${cathieAnalysis.cathie_analysis?.recommendation?.includes('BUY') || cathieAnalysis.recommendation?.includes('BUY')
-                  ? 'bg-purple-900/50 text-purple-400'
-                  : 'bg-gray-700/50 text-gray-300'
-                  }`}>
-                  {cathieAnalysis.cathie_analysis?.recommendation || cathieAnalysis.recommendation || 'HOLD'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-300">Confidence:</span>
-                <span className="text-sm font-bold text-purple-400">
-                  {((cathieAnalysis?.cathie_analysis?.confidence || cathieAnalysis?.confidence || 0) * 100).toFixed(0)}%
-                </span>
-              </div>
-
-              <div className="bg-purple-900/20 rounded-lg p-3 border border-purple-700/30">
-                <p className="text-xs text-purple-200 italic">
-                  "{cathieAnalysis.philosophy || 'Innovation investment philosophy'}"
-                </p>
-                <p className="text-xs text-purple-300 mt-2">
-                  {cathieAnalysis?.cathie_analysis?.reasoning || cathieAnalysis?.reasoning || 'Analyzing innovation potential...'}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center text-purple-400 py-4">
-              <div className="animate-pulse">Loading Cathie's Analysis...</div>
-            </div>
-          )}
-        </div>
+        ))}
       </div>
 
       {/* AI Firm Coordination Metrics (Bottom) */}

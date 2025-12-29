@@ -6,6 +6,8 @@ const StepMarkets = ({ config, setConfig }) => {
         { id: 'us_stocks', label: 'US Stocks', icon: '🇺🇸', sub: 'NYSE/NASDAQ' },
         { id: 'indian_stocks', label: 'Indian Stocks', icon: '🇮🇳', sub: 'NSE/BSE' },
         { id: 'crypto', label: 'Crypto', icon: '₿', sub: 'Top 50 Coins' },
+        { id: 'indices', label: 'Institutional Indices', icon: '📊', sub: 'S&P 500, QQQ, VIX' },
+        { id: 'commodities', label: 'Commodities', icon: '🧱', sub: 'Gold, Crude Oil, Silver' },
         { id: 'global_etfs', label: 'Global ETFs', icon: '🌍', sub: 'Macro Exposure' }
     ];
 

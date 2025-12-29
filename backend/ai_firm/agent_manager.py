@@ -142,19 +142,19 @@ class AgentManager:
             }
         })
         
-        # Communications Department (3 agents)
+        # Custom Personas Department (Special Layer)
         agents.update({
-            'report_generator': {
-                'confidence': 0.85, 'performance': 23.2, 'specialty': 'Report Generation',
-                'department': 'communications', 'role': 'director', 'persona': False
+            'macro_monk': {
+                'confidence': 0.92, 'performance': 31.2, 'specialty': 'Geopolitical / War Economics',
+                'department': 'market_intelligence', 'role': 'director', 'persona': True
             },
-            'market_narrator': {
-                'confidence': 0.80, 'performance': 19.8, 'specialty': 'Market Storytelling',
-                'department': 'communications', 'role': 'senior', 'persona': False
+            'the_ghost': {
+                'confidence': 0.95, 'performance': 42.0, 'specialty': 'Divine Doubt / Paradox Injection',
+                'department': 'risk_control', 'role': 'director', 'persona': True
             },
-            'alert_coordinator': {
-                'confidence': 0.83, 'performance': 21.5, 'specialty': 'Alert Management',
-                'department': 'communications', 'role': 'specialist', 'persona': False
+            'degen_auditor': {
+                'confidence': 0.88, 'performance': 25.5, 'specialty': 'Degenerate Risk Mitigation',
+                'department': 'risk_control', 'role': 'senior', 'persona': True
             }
         })
         
@@ -197,9 +197,19 @@ class AgentManager:
             })
         
         # Determine winning signal
+        divine_doubt_triggered = False
         if vote_tally:
             winning_signal = max(vote_tally.items(), key=lambda x: x[1])[0]
             consensus_strength = vote_tally[winning_signal] / total_weight if total_weight > 0 else 0
+            
+            # DIVINE DOUBT PROTOCOL
+            # If consensus is too high (>90%), The Ghost injects doubt
+            if consensus_strength > 0.9 and 'the_ghost' in self.enhanced_agents:
+                self.logger.info("👻 Divine Doubt triggered! Consensus too high (%s)", consensus_strength)
+                # Pivot: Force a re-evaluation
+                winning_signal = "HOLD_FOR_CLARITY"
+                consensus_strength *= 0.7  # Dilute confidence
+                divine_doubt_triggered = True
         else:
             winning_signal = 'HOLD'
             consensus_strength = 0.5
@@ -211,7 +221,8 @@ class AgentManager:
             'participating_agents': len(participating_agents),
             'total_weight': round(total_weight, 2),
             'session_id': str(uuid.uuid4()),
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'divine_doubt_applied': divine_doubt_triggered
         }
         
         self.voting_sessions.append(voting_result)
@@ -249,8 +260,31 @@ class AgentManager:
             elif rsi < 30:
                 return 'HOLD' # Buying dips in growth
             return 'HOLD'
+
+        # 3. MACRO MONK: Geopolitical / Macro Risk
+        elif agent_name == 'macro_monk':
+            # Monk likes stability and low debt
+            if debt_to_equity < 0.5 and trend == 'bullish':
+                return 'BUY'
+            elif debt_to_equity > 5.0:
+                return 'SELL'
+            return 'HOLD'
+
+        # 4. DEGEN AUDITOR: Risk Gatekeeper
+        elif agent_name == 'degen_auditor':
+            # Flags unsustainable risk
+            if debt_to_equity > 4.0 or pe_ratio > 100:
+                return 'REJECT'
+            return 'APPROVED'
+
+        # 5. THE GHOST: Paradox / Doubt
+        elif agent_name == 'the_ghost':
+            # The Ghost is unpredictable but tends to disagree with extreme momentum
+            if rsi > 85: return 'SELL'
+            if rsi < 15: return 'BUY'
+            return 'WHISPER_HOLD'
             
-        # 3. QUANT / SYSTEMATIC: Pure Data
+        # 6. QUANT / SYSTEMATIC: Pure Data
         elif 'Statistical' in specialty or 'Quant' in agent_name:
             if trend == 'bullish' and rsi < 70:
                 return 'BUY'

@@ -1,30 +1,53 @@
-// src/components/mood/TopSignals.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { getVotingHistory } from '../../api/api';
 
 const TopSignals = () => {
-    const signals = [
-        { ticker: 'NVDA', type: 'LONG', conf: 92, reason: 'AI Hype + Tech Breakout', time: '2m ago' },
-        { ticker: 'TSLA', type: 'SHORT', conf: 78, reason: 'Rejection at Key Res', time: '15m ago' },
-        { ticker: 'BTC', type: 'LONG', conf: 85, reason: 'Liquidity Grab', time: '4h ago' }
-    ];
+    const [signals, setSignals] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchSignals = async () => {
+            try {
+                const data = await getVotingHistory(5);
+                if (data && data.history) {
+                    setSignals(data.history.map(s => ({
+                        ticker: s.symbol || 'AAPL',
+                        type: s.winning_signal?.includes('BUY') ? 'LONG' : s.winning_signal?.includes('SELL') ? 'SHORT' : 'HOLD',
+                        conf: Math.round(s.consensus_strength * 100),
+                        reason: s.divine_doubt_applied ? '👻 GHOST CIRCUIT BREAKER' : 'Multi-Agent Consensus',
+                        time: new Date(s.timestamp).toLocaleTimeString()
+                    })));
+                }
+            } catch (e) {
+                console.error('Signals fetch failed', e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchSignals();
+        const interval = setInterval(fetchSignals, 10000);
+        return () => clearInterval(interval);
+    }, []);
 
     return (
         <div className="bg-gray-900/80 backdrop-blur rounded-2xl p-6 border border-gray-800">
             <h3 className="text-lg font-bold text-gray-200 mb-4">Top Alpha Signals</h3>
             <div className="space-y-4">
-                {signals.map((sig, i) => (
+                {loading && <div className="text-center py-10 animate-pulse text-gray-500 text-sm">Quantifying Alpha...</div>}
+                {!loading && signals.length === 0 && <div className="text-center py-10 text-gray-600 text-xs italic">Waiting for institutional consensus...</div>}
+                {!loading && signals.map((sig, i) => (
                     <div key={i} className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-700/50 hover:bg-gray-700/50 transition-colors">
                         <div className="flex items-center space-x-3">
                             <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm
-                                ${sig.type === 'LONG' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                ${sig.type === 'LONG' ? 'bg-green-500/20 text-green-400' : sig.type === 'SHORT' ? 'bg-red-500/20 text-red-400' : 'bg-gray-700/20 text-gray-400'}`}>
                                 {sig.ticker}
                             </div>
                             <div>
                                 <div className="flex items-center space-x-2">
-                                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${sig.type === 'LONG' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${sig.type === 'LONG' ? 'bg-green-500/20 text-green-400' : sig.type === 'SHORT' ? 'bg-red-500/20 text-red-400' : 'bg-gray-700/20 text-gray-400'}`}>
                                         {sig.type}
                                     </span>
-                                    <span className="text-xs text-gray-500">{sig.time}</span>
+                                    <span className="text-[10px] text-gray-500">{sig.time}</span>
                                 </div>
                                 <p className="text-xs text-gray-300 mt-1">{sig.reason}</p>
                             </div>

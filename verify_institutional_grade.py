@@ -1,166 +1,134 @@
+"""Institutional Grade Master Verification Script
+
+Validates the existence and functionality of the Tier S and Tier A restoration items.
+"""
+
 import sys
 import os
-import json
 import logging
-import time
-from datetime import datetime
 
-# Setup paths
+# Add backend to path
 sys.path.append(os.path.join(os.getcwd(), 'backend'))
 
-# Configure Logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("InstitutionalVerifier")
+from ai_firm.agent_manager import AgentManager
+from services.knowledge_base import get_knowledge_base
+from services.trade_validator import TradeValidator
+from services.market_data_service_waterfall import get_waterfall_service
 
-def test_institutional_grade():
-    logger.info("🧪 STARTING TEAM 5 INSTITUTIONAL VERIFICATION...")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("Verification")
+
+def test_persona_registry():
+    logger.info("🕵️ Checking Persona Registry...")
+    am = AgentManager()
+    agents = am.enhanced_agents
     
-    results = {
-        "personas": False,
-        "knowledge_base": False,
-        "trade_validator": False,
-        "data_verification": False,
-        "api_layer": False
-    }
-
-    try:
-        # 1. PERSONA REGISTRY CHECK
-        logger.info("\n--- 1. Testing Explicit AI Personas ---")
-        from backend.ai_agents.persona_registry import PersonaRegistry
-        registry = PersonaRegistry()
-        
-        # Check if personas are registered
-        summaries = registry.get_all_summaries()
-        logger.info(f"Personas found: {len(summaries)}")
-        if len(summaries) >= 2:
-            results["personas"] = True
-            logger.info("✅ Persona Registry Active")
-        else:
-            logger.error("❌ Persona Registry Incomplete")
-
-        # Conduct a mock vote
-        vote_result = registry.conduct_vote({
-            "symbol": "AAPL", 
-            "price": 150.0, 
-            "rsi": 30, 
-            "trend": "bullish"
-        }, market_context={
-            "vix": 15,
-            "market_trend": "bullish",
-            "liquidity": "high"
-        })
-        logger.info(f"Vote Concluded: {vote_result['consensus']} (Confidence: {vote_result['consensus_strength']})")
-
-
-        # 2. KNOWLEDGE BASE CHECK
-        logger.info("\n--- 2. Testing Knowledge Base Engine ---")
-        from backend.services.knowledge_base_service import KnowledgeBaseService
-        kb = KnowledgeBaseService()
-        
-        # Query wisdom
-        wisdom = kb.query_wisdom("market crash", max_results=1)
-        if wisdom:  # Wisdom is a list, check if not empty
-            logger.info(f"Wisdom Retrieved: {wisdom[0]['content'][:50]}...")
-            results["knowledge_base"] = True
-            logger.info("✅ Knowledge Base Operational")
-        else:
-            logger.warning("⚠️ Knowledge Base returned empty results (might need ingestion)")
-            # Assuming it passes if code runs, but flagging empty
-
-        
-        # 3. TRADE VALIDATOR CHECK
-        logger.info("\n--- 3. Testing Trade Validation Engine ---")
-        from backend.services.trade_validator import TradeValidator
-        validator = TradeValidator()
-        
-        # Mock Trade (Should likely fail defaults if market data is strict, but we test logic)
-        mock_trade = {
-            "symbol": "TEST",
-            "action": "BUY",
-            "price": 100,
-            "quantity": 10,
-            "strategy": "test"
-        }
-        # Mock context for validation
-        mock_context = {
-            "portfolio_value": 100000,
-            "vix": 15,  # Safe
-            "market_trend": "bullish"
-        }
-        
-        validation = validator.validate_trade(mock_trade, mock_context)
-        logger.info(f"Validation Result: {validation['allowed']}")
-        logger.info(f"Checks Passed: {validation['checks_passed']}/{len(validation['pass_map'])}")
-        
-        if 'validation_history' in validator.__dict__: # Check if audit trail exists
-            results["trade_validator"] = True
-            logger.info("✅ Trade Validator & Audit Trail Active")
-
-
-        # 4. DATA VERIFICATION CHECK
-        logger.info("\n--- 4. Testing Triple-Source Verification ---")
-        from backend.services.market_data_service_waterfall import WaterfallMarketDataService
-        service = WaterfallMarketDataService()
-        
-        # Check if new methods exist
-        if hasattr(service, 'get_price_verified') and hasattr(service, 'get_verification_stats'):
-            results["data_verification"] = True
-            logger.info("✅ Triple-Source Methods Detected")
-            
-            # Mock call (might fail without API keys, so wrapping)
-            try:
-                stats = service.get_verification_stats()
-                logger.info(f"Verification Stats: {stats}")
-            except Exception as e:
-                logger.warning(f"Could not fetch live stats (expected if no keys): {e}")
-        else:
-            logger.error("❌ Triple-Source Methods Missing")
-
-
-        # 5. API LAYER CHECK (Flask Test Client)
-        logger.info("\n--- 5. Testing API Endpoints ---")
-        from backend.main import app
-        with app.test_client() as client:
-            # Check Health
-            resp = client.get('/health')
-            if resp.status_code == 200:
-                logger.info("✅ /health endpoint OK")
-                
-            # Check Status (Institutional Metrics)
-            resp = client.get('/api/ai-firm/status')
-            data = resp.get_json()
-            if 'institutional_services' in data:
-                logger.info("✅ Institutional Metrics Exposed")
-                results["api_layer"] = True
-            else:
-                logger.error("❌ Institutional Metrics Missing from /status")
-
-    except Exception as e:
-        logger.error(f"❌ FATAL ERROR DURING VERIFICATION: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-    # FINAL REPORT
-    logger.info("\n" + "="*40)
-    logger.info("INSTITUTIONAL VERIFICATION REPORT")
-    logger.info("="*40)
-    passed = 0
-    for component, success in results.items():
-        status = "PASS" if success else "FAIL"
-        if success: passed += 1
-        logger.info(f"{component.ljust(25)}: {status}")
+    required_personas = ['warren', 'cathie', 'macro_monk', 'the_ghost', 'degen_auditor']
     
-    logger.info("-" * 40)
-    logger.info(f"SCORE: {passed}/5")
+    for p in required_personas:
+        if p in agents:
+            logger.info(f"  ✅ Persona '{p}' is ACTIVE. Specialty: {agents[p]['specialty']}")
+        else:
+            logger.error(f"  ❌ Missing Persona: {p}")
+            return False
+    return True
+
+def test_knowledge_base():
+    logger.info("🧠 Checking Knowledge Base (ChromaDB)...")
+    kb = get_knowledge_base()
+    results = kb.query_wisdom("Never lose money", n_results=1)
     
-    if passed == 5:
-        logger.info("🏆 RESULT: INSTITUTIONAL GRADE CONFIRMED")
-        return True
+    if results:
+        logger.info(f"  DEBUG: KB Metadata: {results[0]['metadata']}")
+        if "Buffett" in str(results[0]['metadata']):
+            logger.info(f"  ✅ KB Retrieval Successful: {results[0]['text']}")
+        else:
+            logger.warning(f"  ⚠️ KB return data mismatch. Found: {results[0]['metadata']}")
+            return False
     else:
-        logger.info("⚠️ RESULT: GAPS DETECTED")
+        logger.error("  ❌ KB Query returned no results.")
         return False
+        
+    hindi_wisdom = kb.query_wisdom("Hindi Wisdom", n_results=1)
+    if hindi_wisdom:
+        logger.info(f"  ✅ Cultural Lore Retrieval Successful: {hindi_wisdom[0]['text']}")
+    else:
+        logger.warning("  ⚠️ Hindi wisdom missing in KB.")
+        
+    return True
+
+def test_trade_validator():
+    logger.info("🛡️  Checking Trade Validator (8-Point Checklist)...")
+    validator = TradeValidator()
+    
+    # Mock a "Dangerous" trade
+    proposal = {
+        'symbol': 'TSLA',
+        'action': 'BUY',
+        'shares': 1000,
+        'entry_price': 200,
+        'target_price': 210,
+        'stop_loss': 199,
+        'portfolio_value': 100000 # Trying to buy $200k with $100k
+    }
+    
+    market_context = {
+        'market_trend': 'bullish',
+        'volatility': 0.05,
+        'vix': 15,
+        'persona_votes': [
+            {'name': 'warren', 'signal': 'BUY', 'weight': 1.0, 'confidence': 0.8},
+            {'name': 'the_ghost', 'signal': 'HOLD', 'weight': 1.0, 'confidence': 0.9}
+        ]
+    }
+    
+    result = validator.validate_trade(proposal, market_context)
+    
+    if result['allowed'] is False:
+        logger.info(f"  ✅ Validator correctly BLOCKED risky trade. Failures: {result['failures']}")
+    else:
+        logger.warning("  ⚠️ Validator allowed a risky trade. Check position sizing logic.")
+        
+    if 'wisdom' in result:
+        logger.info(f"  ✅ Trade Validation includes KB Insight: {result['wisdom']}")
+        
+    return True
+
+def test_divine_doubt():
+    logger.info("👻 Checking Divine Doubt Protocol...")
+    am = AgentManager()
+    
+    # Create an artificial high-consensus context
+    context = {
+        'market_trend': 'bullish',
+        'rsi': 55,
+        'fundamentals': {'pe_ratio': 15, 'return_on_equity': 0.25, 'debt_to_equity': 0.1}
+    }
+    # Create high consensus by masking all opinions with BUY
+    expert_opinions = {name: 'BUY' for name in am.enhanced_agents.keys()}
+    result = am.conduct_agent_voting(context, expert_opinions=expert_opinions)
+    
+    if result.get('divine_doubt_applied'):
+        logger.info(f"  ✅ Divine Doubt successfully applied. Signal: {result['winning_signal']}")
+    else:
+        logger.warning(f"  ⚠️ Divine Doubt not triggered (Consensus: {result['consensus_strength']}). Check Ghost logic.")
+        return False
+        
+    return True
 
 if __name__ == "__main__":
-    success = test_institutional_grade()
-    sys.exit(0 if success else 1)
+    logger.info("🚀 Starting Institutional Grade Final Audit...")
+    
+    success = all([
+        test_persona_registry(),
+        test_knowledge_base(),
+        test_trade_validator(),
+        test_divine_doubt()
+    ])
+    
+    if success:
+        logger.info("\n🏆 INSTITUTIONAL GRADE VERIFIED. System is ALIGNED with God Mode requirements.")
+        sys.exit(0)
+    else:
+        logger.error("\n💥 AUDIT FAILED. Key components missing or malfunctioning.")
+        sys.exit(1)

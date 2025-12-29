@@ -214,6 +214,46 @@ export const getPerformance = () => fetchWithRetry(`${BASE_URL}/performance`);
 
 export const runTradingCycle = () => fetchWithRetry(`${BASE_URL}/run-cycle`, { method: 'POST' });
 
+// ==================== INSTITUTIONAL ENDPOINTS ====================
+
+// Knowledge Base
+export const queryKnowledge = (topic, archetype = null) =>
+  fetchWithRetry(`${BASE_URL}/api/knowledge/query`, {
+    method: 'POST',
+    body: JSON.stringify({ topic, archetype })
+  });
+
+export const getKnowledgeStats = () => fetchWithRetry(`${BASE_URL}/api/knowledge/stats`);
+
+// Personas
+export const getPersonas = () => fetchWithRetry(`${BASE_URL}/api/personas`);
+
+export const getVotingHistory = (limit = 10) => fetchWithRetry(`${BASE_URL}/api/ai-firm/voting-history?limit=${limit}`);
+
+export const getPersonaDetails = (name) => fetchWithRetry(`${BASE_URL}/api/personas/${name}`);
+
+export const conductPersonaVote = (proposal, context = {}) =>
+  fetchWithRetry(`${BASE_URL}/api/personas/vote`, {
+    method: 'POST',
+    body: JSON.stringify({ proposal, ...context })
+  });
+
+// Trade Validation
+export const validateTrade = (trade, marketContext = {}) =>
+  fetchWithRetry(`${BASE_URL}/api/trade/validate`, {
+    method: 'POST',
+    body: JSON.stringify({ trade, market_context: marketContext })
+  });
+
+export const getValidationStats = () => fetchWithRetry(`${BASE_URL}/api/trade/validation-stats`);
+
+// Data Verification
+export const getVerifiedPrice = (symbol) => fetchWithRetry(`${BASE_URL}/api/data/price-verified?symbol=${symbol}`);
+
+export const getVerificationStats = () => fetchWithRetry(`${BASE_URL}/api/data/verification-stats`);
+
+// ================================================================
+
 // Enhanced RL cycle
 
 
@@ -295,7 +335,18 @@ export const api = {
   optimizePortfolio,
   subscribeToUpdates,
   streamMarketPrice,
-  testConnection
+  testConnection,
+  // New Institutional
+  queryKnowledge,
+  getKnowledgeStats,
+  getVotingHistory,
+  getPersonas,
+  getPersonaDetails,
+  conductPersonaVote,
+  validateTrade,
+  getValidationStats,
+  getVerifiedPrice,
+  getVerificationStats
 };
 
 export default api;

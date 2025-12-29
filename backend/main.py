@@ -1081,6 +1081,20 @@ def ai_firm_status():
         }), 200
     return jsonify({'status': 'degraded'}), 500
 
+@app.route('/api/ai-firm/voting-history', methods=['GET'])
+def ai_firm_voting_history():
+    """Get recent voting sessions history"""
+    if AI_FIRM_READY:
+        limit = int(request.args.get('limit', 10))
+        # Reverse sessions to get latest first and limit
+        history = agent_manager.voting_sessions[::-1][:limit]
+        return jsonify({
+            'history': history,
+            'count': len(history),
+            'timestamp': datetime.now().isoformat()
+        }), 200
+    return jsonify({'status': 'degraded'}), 500
+
 # ==================== EXPLICIT PERSONA API ENDPOINTS ====================
 
 @app.route('/api/personas', methods=['GET'])

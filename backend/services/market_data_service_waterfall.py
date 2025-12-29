@@ -369,7 +369,7 @@ class WaterfallMarketDataService:
         try:
             import yfinance as yf
             data = yf.Ticker(symbol).history(period='1d')
-            return float(data['Close'].iloc[-1]) if notdata.empty else None
+            return float(data['Close'].iloc[-1]) if not data.empty else None
         except: return None
 
     def _fetch_price_fmp(self, symbol):
@@ -394,3 +394,12 @@ class WaterfallMarketDataService:
             price = r.json().get('Global Quote', {}).get('05. price')
             if price: self.providers['alpha_vantage']['limiter'].increment(); return float(price)
         except: return None
+
+# Singleton
+_waterfall_service = None
+
+def get_waterfall_service():
+    global _waterfall_service
+    if _waterfall_service is None:
+        _waterfall_service = WaterfallMarketDataService()
+    return _waterfall_service

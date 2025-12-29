@@ -1,3 +1,10 @@
+from typing import Dict, Any, List, Optional
+from datetime import datetime, timedelta
+import logging
+import uuid
+from services.market_data_service_waterfall import get_waterfall_service
+from services.knowledge_base import get_knowledge_base
+
 """
 Trade Validation Engine
 
@@ -14,11 +21,6 @@ The 8 Mandatory Checks:
 7. Position Size ≤10%
 8. Execution Risk <2%
 """
-
-from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
-import logging
-import uuid
 
 
 class TradeValidator:
@@ -181,6 +183,8 @@ class TradeValidator:
         """Check 3: Confidence Band ≥60%"""
         try:
             persona_votes = context.get('persona_votes', [])
+            kb = get_knowledge_base()
+            wisdom = kb.query_wisdom(proposal.get('symbol', 'market'), n_results=1)
             
             if not persona_votes:
                 # No votes available, use conservative default
@@ -195,7 +199,13 @@ class TradeValidator:
             passed = confidence >= self.CONFIDENCE_BAND_MIN
             reason = '' if passed else f'Confidence {confidence:.1f}% < {self.CONFIDENCE_BAND_MIN}%'
             
-            return {'name': 'confidence_band', 'passed': passed, 'reason': reason, 'confidence': round(confidence, 1)}
+            return {
+                'name': 'confidence_band', 
+                'passed': passed, 
+                'reason': reason, 
+                'confidence': round(confidence, 1),
+                'wisdom': wisdom[0]['text'] if wisdom else "Stay data-driven."
+            }
         except Exception as e:
             return {'name': 'confidence_band', 'passed': False, 'reason': f'Error: {e}'}
     
