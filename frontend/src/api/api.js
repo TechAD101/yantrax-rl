@@ -2,7 +2,7 @@
 // Resolve backend BASE URL from Vite env var or process env fallbacks
 const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL)
   ? import.meta.env.VITE_API_URL
-  : (process.env.VITE_API_URL || process.env.REACT_APP_API_URL || 'https://yantrax-backend.onrender.com');
+  : 'https://yantrax-backend.onrender.com';
 
 const BASE_URL = API_BASE_URL;
 export { BASE_URL };
@@ -187,7 +187,7 @@ export const streamMarketPrice = ({ symbol = 'AAPL', interval = 5, count = 0, on
   es.onopen = (evt) => { if (typeof onOpen === 'function') onOpen(evt) }
   es.onmessage = (evt) => { try { const payload = JSON.parse(evt.data); if (typeof onMessage === 'function') onMessage(payload) } catch (err) { if (typeof onError === 'function') onError(err); console.error('streamMarketPrice JSON parse error', err) } }
   es.onerror = (evt) => { if (typeof onError === 'function') onError(evt) }
-  return { close: () => { try { es.close() } catch (e) {} } }
+  return { close: () => { try { es.close() } catch (e) { } } }
 };
 
 export const testConnection = async () => {

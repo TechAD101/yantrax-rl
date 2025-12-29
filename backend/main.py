@@ -5,6 +5,16 @@ import logging
 import json
 from dotenv import load_dotenv
 
+# --- RENDER/CHROMA DB PATCH ---
+# Fix for old SQLite versions on Render/Linux
+try:
+    __import__('pysqlite3')
+    import sys
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+except ImportError:
+    pass
+# ------------------------------
+
 load_dotenv()
 
 import numpy as np
