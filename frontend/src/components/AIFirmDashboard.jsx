@@ -196,8 +196,8 @@ const AIFirmDashboard = () => {
                   <div key={agent.name} className="group relative flex flex-col items-center">
                     <div
                       className={`w-3 h-3 rounded-full transition-all duration-700 ${agent.confidence > 0.8 ? 'bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)]' :
-                          agent.confidence > 0.6 ? 'bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]' :
-                            'bg-gray-600 shadow-none'
+                        agent.confidence > 0.6 ? 'bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]' :
+                          'bg-gray-600 shadow-none'
                         } ${i % 2 === 0 ? 'animate-pulse' : ''}`}
                     ></div>
                     {/* Tooltip on hover */}
@@ -265,7 +265,7 @@ const AIFirmDashboard = () => {
               <div className="bg-gray-900/40 rounded-lg p-3 border border-white/5">
                 <p className="text-xs text-gray-500 uppercase tracking-tighter mb-1 font-bold">Voice & Logic</p>
                 <p className="text-xs text-gray-300">
-                  Agents in the {persona.department.replace('_', ' ')} department are currently monitoring {persona.specialty.toLowerCase()} patterns.
+                  Agents in the {persona.department?.replace('_', ' ') || 'core'} department are currently monitoring {persona.specialty?.toLowerCase() || 'market'} patterns.
                 </p>
               </div>
             </div>
