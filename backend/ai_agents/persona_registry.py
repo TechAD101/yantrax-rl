@@ -44,23 +44,24 @@ class PersonaRegistry:
         except Exception as e:
             self.logger.error(f"Failed to register Cathie: {e}")
 
-        try:
-            # Import and instantiate The Ghost
-            from ai_agents.personas.the_ghost import TheGhostAgent
-            ghost = TheGhostAgent()
-            self._personas[ghost.name.lower()] = ghost
-            self.logger.info(f"✓ Registered persona: {ghost.name} ({ghost.archetype.value})")
-        except Exception as e:
-            self.logger.debug(f"TheGhost not found: {e}")
+        # TEMPORARILY DISABLED - causing backend crash
+        # try:
+        #     # Import and instantiate The Ghost
+        #     from ai_agents.personas.the_ghost import TheGhostAgent
+        #     ghost = TheGhostAgent()
+        #     self._personas[ghost.name.lower()] = ghost
+        #     self.logger.info(f"✓ Registered persona: {ghost.name} ({ghost.archetype.value})")
+        # except Exception as e:
+        #     self.logger.debug(f"TheGhost not found: {e}")
 
-        try:
-            # Import and instantiate Macro Monk
-            from ai_agents.personas.macro_monk import MacroMonkAgent
-            monk = MacroMonkAgent()
-            self._personas[monk.name.lower()] = monk
-            self.logger.info(f"✓ Registered persona: {monk.name} ({monk.archetype.value})")
-        except Exception as e:
-            self.logger.debug(f"MacroMonk not found: {e}")
+        # try:
+        #     # Import and instantiate Macro Monk
+        #     from ai_agents.personas.macro_monk import MacroMonkAgent
+        #     monk = MacroMonkAgent()
+        #     self._personas[monk.name.lower()] = monk
+        #     self.logger.info(f"✓ Registered persona: {monk.name} ({monk.archetype.value})")
+        # except Exception as e:
+        #     self.logger.debug(f"MacroMonk not found: {e}")
             
         self.logger.info(f"PersonaRegistry initialized with {len(self._personas)} personas")
     

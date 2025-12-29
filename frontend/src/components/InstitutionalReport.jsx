@@ -6,23 +6,24 @@ const InstitutionalReport = ({ symbol, isOpen, onClose }) => {
     const [report, setReport] = useState(null);
     const [loading, setLoading] = useState(true);
 
+
     useEffect(() => {
+        const fetchReport = async () => {
+            try {
+                setLoading(true);
+                const data = await api.getInstitutionalReport(symbol);
+                setReport(data);
+            } catch (e) {
+                console.error('Report fetch failed', e);
+            } finally {
+                setLoading(false);
+            }
+        };
+
         if (isOpen && symbol) {
             fetchReport();
         }
     }, [isOpen, symbol]);
-
-    const fetchReport = async () => {
-        try {
-            setLoading(true);
-            const data = await api.getInstitutionalReport(symbol);
-            setReport(data);
-        } catch (e) {
-            console.error('Report fetch failed', e);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     if (!isOpen) return null;
 
