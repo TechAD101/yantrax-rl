@@ -15,8 +15,7 @@ import time
 import logging
 import requests  # type: ignore[import]
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
-from functools import lru_cache
+from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
 

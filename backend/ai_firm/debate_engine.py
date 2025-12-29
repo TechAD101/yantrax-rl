@@ -1,7 +1,7 @@
 import logging
 import uuid
 from datetime import datetime, timedelta
-from typing import Dict, List, Any
+from typing import Dict, Any
 
 class DebateEngine:
     """Facilitates structured arguments and voting among AI agents"""

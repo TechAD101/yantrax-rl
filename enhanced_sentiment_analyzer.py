@@ -5,11 +5,10 @@ Advanced sentiment analysis with reinforcement learning optimization
 """
 
 import numpy as np
-import pandas as pd
 from textblob import TextBlob
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import re
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Any
 from datetime import datetime
 import logging
 from sklearn.preprocessing import MinMaxScaler

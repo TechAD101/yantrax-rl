@@ -1,5 +1,4 @@
 import os
-import multiprocessing
 
 # Gunicorn Configuration File (gunicorn.conf.py)
 # This file is automatically loaded by Gunicorn/Render to configure the server.

@@ -406,7 +406,7 @@ def ingest_all_wisdom():
     ])
     
     print("=" * 60)
-    print(f"  ✅ INGESTION COMPLETE")
+    print("  ✅ INGESTION COMPLETE")
     print(f"  Total wisdom items: {final_stats['investor_wisdom_count']}")
     print(f"  Expected: {total_ingested}")
     print("=" * 60 + "\n")

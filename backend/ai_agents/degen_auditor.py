@@ -1,10 +1,7 @@
 # ai_agents/degen_auditor.py - Enhanced Risk Assessment and Trade Auditing Agent
-import numpy as np
-import random
-from typing import Dict, List, Tuple, Optional, Any
-from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+from datetime import datetime
 import logging
-import math
 
 logger = logging.getLogger(__name__)
 
@@ -392,7 +389,7 @@ class DegenAuditorAgent:
 
     def _log_audit_trail(self, parsed_signal: Dict, decision: str, risk_assessment: Dict, risk_score: float):
         """Log comprehensive audit trail"""
-        logger.info(f"[Degen Auditor] Audit Trail:")
+        logger.info("[Degen Auditor] Audit Trail:")
         logger.info(f"  Signal: {parsed_signal.get('original_signal', 'Unknown')}")
         logger.info(f"  Action: {parsed_signal.get('action', 'Unknown')}")
         logger.info(f"  Confidence: {parsed_signal.get('confidence', 'Unknown')}")

@@ -4,13 +4,11 @@ Sophisticated 200+ line report generator with AI insights, narrative generation,
 and comprehensive analytics for stakeholder communication.
 """
 
-import json
 import uuid
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Union
+from datetime import datetime
+from typing import Dict, List, Any
 from dataclasses import dataclass, asdict
 from enum import Enum
-import statistics
 import numpy as np
 
 class ReportType(Enum):
@@ -290,7 +288,7 @@ class AdvancedReportGenerator:
             insights=[
                 f"Portfolio achieved {metrics.daily_pnl:+.2f}% {timeframe} performance",
                 f"Agent consensus at {metrics.agent_consensus:.1%} demonstrates strong coordination",
-                f"Risk metrics remain within acceptable parameters"
+                "Risk metrics remain within acceptable parameters"
             ],
             priority=1
         )

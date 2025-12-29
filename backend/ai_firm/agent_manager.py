@@ -3,12 +3,11 @@
 Integrates with existing Flask structure while adding 20+ agent coordination
 """
 
-import json
 import logging
 import uuid
 import numpy as np
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, Any
 
 class Agent:
     """Lightweight Agent representation used by the package API.
@@ -427,7 +426,7 @@ class AgentManager:
             payload['sample_agents'] = sample
 
             return payload
-        except Exception as e:
+        except Exception:
             # If anything unexpected happens, log and return a safe minimal payload
             self.logger.exception("agent_manager.get_agent_status unexpected error")
             return {

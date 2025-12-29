@@ -2,13 +2,15 @@
 
 # Core Web Framework
 flask==3.0.3
-flask-cors==4.0.0
-gunicorn==21.2.0
+flask-cors==6.0.0
+gunicorn==22.0.0
 
 # HTTP & Environment
-requests==2.31.0
+requests==2.32.5
 python-dotenv==1.0.0
-urllib3<2.0
+urllib3==2.6.0
+filelock==3.20.1
+werkzeug==3.1.4
 
 # Data Processing
 numpy==1.26.4

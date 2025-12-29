@@ -23,6 +23,7 @@ The 8 Mandatory Checks:
 """
 
 
+
 class TradeValidator:
     """
     Strict 8-point validation engine for institutional-grade risk management

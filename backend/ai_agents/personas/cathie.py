@@ -4,19 +4,11 @@ Growth-focused innovation scouting agent with disruptive technology focus
 and sector rotation capabilities for emerging market opportunities.
 """
 
-import hashlib
-import secrets
-import sys
-import os
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
+from datetime import datetime
+from typing import Dict, Any
 from dataclasses import dataclass
-import json
-import math
 
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from base_persona import PersonaAgent, PersonaArchetype, VoteType, PersonaVote, PersonaAnalysis
+from ..base_persona import PersonaAgent, PersonaArchetype, VoteType, PersonaVote, PersonaAnalysis
 
 @dataclass
 class CathiePersonality:

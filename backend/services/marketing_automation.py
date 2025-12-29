@@ -12,10 +12,9 @@ Author: YantraX-RL Platform
 Created: August 28, 2025
 """
 
-import asyncio
 import logging
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
@@ -25,7 +24,6 @@ import redis
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from jinja2 import Template
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -247,7 +245,7 @@ class JourneyTrackingService:
         self.redis = redis_client
     
     async def track_event(self, lead_id: str, event_type: EventType, event_name: str, 
-                         properties: Dict[str, Any] = None) -> JourneyEvent:
+                         properties: Optional[Dict[str, Any]] = None) -> JourneyEvent:
         """Track a customer journey event."""
         event_id = str(uuid4())
         

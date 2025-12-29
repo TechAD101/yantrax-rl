@@ -4,11 +4,10 @@ Manages 24/7 operation with 3-shift system for continuous AI firm operation.
 Coordinates agent availability, shift transitions, and round-the-clock monitoring.
 """
 
-import json
 import uuid
 from datetime import datetime, timedelta, time
 from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from enum import Enum
 import pytz
 
@@ -52,10 +51,10 @@ class ShiftManager:
     
     def __init__(self, timezone: str = 'UTC'):
         self.timezone = pytz.timezone(timezone)
-        self.shifts = {}
-        self.current_shift = None
-        self.shift_history = []
-        self.transition_logs = []
+        self.shifts: Dict[ShiftType, Shift] = {}
+        self.current_shift: Optional[ShiftType] = None
+        self.shift_history: List[Dict[str, Any]] = []
+        self.transition_logs: List[ShiftTransition] = []
         
         # Initialize 3-shift system
         self._initialize_shift_system()
@@ -146,9 +145,10 @@ class ShiftManager:
         if target_shift is None:
             target_shift = self._get_next_shift()
         
-        current_shift_obj = self.shifts[self.current_shift]
-        target_shift_obj = self.shifts[target_shift]
-        
+        # Ensure we have a valid current shift
+        if self.current_shift is None:
+            self.current_shift = self._determine_current_shift()
+
         # Create handover notes
         handover_notes = self._generate_handover_notes(current_shift_obj)
         
@@ -452,7 +452,7 @@ class ShiftManager:
     def _find_overlap_agents(self) -> List[str]:
         """Find agents assigned to multiple shifts"""
         
-        agent_shift_count = {}
+        agent_shift_count: Dict[str, int] = {}
         
         for shift in self.shifts.values():
             for agent in shift.assigned_agents:

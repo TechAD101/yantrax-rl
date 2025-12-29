@@ -2,13 +2,13 @@
 flask==3.0.0
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-gunicorn==21.2.0
+gunicorn==22.0.0
 psycopg2-binary==2.9.9
 sqlalchemy==2.0.23
 alembic==1.13.1
 celery==5.3.4
 redis==5.0.1
-requests==2.31.0
+requests==2.32.5
 pandas==2.1.4
 numpy==1.26.2
 python-dotenv==1.0.0
@@ -62,3 +62,9 @@ slugify==0.0.1
 peewee==3.17.0
 textblob
 vaderSentiment
+# Security pins (upgrades recommended)
+urllib3==2.6.0
+filelock==3.20.1
+werkzeug==3.1.4
+fonttools==4.60.2
+jupyterlab==4.4.8

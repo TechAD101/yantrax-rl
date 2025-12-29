@@ -4,11 +4,10 @@ Manages the 5-department structure of the AI firm:
 Market Intelligence, Trade Operations, Risk Control, Performance Lab, Communications
 """
 
-import json
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from enum import Enum
 
 class DepartmentType(Enum):
@@ -216,7 +215,7 @@ class Department:
         self.priority_level = priority_level
         self.coordination_dependencies = coordination_deps
         self.agent_status = {agent: {'active': True, 'workload': 0.5} for agent in agents}
-        self.task_history = []
+        self.task_history: List[Dict[str, Any]] = []
         
     def process_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
         """Process task within department"""

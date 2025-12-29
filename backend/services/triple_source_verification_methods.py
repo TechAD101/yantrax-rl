@@ -7,6 +7,12 @@ institutional-grade triple-source verification.
 CRITICAL: ZERO MOCK DATA - All values from real APIs or explicit errors.
 """
 
+from typing import Dict, Any, List, Optional
+from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
+
 # ==================== TRIPLE-SOURCE VERIFICATION METHODS ====================
 
 def get_price_verified(self, symbol: str) -> Dict[str, Any]:

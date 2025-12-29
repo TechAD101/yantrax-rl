@@ -8,12 +8,14 @@ import json
 import uuid
 import hashlib
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Union
-from dataclasses import dataclass, asdict
+from typing import Dict, List, Any, Optional, Set
+from dataclasses import dataclass
 from enum import Enum
-import pickle
 import sqlite3
 import threading
+import logging
+
+logger = logging.getLogger(__name__)
 
 class MemoryType(Enum):
     DECISION = "decision"
@@ -51,9 +53,9 @@ class FirmMemorySystem:
     
     def __init__(self, db_path: str = "ai_firm_memory.db"):
         self.db_path = db_path
-        self.memory_cache = {}
-        self.access_patterns = {}
-        self.context_index = {}
+        self.memory_cache: Dict[str, MemoryItem] = {}
+        self.access_patterns: Dict[str, dict] = {}
+        self.context_index: Dict[str, List[str]] = {}
         self.lock = threading.RLock()
         
         # Initialize database
@@ -93,7 +95,7 @@ class FirmMemorySystem:
             conn.commit()
     
     def store_memory(self, memory_type: MemoryType, content: Dict[str, Any], 
-                    importance: float, agents: List[str], tags: List[str] = None) -> str:
+                    importance: float, agents: List[str], tags: Optional[List[str]] = None) -> str:
         """Store new memory item with intelligent categorization"""
         
         with self.lock:
@@ -421,7 +423,7 @@ class FirmMemorySystem:
             ]
             
             # Group similar memories for consolidation
-            context_groups = {}
+            context_groups: Dict[str, List[MemoryItem]] = {}
             for memory in old_memories:
                 if memory.context_hash not in context_groups:
                     context_groups[memory.context_hash] = []
@@ -532,13 +534,13 @@ class FirmMemorySystem:
                 return {'total_memories': 0, 'memory_types': {}, 'agents': {}}
             
             # Memory type distribution
-            type_distribution = {}
+            type_distribution: Dict[str, int] = {}
             for memory in self.memory_cache.values():
                 type_key = memory.memory_type.value
                 type_distribution[type_key] = type_distribution.get(type_key, 0) + 1
             
             # Agent memory distribution
-            agent_distribution = {}
+            agent_distribution: Dict[str, int] = {}
             for memory in self.memory_cache.values():
                 for agent in memory.associated_agents:
                     agent_distribution[agent] = agent_distribution.get(agent, 0) + 1
@@ -594,5 +596,6 @@ class FirmMemorySystem:
             import os
             size_bytes = os.path.getsize(self.db_path)
             return round(size_bytes / (1024 * 1024), 2)
-        except:
+        except Exception as e:
+            logger.debug(f"Failed to estimate DB size: {e}")
             return 0.5  # Default estimate

@@ -87,31 +87,47 @@ methods_to_add = '''
         try:
             import yfinance as yf
             data = yf.Ticker(symbol).history(period='1d')
-            return float(data['Close'].iloc[-1]) if notdata.empty else None
-        except: return None
+            if data is None or data.empty:
+                return None
+            return float(data['Close'].iloc[-1])
+        except Exception as e:
+            logger.warning(f"yfinance fetch failed for {symbol}: {e}")
+            return None
 
     def _fetch_price_fmp(self, symbol):
-        if not self.providers['fmp']['enabled']: return None
+        if not self.providers['fmp']['enabled']:
+            return None
         try:
             self.providers['fmp']['limiter'].check()
             import requests
             r = requests.get(f"https://financialmodelingprep.com/api/v3/quote-short/{symbol}",
-                           params={'apikey': self.providers['fmp']['key']}, timeout=5)
+                             params={'apikey': self.providers['fmp']['key']}, timeout=5)
             data = r.json()
-            if data: self.providers['fmp']['limiter'].increment(); return float(data[0]['price'])
-        except: return None
+            if data:
+                self.providers['fmp']['limiter'].increment()
+                return float(data[0]['price'])
+            return None
+        except Exception as e:
+            logger.warning(f"FMP fetch failed for {symbol}: {e}")
+            return None
 
     def _fetch_price_alpha_vantage(self, symbol):
-        if not self.providers['alpha_vantage']['enabled']: return None
+        if not self.providers['alpha_vantage']['enabled']:
+            return None
         try:
             self.providers['alpha_vantage']['limiter'].check()
             import requests
             r = requests.get("https://www.alphavantage.co/query",
-                           params={'function': 'GLOBAL_QUOTE', 'symbol': symbol,
-                                 'apikey': self.providers['alpha_vantage']['key']}, timeout=5)
+                             params={'function': 'GLOBAL_QUOTE', 'symbol': symbol,
+                                     'apikey': self.providers['alpha_vantage']['key']}, timeout=5)
             price = r.json().get('Global Quote', {}).get('05. price')
-            if price: self.providers['alpha_vantage']['limiter'].increment(); return float(price)
-        except: return None
+            if price:
+                self.providers['alpha_vantage']['limiter'].increment()
+                return float(price)
+            return None
+        except Exception as e:
+            logger.warning(f"Alpha Vantage fetch failed for {symbol}: {e}")
+            return None
 '''
 
 # Append to file
