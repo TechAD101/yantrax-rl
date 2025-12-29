@@ -346,7 +346,10 @@ export const api = {
   validateTrade,
   getValidationStats,
   getVerifiedPrice,
-  getVerificationStats
+  getVerificationStats,
+  // New Institutional Phase Ω
+  getInstitutionalReport: (symbol = 'AAPL') => fetchWithRetry(`${BASE_URL}/report/institutional?symbol=${symbol}`),
+  getSystemStatus: () => fetchWithRetry(`${BASE_URL}/health`)
 };
 
 export default api;

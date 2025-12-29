@@ -25,7 +25,7 @@ const TopSignals = () => {
             }
         };
         fetchSignals();
-        const interval = setInterval(fetchSignals, 10000);
+        const interval = setInterval(fetchSignals, 60000); // Global Sync: 1 minute
         return () => clearInterval(interval);
     }, []);
 

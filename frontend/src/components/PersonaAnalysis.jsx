@@ -15,7 +15,7 @@ const PersonaAnalysis = () => {
           api.getWarrenAnalysis(),
           api.getCathieAnalysis()
         ]);
-        
+
         setPersonaData({
           warren: warrenData,
           cathie: cathieData,
@@ -31,7 +31,7 @@ const PersonaAnalysis = () => {
     loadPersonaData();
 
     // Subscribe to updates
-    const timer = setInterval(loadPersonaData, 15000);
+    const timer = setInterval(loadPersonaData, 60000); // Global Sync: 1 minute
     return () => clearInterval(timer);
   }, []);
 

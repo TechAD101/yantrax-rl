@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BASE_URL } from '../api/api';
 import PainMeter from './PainMeter';
 import MarketMoodDial from './MarketMoodDial';
+import InstitutionalReport from './InstitutionalReport';
 
 const AIFirmDashboard = () => {
   const [firmStatus, setFirmStatus] = useState(null);
@@ -9,10 +10,11 @@ const AIFirmDashboard = () => {
   const [wisdom, setWisdom] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
     fetchAIFirmData();
-    const interval = setInterval(fetchAIFirmData, 30000); // Update every 30 seconds
+    const interval = setInterval(fetchAIFirmData, 60000); // Update every 1 minute (Global Sync)
     return () => clearInterval(interval);
   }, []);
 
@@ -217,7 +219,7 @@ const AIFirmDashboard = () => {
 
             {/* CEO Reasoning & Ghost Whispers */}
             {wisdom && (
-              <div className="bg-gray-900/80 rounded-lg p-4 border border-blue-500/30">
+              <div className="bg-gray-900/80 rounded-lg p-4 border border-blue-500/30 mb-6">
                 <h4 className="text-sm font-bold text-blue-300 mb-2 flex items-center">
                   <span className="mr-2">📜</span> Institutional Wisdom
                 </h4>
@@ -227,8 +229,28 @@ const AIFirmDashboard = () => {
                 </div>
               </div>
             )}
+
+            {/* Institutional Phase Ω: Action Bar */}
+            <div className="flex items-center justify-center pt-4 pb-4 border-t border-white/5">
+              <button
+                onClick={() => setReportOpen(true)}
+                className="group relative px-8 py-3 bg-gradient-to-r from-cyan-600 to-blue-700 hover:from-cyan-500 hover:to-blue-600 rounded-xl font-bold text-white shadow-lg transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 rounded-xl transition-opacity"></div>
+                <span className="flex items-center tracking-widest uppercase text-[10px] font-bold">
+                  <span className="mr-2 text-base">📄</span>
+                  Generate Institutional Intelligence Report
+                </span>
+              </button>
+            </div>
           </div>
         )}
+
+        <InstitutionalReport
+          symbol="AAPL"
+          isOpen={reportOpen}
+          onClose={() => setReportOpen(false)}
+        />
       </div>
 
       {/* Named Personas Analysis */}

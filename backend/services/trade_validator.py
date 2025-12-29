@@ -130,13 +130,15 @@ class TradeValidator:
     # ==================== THE 8 VALIDATION CHECKS ====================
     
     def _check_macro_alignment(self, proposal: Dict, context: Dict) -> Dict[str, Any]:
-        """Check 1: Macro Alignment ≥50%"""
+        """Check 1: Macro Alignment ≥50%
+        Improved: Uses market_trend and optional sentiment/mood.
+        """
         try:
-            # Calculate macro score from market context
             market_trend = context.get('market_trend', 'neutral')
             action = proposal.get('action', 'BUY')
+            mood = context.get('market_mood', 'neutral') # New: RL or CEO mood
             
-            # Simple heuristic: bullish trend + BUY = good, bearish + SELL = good
+            # Base logic
             if market_trend == 'bullish' and action == 'BUY':
                 macro_score = 75
             elif market_trend == 'bearish' and action == 'SELL':
@@ -144,12 +146,23 @@ class TradeValidator:
             elif market_trend == 'neutral':
                 macro_score = 55
             else:
-                macro_score = 35  # Counter-trend trade
-            
+                macro_score = 35 # Counter-trend
+                
+            # Adjustment for Mood (Divine/RL Sentiment)
+            if mood == 'euphoric' and action == 'BUY': macro_score -= 10 # Overheated
+            if mood == 'panic' and action == 'SELL': macro_score -= 10 # Panic selling
+            if mood == 'calm': macro_score += 5 # Precision environment
+
             passed = macro_score >= self.MACRO_ALIGNMENT_MIN
-            reason = '' if passed else f'Macro score {macro_score} < {self.MACRO_ALIGNMENT_MIN}'
+            reason = '' if passed else f'Macro score {macro_score} < {self.MACRO_ALIGNMENT_MIN} (Trend: {market_trend}, Mood: {mood})'
             
-            return {'name': 'macro_alignment', 'passed': passed, 'reason': reason, 'score': macro_score}
+            return {
+                'name': 'macro_alignment', 
+                'passed': passed, 
+                'reason': reason, 
+                'score': macro_score,
+                'details': {'trend': market_trend, 'mood': mood}
+            }
         except Exception as e:
             return {'name': 'macro_alignment', 'passed': False, 'reason': f'Error: {e}'}
     

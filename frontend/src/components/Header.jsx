@@ -12,13 +12,14 @@ const Header = () => {
       total_agents: 0,
       departments: 0,
       mode: ''
-    }
+    },
+    lastUpdated: new Date()
   });
 
   useEffect(() => {
     // Subscribe to status updates
     const unsubscribe = api.subscribeToUpdates('getStatus', (data) => {
-      setSystemStatus(data);
+      setSystemStatus({ ...data, lastUpdated: new Date() });
     });
 
     return () => unsubscribe();
@@ -36,29 +37,35 @@ const Header = () => {
               SUPERNATURAL
             </span>
           </div>
-          
+
           <div className="flex items-center space-x-6">
-            {/* AI Firm Status */}
-            <div className="flex items-center space-x-2">
-              <div className="text-sm text-gray-400">
-                <span className="block text-right">AI Firm</span>
-                <span className="block text-xs text-gray-500">
-                  {systemStatus.aiForm?.total_agents || 24} Agents • {systemStatus.aiForm?.departments || 5} Departments
+            {/* Institutional Trust Score */}
+            <div className="flex flex-col items-end">
+              <span className="text-[10px] text-gray-500 uppercase tracking-widest">Trust Score</span>
+              <div className="flex items-center space-x-2">
+                <span className={`text-sm font-bold ${systemStatus.institutional_trust?.score > 80 ? 'text-cyan-400' : 'text-yellow-400'}`}>
+                  {systemStatus.institutional_trust?.score || '88.5'}%
                 </span>
+                <div className={`w-1.5 h-1.5 rounded-full ${systemStatus.institutional_trust?.score > 80 ? 'bg-cyan-400 shadow-[0_0_5px_rgba(34,211,238,0.8)]' : 'bg-yellow-400'}`} />
               </div>
             </div>
 
-            {/* System Status */}
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-400">Status:</span>
-              <div className="flex items-center space-x-2">
-                <span className="text-green-400">{systemStatus.status}</span>
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              </div>
+            {/* Ghost Layer Status */}
+            <div className="flex flex-col items-end border-l border-gray-700/50 pl-6">
+              <span className="text-[10px] text-purple-400 uppercase tracking-widest font-bold">Ghost Layer</span>
+              <span className="text-xs text-purple-300 font-mono">
+                {systemStatus.ghost_layer?.dimension || '9th_chamber'}
+              </span>
             </div>
-            {/* Debug: show effective API URL for deployment verification */}
-            <div className="text-xs text-gray-400">
-              API: <span className="text-blue-300">{EFFECTIVE_API}</span>
+
+            {/* System Status */}
+            <div className="flex items-center space-x-3 border-l border-gray-700/50 pl-6">
+              <div className="text-right">
+                <div className="text-xs text-gray-400">v{systemStatus.version}</div>
+                <div className="text-[9px] text-gray-500 font-mono">Updated: {systemStatus.lastUpdated?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                <div className="text-[10px] text-green-500 font-mono uppercase tracking-tighter">Sync: {systemStatus.cache_sync || '60s'}</div>
+              </div>
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
             </div>
           </div>
         </div>

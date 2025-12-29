@@ -56,7 +56,8 @@ class WaterfallMarketDataService:
             'price': {},        # ticker -> {'price': float, 'source': str, 'expiry': float}
             'fundamentals': {}  # ticker -> {'data': dict, 'expiry': float}
         }
-        self.cache_ttl = int(os.getenv('MARKET_DATA_CACHE_TTL', 60))  # 60s
+        # GLOBAL SYNC REQUIREMENT: 60s cache for institutional precision
+        self.cache_ttl = 60 
         
         # Audit trail for triple-source verification (in-memory for now)
         self.audit_log = []  # List of verification attempts
@@ -104,8 +105,13 @@ class WaterfallMarketDataService:
         
         logger.info(f"🌊 Waterfall Service Initialized. Active: {[k for k,v in self.providers.items() if v['enabled']]}")
 
-    def get_price(self, symbol: str) -> Dict[str, Any]:
-        """Get current price using waterfall strategy with caching & circuit breaking"""
+    def get_price(self, symbol: str, verified: bool = False) -> Dict[str, Any]:
+        """Get current price using waterfall strategy with caching & circuit breaking.
+        If verified=True, uses triple-source verification (Perplexity spec).
+        """
+        if verified:
+            return self.get_price_verified(symbol)
+
         symbol = symbol.upper()
         now = time.time()
         
