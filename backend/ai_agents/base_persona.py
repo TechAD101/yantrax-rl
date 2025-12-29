@@ -17,6 +17,8 @@ class PersonaArchetype(Enum):
     GROWTH = "cathie"  # Innovation, disruptive tech
     SYSTEMATIC = "quant"  # Pure algorithmic, no emotion
     RISK_AUDITOR = "degen_auditor"  # Monitors and mitigates excessive risk
+    MACRO = "macro_monk"  # Geopolitical and macro trends
+    GHOST = "the_ghost"  # Quantum sentiment and reversals
 
 
 class VoteType(Enum):
@@ -98,7 +100,11 @@ class PersonaAgent(ABC):
                  name: str, 
                  archetype: PersonaArchetype,
                  voting_weight: float = 1.0,
-                 preferred_strategies: Optional[List[str]] = None):
+                 preferred_strategies: Optional[List[str]] = None,
+                 department: str = "core_strategy",
+                 specialty: str = "general_trading",
+                 role: str = "senior_analyst",
+                 mandate: str = "Support institutional growth"):
         """
         Initialize persona agent
         
@@ -112,6 +118,10 @@ class PersonaAgent(ABC):
         self.archetype = archetype
         self.voting_weight = voting_weight
         self.preferred_strategies = preferred_strategies or []
+        self.department = department
+        self.specialty = specialty
+        self.role = role
+        self.mandate = mandate
         self.vote_history: List[PersonaVote] = []
         self.analysis_history: List[PersonaAnalysis] = []
         self.performance_metrics = {
@@ -200,13 +210,19 @@ class PersonaAgent(ABC):
         
         return {
             'persona_name': self.name,
+            'name': self.name.lower(), # compatibility with frontend
             'archetype': self.archetype.value,
             'total_votes': self.performance_metrics['total_votes'],
             'total_analyses': self.performance_metrics['total_analyses'],
             'avg_confidence': round(self.performance_metrics['avg_confidence'], 3),
+            'confidence': round(self.performance_metrics['avg_confidence'], 3), # compatibility
             'recent_votes_30d': len(recent_votes),
             'voting_weight': self.voting_weight,
-            'preferred_strategies': self.preferred_strategies
+            'preferred_strategies': self.preferred_strategies,
+            'department': self.department,
+            'specialty': self.specialty,
+            'role': self.role,
+            'mandate': self.mandate
         }
     
     def get_recent_reasoning(self, limit: int = 5) -> List[Dict[str, Any]]:

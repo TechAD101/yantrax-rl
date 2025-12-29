@@ -43,7 +43,25 @@ class PersonaRegistry:
             self.logger.info(f"✓ Registered persona: {cathie.name} ({cathie.archetype.value})")
         except Exception as e:
             self.logger.error(f"Failed to register Cathie: {e}")
-        
+
+        try:
+            # Import and instantiate The Ghost
+            from ai_agents.personas.the_ghost import TheGhostAgent
+            ghost = TheGhostAgent()
+            self._personas[ghost.name.lower()] = ghost
+            self.logger.info(f"✓ Registered persona: {ghost.name} ({ghost.archetype.value})")
+        except Exception as e:
+            self.logger.debug(f"TheGhost not found: {e}")
+
+        try:
+            # Import and instantiate Macro Monk
+            from ai_agents.personas.macro_monk import MacroMonkAgent
+            monk = MacroMonkAgent()
+            self._personas[monk.name.lower()] = monk
+            self.logger.info(f"✓ Registered persona: {monk.name} ({monk.archetype.value})")
+        except Exception as e:
+            self.logger.debug(f"MacroMonk not found: {e}")
+            
         self.logger.info(f"PersonaRegistry initialized with {len(self._personas)} personas")
     
     def get_persona(self, name: str) -> Optional[PersonaAgent]:
@@ -68,10 +86,16 @@ class PersonaRegistry:
             return None
         
         return {
-            'name': persona.name,
+            'name': persona.name.lower(),
+            'display_name': persona.name,
             'archetype': persona.archetype.value,
             'voting_weight': persona.voting_weight,
             'preferred_strategies': persona.preferred_strategies,
+            'department': persona.department,
+            'specialty': persona.specialty,
+            'role': persona.role,
+            'mandate': persona.mandate,
+            'confidence': persona.get_performance_summary().get('confidence', 0.8),
             'performance': persona.get_performance_summary(),
             'recent_reasoning': persona.get_recent_reasoning(limit=3)
         }

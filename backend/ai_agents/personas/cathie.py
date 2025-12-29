@@ -29,7 +29,11 @@ class CathieAgent(PersonaAgent):
             name="Cathie",
             archetype=PersonaArchetype.GROWTH,
             voting_weight=1.0,  # Standard weight
-            preferred_strategies=["innovation_investing", "disruptive_tech", "growth_at_scale", "sector_rotation"]
+            preferred_strategies=["innovation_investing", "disruptive_tech", "growth_at_scale", "sector_rotation"],
+            department="performance_lab",
+            specialty="Disruptive Innovation",
+            role="director",
+            mandate="Invest in the future of technology and the companies poised to disrupt established industries."
         )
         
         self.personality = CathiePersonality()

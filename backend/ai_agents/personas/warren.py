@@ -32,7 +32,11 @@ class WarrenAgent(PersonaAgent):
             name="Warren",
             archetype=PersonaArchetype.VALUE,
             voting_weight=1.2,  # Slightly higher weight for value investing
-            preferred_strategies=["value_investing", "dividend_capture", "buy_and_hold"]
+            preferred_strategies=["value_investing", "dividend_capture", "buy_and_hold"],
+            department="trade_operations",
+            specialty="Fundamental Value Investing",
+            role="director",
+            mandate="Find high-quality businesses at a fair price with a significant margin of safety."
         )
         
         self.personality = WarrenPersonality()
