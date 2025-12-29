@@ -56,7 +56,7 @@ class WaterfallMarketDataService:
             'price': {},        # ticker -> {'price': float, 'source': str, 'expiry': float}
             'fundamentals': {}  # ticker -> {'data': dict, 'expiry': float}
         }
-        self.cache_ttl = int(os.getenv('MARKET_DATA_CACHE_TTL', 300))  # 5 mins
+        self.cache_ttl = int(os.getenv('MARKET_DATA_CACHE_TTL', 60))  # 60s
         
         # Audit trail for triple-source verification (in-memory for now)
         self.audit_log = []  # List of verification attempts

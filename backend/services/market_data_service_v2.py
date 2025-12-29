@@ -30,8 +30,8 @@ class MarketDataConfig:
     """Configuration for market data service (FMP-only)"""
     # Read FMP API key from env by default but allow override in tests/config
     fmp_api_key: str = os.getenv("FMP_API_KEY")
-    # Very short TTL for live data to keep UI responsive
-    cache_ttl_seconds: int = 5  # seconds
+    # Updated to 60s as per user requirement for 1-minute updates
+    cache_ttl_seconds: int = 60  # seconds
     request_timeout: int = 10
     # Soft rate limiting for FMP (calls per period)
     rate_limit_calls: int = 300

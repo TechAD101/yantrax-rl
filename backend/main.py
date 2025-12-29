@@ -133,7 +133,7 @@ try:
 
         config = MarketDataConfig(
             fmp_api_key=fmp_key,
-            cache_ttl_seconds=5,
+            cache_ttl_seconds=60,
             rate_limit_calls=300,
             rate_limit_period=60,
             batch_size=50
@@ -293,7 +293,7 @@ if MARKET_SERVICE_READY:
             finnhub = os.getenv('FINNHUB_KEY') or os.getenv('FINNHUB') or None
             cfg = MarketDataConfig(
                 fmp_api_key=fmp_key_env,
-                cache_ttl_seconds=5
+                cache_ttl_seconds=60
             )
             market_data = MarketDataService(cfg)
             logger.info("✅ MarketDataService v2 initialized with config from env")

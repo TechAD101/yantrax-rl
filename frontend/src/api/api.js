@@ -7,7 +7,7 @@ const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && i
 const BASE_URL = API_BASE_URL;
 export { BASE_URL };
 
-const UPDATE_INTERVAL = 15000; // 15 seconds
+const UPDATE_INTERVAL = 60000; // 60 seconds (1 minute updates)
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
@@ -178,7 +178,7 @@ export const getPortfolio = async () => {
 // Backwards-compatible alias for earlier naming
 export const getTradingJournal = getJournal;
 
-export const streamMarketPrice = ({ symbol = 'AAPL', interval = 5, count = 0, onMessage = null, onOpen = null, onError = null } = {}) => {
+export const streamMarketPrice = ({ symbol = 'AAPL', interval = 60, count = 0, onMessage = null, onOpen = null, onError = null } = {}) => {
   if (!symbol) throw new Error('streamMarketPrice requires a symbol');
   const normalizedBase = (BASE_URL || '').replace(/\/$/, '');
   const url = `${normalizedBase}/market-price-stream?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&count=${encodeURIComponent(count)}`;
