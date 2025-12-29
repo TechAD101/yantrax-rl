@@ -77,6 +77,34 @@ export default function useMarketStream(symbol, { interval = 5, count = 0 } = {}
         if (!evt.data) return;
         try {
           const payload = JSON.parse(evt.data);
+
+          // Server now emits structured events with `type` such as 'error' or 'fallback'
+          if (payload?.type === 'error') {
+            const message = payload?.error?.message || 'provider_error';
+            const code = payload?.error?.code || null;
+            setError(`provider_error:${message}${code ? ` (code:${code})` : ''}`);
+            setIsLoading(false);
+            return;
+          }
+
+          if (payload?.type === 'fallback') {
+            const data = payload?.data ?? {};
+            const maybePrice = data?.price ?? data?.close ?? data?.last ?? null;
+            if (maybePrice === null || maybePrice === undefined) {
+              setError('fallback_no_price');
+              setIsLoading(false);
+              return;
+            }
+            const numeric = Number(maybePrice);
+            if (!Number.isFinite(numeric)) { setError('non_numeric_price'); setIsLoading(false); return; }
+            setPrice(numeric);
+            setLastUpdate(payload.timestamp ? new Date(payload.timestamp) : new Date());
+            setError('fallback');
+            setIsLoading(false);
+            return;
+          }
+
+          // Default: older-style payloads where the price may be inside payload.data or top-level
           const data = payload?.data ?? payload;
           const maybePrice = data?.price ?? data?.close ?? data?.last ?? null;
           if (maybePrice === null || maybePrice === undefined) {

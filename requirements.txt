@@ -12,6 +12,8 @@ requests==2.31.0
 pandas==2.1.4
 numpy==1.26.2
 python-dotenv==1.0.0
+# Add yfinance as a fallback market data provider
+yfinance==0.2.27
 # API Framework & Utilities
 fastapi-limiter==0.1.6
 starlette==0.27.0
