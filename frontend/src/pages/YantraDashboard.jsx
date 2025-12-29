@@ -160,7 +160,7 @@ const YantraDashboard = () => {
   // Auto-refresh with intelligent intervals
   useEffect(() => {
     fetchComprehensiveData();
-    const interval = setInterval(fetchAIFirmData, 60000); // Update every 1 minute (Global Sync)
+    const interval = setInterval(fetchComprehensiveData, 60000); // Update every 1 minute (Global Sync)
     return () => clearInterval(interval);
   }, []);
 
