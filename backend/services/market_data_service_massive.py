@@ -53,6 +53,13 @@ class MassiveMarketDataService:
         self._retries = int(os.getenv('MASSIVE_REQUEST_RETRIES', '2'))
         self._backoff = float(os.getenv('MASSIVE_REQUEST_BACKOFF', '0.5'))
 
+        # provider health/status tracking to disable providers on persistent failures
+        # structure: { provider_name: { 'disabled_until': float_ts, 'consecutive_failures': int, 'last_error': str } }
+        self._provider_status: Dict[str, Dict[str, Any]] = {}
+        self._failure_threshold = int(os.getenv('MASSIVE_PROVIDER_FAILURE_THRESHOLD', '3'))
+        self._disable_duration = int(os.getenv('MASSIVE_PROVIDER_DISABLE_SECONDS', '300'))
+        self._lock = None  # placeholder if we later add thread-safety primitives
+
     def _request_with_retries(self, method: str, url: str, params: dict | None = None, timeout: int | None = None):
         """Perform an HTTP GET with basic retries on timeouts and 5xx errors.
 
@@ -80,6 +87,60 @@ class MassiveMarketDataService:
             raise last_exc
         raise RuntimeError('Unreachable')
 
+    # -------------------- Provider health helpers --------------------
+    def _record_provider_failure(self, provider: str, code: int | None, message: str | None):
+        s = self._provider_status.setdefault(provider, {})
+        s['consecutive_failures'] = s.get('consecutive_failures', 0) + 1
+        s['last_error'] = message
+        s['last_failure_at'] = time.time()
+
+    def _reset_provider_failures(self, provider: str):
+        if provider in self._provider_status:
+            self._provider_status[provider]['consecutive_failures'] = 0
+            self._provider_status[provider]['last_error'] = None
+
+    def _maybe_disable_provider(self, provider: str):
+        s = self._provider_status.setdefault(provider, {})
+        if s.get('consecutive_failures', 0) >= self._failure_threshold:
+            s['disabled_until'] = time.time() + self._disable_duration
+            logger.warning(f"Provider {provider} disabled until {s['disabled_until']} due to repeated failures")
+
+    def _is_provider_disabled(self, provider: str) -> bool:
+        s = self._provider_status.get(provider)
+        if not s:
+            return False
+        until = s.get('disabled_until')
+        if not until:
+            return False
+        if time.time() > until:
+            # re-enable
+            s['disabled_until'] = None
+            s['consecutive_failures'] = 0
+            return False
+        return True
+
+    # convenience wrappers used by fetch_quote to attempt fallbacks safely
+    def _try_alpha_vantage(self, symbol: str):
+        try:
+            return self._fetch_price_alpha_vantage(symbol)
+        except Exception as e:
+            # check for quota/429 style errors and possibly disable
+            if '429' in str(e) or 'Too Many Requests' in str(e):
+                self._record_provider_failure('alpha_vantage', None, str(e))
+                self._maybe_disable_provider('alpha_vantage')
+            raise
+
+    def _try_yfinance(self, symbol: str):
+        try:
+            return self._fetch_price_yfinance(symbol)
+        except Exception as e:
+            # yfinance sometimes returns empty/invalid payloads or rate limits; treat as transient
+            msg = str(e)
+            self._record_provider_failure('yfinance', None, msg)
+            if '429' in msg or 'Too Many Requests' in msg:
+                self._maybe_disable_provider('yfinance')
+            # swallow json parse errors as None (caller will try other providers)
+            return None
     def fetch_quote(self, symbol: str) -> Dict[str, Any]:
         symbol = (symbol or '').upper()
         if not symbol:
@@ -192,43 +253,56 @@ class MassiveMarketDataService:
                     text = (last_resp.text or '')[:200]
                     logger.error(f"Polygon requests failed: status={status}, body={text}")
 
+                    # track failure
+                    self._record_provider_failure('polygon', status, text)
+
                     # If 403 (NOT_AUTHORIZED), attempt fallbacks: alpha_vantage then yfinance
                     if status == 403:
                         logger.warning('Polygon returned 403 - attempting fallback providers')
-                        # try alpha_vantage first
-                        try:
-                            av_price = self._try_alpha_vantage(symbol)
-                            if av_price is not None:
-                                result = {
-                                    'symbol': symbol,
-                                    'price': round(float(av_price), 2),
-                                    'timestamp': datetime.now().isoformat(),
-                                    'source': 'alpha_vantage',
-                                    'fallback_from': 'polygon'
-                                }
-                                # cache
-                                self._last_prices[symbol] = result
-                                return result
-                        except Exception:
-                            logger.exception('Alpha Vantage fallback failed')
 
-                        # try yfinance next
-                        try:
-                            yf_price = self._try_yfinance(symbol)
-                            if yf_price is not None:
-                                result = {
-                                    'symbol': symbol,
-                                    'price': round(float(yf_price), 2),
-                                    'timestamp': datetime.now().isoformat(),
-                                    'source': 'yfinance',
-                                    'fallback_from': 'polygon'
-                                }
-                                self._last_prices[symbol] = result
-                                return result
-                        except Exception:
-                            logger.exception('YFinance fallback failed')
+                        # If polygon is now disabled due to repeated 403s, skip directly to fallbacks
+                        if self._is_provider_disabled('polygon'):
+                            logger.warning('Polygon marked disabled; skipping direct polygon calls')
+                        else:
+                            # try alpha_vantage first
+                            try:
+                                av_price = self._try_alpha_vantage(symbol)
+                                if av_price is not None:
+                                    result = {
+                                        'symbol': symbol,
+                                        'price': round(float(av_price), 2),
+                                        'timestamp': datetime.now().isoformat(),
+                                        'source': 'alpha_vantage',
+                                        'fallback_from': 'polygon'
+                                    }
+                                    # cache
+                                    self._last_prices[symbol] = result
+                                    # reset polygon failures on success of fallback (we consider the system recovered)
+                                    self._reset_provider_failures('polygon')
+                                    return result
+                            except Exception:
+                                logger.exception('Alpha Vantage fallback failed')
 
-                        # If we reach here, fallbacks failed. Return structured error dict instead of raising
+                            # try yfinance next
+                            try:
+                                yf_price = self._try_yfinance(symbol)
+                                if yf_price is not None:
+                                    result = {
+                                        'symbol': symbol,
+                                        'price': round(float(yf_price), 2),
+                                        'timestamp': datetime.now().isoformat(),
+                                        'source': 'yfinance',
+                                        'fallback_from': 'polygon'
+                                    }
+                                    self._last_prices[symbol] = result
+                                    self._reset_provider_failures('polygon')
+                                    return result
+                            except Exception:
+                                logger.exception('YFinance fallback failed')
+
+                        # If we reach here, fallbacks failed. Possibly disable polygon if threshold reached
+                        self._maybe_disable_provider('polygon')
+
                         err = {
                             'symbol': symbol,
                             'price': None,
@@ -256,34 +330,39 @@ class MassiveMarketDataService:
 
                 # If polygon hasn't returned a usable quote, attempt other providers as a generic fallback
                 try:
-                    av_price = self._try_alpha_vantage(symbol)
-                    if av_price is not None:
-                        result = {
-                            'symbol': symbol,
-                            'price': round(float(av_price), 2),
-                            'timestamp': datetime.now().isoformat(),
-                            'source': 'alpha_vantage',
-                            'fallback_from': 'polygon'
-                        }
-                        self._last_prices[symbol] = result
-                        return result
-                except Exception:
+                    # Skip fallbacks if those providers are disabled
+                    if not self._is_provider_disabled('alpha_vantage'):
+                        av_price = self._try_alpha_vantage(symbol)
+                        if av_price is not None:
+                            result = {
+                                'symbol': symbol,
+                                'price': round(float(av_price), 2),
+                                'timestamp': datetime.now().isoformat(),
+                                'source': 'alpha_vantage',
+                                'fallback_from': 'polygon'
+                            }
+                            self._last_prices[symbol] = result
+                            return result
+                except Exception as e:
                     logger.exception('Alpha Vantage fallback failed')
+                    self._record_provider_failure('alpha_vantage', getattr(e, 'code', None), str(e))
 
                 try:
-                    yf_price = self._try_yfinance(symbol)
-                    if yf_price is not None:
-                        result = {
-                            'symbol': symbol,
-                            'price': round(float(yf_price), 2),
-                            'timestamp': datetime.now().isoformat(),
-                            'source': 'yfinance',
-                            'fallback_from': 'polygon'
-                        }
-                        self._last_prices[symbol] = result
-                        return result
-                except Exception:
+                    if not self._is_provider_disabled('yfinance'):
+                        yf_price = self._try_yfinance(symbol)
+                        if yf_price is not None:
+                            result = {
+                                'symbol': symbol,
+                                'price': round(float(yf_price), 2),
+                                'timestamp': datetime.now().isoformat(),
+                                'source': 'yfinance',
+                                'fallback_from': 'polygon'
+                            }
+                            self._last_prices[symbol] = result
+                            return result
+                except Exception as e:
                     logger.exception('YFinance fallback failed')
+                    self._record_provider_failure('yfinance', None, str(e))
 
                 # If we have a cached last price, return it
                 if symbol in self._last_prices:
@@ -305,7 +384,8 @@ class MassiveMarketDataService:
                         'code': last_resp.status_code if last_resp is not None else None
                     },
                     'timestamp': datetime.now().isoformat(),
-                    'source': 'polygon'
+                    'source': 'polygon',
+                    'providers_status': {k: {'disabled_until': v.get('disabled_until'), 'consecutive_failures': v.get('consecutive_failures', 0)} for k, v in self._provider_status.items()}
                 }
             else:
                 # Provider with base_url: use generic quote endpoint
