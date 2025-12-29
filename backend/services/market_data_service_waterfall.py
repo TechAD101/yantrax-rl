@@ -96,7 +96,7 @@ class WaterfallMarketDataService:
         }
         
         # 4. Alpha Vantage (Deep Backup)
-        av_key = os.getenv('ALPHA_VANTAGE_API_KEY')
+        av_key = os.getenv('ALPHAVANTAGE_API_KEY') or os.getenv('ALPHA_VANTAGE_API_KEY') or os.getenv('ALPHA_VANTAGE_KEY')
         self.providers['alpha_vantage'] = {
             'enabled': bool(av_key),
             'key': av_key,
