@@ -1,8 +1,7 @@
 # ai_agents/data_whisperer.py - Enhanced Data Analysis Agent
 
 import random
-import requests  # type: ignore[import]
-from typing import Dict, Optional
+from typing import Dict
 from services.market_data_service import get_latest_price
 import threading
 import time
@@ -171,7 +170,6 @@ def _detect_market_phase(price: float) -> str:
 
 
 # --- Parallel agent execution utility ---
-import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 def run_agents_in_parallel(agent_funcs, *args, **kwargs):

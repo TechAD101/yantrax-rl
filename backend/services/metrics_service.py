@@ -5,7 +5,6 @@ Simple Prometheus metrics helper.
 """
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from prometheus_client import CollectorRegistry
-from typing import Dict
 
 registry = CollectorRegistry()
 

@@ -1,8 +1,6 @@
 # ai_agents/macro_monk.py - Enhanced Strategic Decision Agent
-import numpy as np
-import random
-from typing import Dict, List, Tuple, Optional
-from datetime import datetime, timedelta
+from typing import Dict
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -265,7 +263,7 @@ class MacroMonkAgent:
     def _log_decision_reasoning(self, decision: str, regime: str, confidence: float, signals: Dict):
         """Log detailed decision reasoning"""
         signal_summary = ", ".join([f"{k}: {v}" for k, v in signals.items()])
-        logger.info(f"[Macro Monk] Decision Reasoning:")
+        logger.info("[Macro Monk] Decision Reasoning:")
         logger.info(f"  Market Regime: {regime}")
         logger.info(f"  Strategy Signals: {signal_summary}")
         logger.info(f"  Final Decision: {decision}")

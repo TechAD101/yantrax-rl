@@ -18,10 +18,9 @@ except ImportError:
 load_dotenv()
 
 import numpy as np
-import time
 from datetime import datetime, timedelta
 from functools import wraps
-from typing import Dict, Any, Optional, Generator
+from typing import Dict, Any, Optional
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 
@@ -121,7 +120,7 @@ try:
     alpaca_key = os.getenv('ALPACA_API_KEY', '')
     alpaca_secret = os.getenv('ALPACA_SECRET_KEY', '')
 
-    logger.info(f"\n🔑 API KEYS CHECK:")
+    logger.info("\n🔑 API KEYS CHECK:")
     logger.info(f"  FMP: {'✅ SET' if fmp_key_env else '❌ MISSING'}")
     logger.info(f"  Alpaca API Key: {'✅ SET' if alpaca_key else '❌ MISSING'}")
     logger.info(f"  Alpaca Secret: {'✅ SET' if alpaca_secret else '❌ MISSING'}")
@@ -140,7 +139,7 @@ try:
             batch_size=50
         )
 
-        logger.info(f"  Config created:")
+        logger.info("  Config created:")
         logger.info(f"    - fmp_api_key: {'✅ SET' if config.fmp_api_key else '❌ MISSING'}")
         logger.info(f"    - cache_ttl_seconds: {config.cache_ttl_seconds}")
         MARKET_DATA_CONFIG = config
@@ -149,7 +148,7 @@ try:
         market_data = MarketDataService(config)
 
         MARKET_SERVICE_READY = True
-        logger.info(f"✅ MarketDataService initialized successfully")
+        logger.info("✅ MarketDataService initialized successfully")
         logger.info(f"📊 Available providers: {[p.value for p in market_data.providers]}")
         logger.info("📡 Data Pipeline: FinancialModelingPrep (FMP) - batch quote API")
     else:
@@ -359,7 +358,7 @@ class YantraXEnhancedSystem:
     """Enhanced trading system with AI Firm + RL Core integration"""
     
     def __init__(self):
-        from typing import Any, Optional
+        from typing import Any
 
         self.portfolio_balance = 132240.84
         self.trade_history = []
@@ -654,7 +653,7 @@ def test_alpaca():
         import requests  # type: ignore[import]
         
         logger.info(f"  Alpaca Key (first 10): {alpaca_key[:10] if alpaca_key else 'NONE'}")
-        logger.info(f"  Making request to Alpaca...")
+        logger.info("  Making request to Alpaca...")
         
         headers = {
             'APCA-API-KEY-ID': alpaca_key,
@@ -708,7 +707,7 @@ def test_fmp():
         import requests  # type: ignore[import]
 
         logger.info(f"  FMP Key (first 10): {fmp_key[:10] if fmp_key else 'NONE'}")
-        logger.info(f"  Making request to FMP (quote endpoint)...")
+        logger.info("  Making request to FMP (quote endpoint)...")
 
         params = {'apikey': fmp_key}
 

@@ -1,7 +1,6 @@
 # env_market_sim.py — God Mode Market Simulator (Emotionally Adaptive + Portfolio Tracking)
 
 import random
-import numpy as np
 
 class MarketSimEnv:
     def __init__(self):

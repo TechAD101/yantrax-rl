@@ -1,12 +1,10 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests  # type: ignore[import]
 from datetime import datetime
 import os
-import json
 import random
 import logging
-import traceback
 
 app = Flask(__name__)
 CORS(app)
@@ -143,7 +141,7 @@ def analyze_sentiment():
             'processing_time_ms': random.randint(120, 280)
         })
         
-    except requests.RequestException as e:
+    except requests.RequestException:
         # Fallback sentiment analysis
         text = request.get_json().get('text', '')
         fallback_sentiment = analyze_sentiment_fallback(text)
@@ -361,7 +359,7 @@ def market_analysis():
             'timestamp': datetime.now().isoformat()
         })
         
-    except Exception as e:
+    except Exception:
         return jsonify({
             'symbol': symbol,
             'error': 'Unable to analyze market at this time',

@@ -5,7 +5,7 @@ Simple Redis-backed circuit breaker with in-memory fallback.
 Provides per-key failure counting, open/close state, and reset timeout.
 """
 import time
-from typing import Optional
+from typing import Dict, Any
 
 try:
     import redis
@@ -30,7 +30,7 @@ class RedisCircuitBreaker:
             self.client = None
 
         # in-memory fallback
-        self._memory = {}
+        self._memory: Dict[str, dict[str, float | int]] = {}
 
     def _mem_get(self, key: str):
         return self._memory.get(key, {'failures': 0, 'opened_at': 0})

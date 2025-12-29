@@ -2,7 +2,7 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-DATABASE_URL = os.environ.get('DATABASE_URL') or f"sqlite:///./yantrax.db"
+DATABASE_URL = os.environ.get('DATABASE_URL') or "sqlite:///./yantrax.db"
 
 # Create engine with check_same_thread disabled for SQLite in multi-threaded environments
 engine = create_engine(
@@ -21,6 +21,6 @@ def init_db():
     try:
         from models import Base
         Base.metadata.create_all(bind=engine)
-    except Exception as e:
+    except Exception:
         # If models aren't available or DB inaccessible, log at caller
         raise

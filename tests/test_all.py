@@ -266,7 +266,7 @@ class TestSentimentModule:
         # Calculate accuracy
         accuracy = (correct_predictions / total_predictions) * 100
         
-        print(f"\n=== Sentiment Analysis Results ===")
+        print("\n=== Sentiment Analysis Results ===")
         print(f"Total cases: {total_predictions}")
         print(f"Correct: {correct_predictions}")
         print(f"Accuracy: {accuracy:.2f}%")

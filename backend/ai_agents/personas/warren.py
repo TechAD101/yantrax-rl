@@ -5,18 +5,13 @@ and risk management focus. Secured with pbkdf2:sha256 for production use.
 """
 
 import hashlib
-import logging
-import sys
-import os
 import secrets
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
+from datetime import datetime
+from typing import Dict, Any
 from dataclasses import dataclass
 import json
 
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from base_persona import PersonaAgent, PersonaArchetype, VoteType, PersonaVote, PersonaAnalysis
+from ..base_persona import PersonaAgent, PersonaArchetype, VoteType, PersonaVote, PersonaAnalysis
 
 @dataclass
 class WarrenPersonality:

@@ -2,11 +2,10 @@
 
 
 import numpy as np
-import random
 import json
 import os
-from collections import deque, defaultdict
-from typing import Dict, List, Tuple, Optional
+from collections import defaultdict
+from typing import Dict, List, Tuple
 from datetime import datetime
 import logging
 import asyncio

@@ -27,7 +27,7 @@ def test_persona_registry():
     registry = get_persona_registry()
     personas = registry.get_all_personas()
     
-    print(f"✓ PersonaRegistry initialized")
+    print("✓ PersonaRegistry initialized")
     print(f"✓ Registered personas: {len(personas)}")
     
     for persona in personas:

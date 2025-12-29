@@ -2,7 +2,6 @@
 import requests
 import json
 import time
-import sys
 
 def test_stream():
     url = "http://localhost:5000/market-price-stream?symbol=AAPL&interval=1"
@@ -29,8 +28,8 @@ def test_stream():
                             source = data.get('source')
                             print(f"📊 DATA #{count+1}: Price=${price} | Source={source}")
                             count += 1
-                        except:
-                            print(f"⚠️ Bad Data: {decoded}")
+                        except Exception as e:
+                            print(f"⚠️ Bad Data: {decoded} -> {e}")
                 
                 # Run for 10 seconds
                 if time.time() - start_time > 10:

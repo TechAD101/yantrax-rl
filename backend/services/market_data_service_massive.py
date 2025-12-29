@@ -142,7 +142,7 @@ class MassiveMarketDataService:
                 raise Exception('No price data found')
             price = float(data['Close'].iloc[-1])
             return price
-        except Exception as e:
+        except Exception:
             # propagate exception to be handled by _try_yfinance
             raise
 

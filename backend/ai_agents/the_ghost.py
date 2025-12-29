@@ -1,8 +1,6 @@
 # ai_agents/the_ghost.py - Enhanced Emotional Intelligence Signal Processor
-import numpy as np
-import random
-from typing import Dict, List, Tuple, Optional, Any
-from datetime import datetime, timedelta
+from typing import Dict, Optional
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -224,7 +222,7 @@ class TheGhostAgent:
 
     def _log_signal_reasoning(self, original_strategy: str, final_signal: str, confidence: float, psychology: Dict):
         """Log detailed signal processing reasoning"""
-        logger.info(f"[The Ghost] Signal Processing Analysis:")
+        logger.info("[The Ghost] Signal Processing Analysis:")
         logger.info(f"  Original Strategy: {original_strategy}")
         logger.info(f"  Emotional State: {self.emotional_state}")
         logger.info(f"  Market Psychology: {psychology.get('crowd_sentiment', 'unknown')}")
