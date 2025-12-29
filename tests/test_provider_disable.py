@@ -18,7 +18,8 @@ def test_polygon_disabled_after_consecutive_403s():
     mock_resp = Mock()
     mock_resp.ok = False
     mock_resp.status_code = 403
-    mock_resp.text = 'NOT_AUTHORIZED: please upgrade'
+    # use a non-entitlement message so the standard disable-by-threshold path is used
+    mock_resp.text = '403 Temporary quota exceeded'
 
     with patch('requests.request', return_value=mock_resp):
         # force fallbacks to fail so polygon failures accumulate

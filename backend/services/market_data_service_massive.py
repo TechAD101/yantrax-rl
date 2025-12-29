@@ -58,6 +58,8 @@ class MassiveMarketDataService:
         self._provider_status: Dict[str, Dict[str, Any]] = {}
         self._failure_threshold = int(os.getenv('MASSIVE_PROVIDER_FAILURE_THRESHOLD', '3'))
         self._disable_duration = int(os.getenv('MASSIVE_PROVIDER_DISABLE_SECONDS', '300'))
+        # If entitlement error (403 NOT_AUTHORIZED with message about entitlement), disable longer
+        self._entitlement_disable_seconds = int(os.getenv('MASSIVE_PROVIDER_ENTITLEMENT_DISABLE_SECONDS', '3600'))
         self._lock = None  # placeholder if we later add thread-safety primitives
 
     def _request_with_retries(self, method: str, url: str, params: dict | None = None, timeout: int | None = None):
@@ -130,17 +132,43 @@ class MassiveMarketDataService:
                 self._maybe_disable_provider('alpha_vantage')
             raise
 
+    def _fetch_price_yfinance(self, symbol: str):
+        """Fetch price via yfinance wrapper. Returns float price or raises on unexpected errors."""
+        try:
+            import yfinance as yf
+            ticker = yf.Ticker(symbol)
+            data = ticker.history(period='1d')
+            if getattr(data, 'empty', True):
+                raise Exception('No price data found')
+            price = float(data['Close'].iloc[-1])
+            return price
+        except Exception as e:
+            # propagate exception to be handled by _try_yfinance
+            raise
+
     def _try_yfinance(self, symbol: str):
         try:
             return self._fetch_price_yfinance(symbol)
         except Exception as e:
             # yfinance sometimes returns empty/invalid payloads or rate limits; treat as transient
             msg = str(e)
-            self._record_provider_failure('yfinance', None, msg)
+            # If JSON parse failure (empty/malformed body), treat as transient and increase failure count
+            if 'Expecting value' in msg or 'No price data found' in msg or msg.strip() == '':
+                logger.warning(f"YFinance parse/empty response for {symbol}: {msg}")
+                self._record_provider_failure('yfinance', None, msg)
+                # return None to allow other fallbacks (do not raise)
+                return None
+
+            # If 429 / Too Many Requests - consider disabling temporarily
             if '429' in msg or 'Too Many Requests' in msg:
+                logger.warning(f"YFinance rate limit detected for {symbol}: {msg}")
+                self._record_provider_failure('yfinance', None, msg)
                 self._maybe_disable_provider('yfinance')
-            # swallow json parse errors as None (caller will try other providers)
-            return None
+                return None
+
+            # For other exceptions, record and re-raise to surface unexpected errors
+            self._record_provider_failure('yfinance', None, msg)
+            raise
     def fetch_quote(self, symbol: str) -> Dict[str, Any]:
         symbol = (symbol or '').upper()
         if not symbol:
@@ -259,6 +287,36 @@ class MassiveMarketDataService:
                     # If 403 (NOT_AUTHORIZED), attempt fallbacks: alpha_vantage then yfinance
                     if status == 403:
                         logger.warning('Polygon returned 403 - attempting fallback providers')
+
+                        # If the response explicitly indicates entitlement / "not entitled" treat as permanent until entitle window
+                        entitlement_indicators = ['not_entitled', 'NOT_AUTHORIZED', 'You are not entitled', 'not entitled']
+                        is_entitlement = any(ind.lower() in text.lower() for ind in entitlement_indicators)
+
+                        if is_entitlement:
+                            # immediate disable for entitlement issues; longer window and explicit error
+                            s = self._provider_status.setdefault('polygon', {})
+                            s['disabled_until'] = time.time() + self._entitlement_disable_seconds
+                            s['consecutive_failures'] = s.get('consecutive_failures', 0) + 1
+                            s['last_error'] = text
+                            logger.error(f"Polygon entitlement failure detected; disabling for {self._entitlement_disable_seconds} seconds")
+
+                            err = {
+                                'symbol': symbol,
+                                'price': None,
+                                'error': {
+                                    'message': f'Polygon entitlement required: {text}',
+                                    'code': status,
+                                    'entitlement_required': True
+                                },
+                                'timestamp': datetime.now().isoformat(),
+                                'source': 'polygon'
+                            }
+                            if symbol in self._last_prices:
+                                err['cached'] = self._last_prices[symbol]
+                            return err
+
+                        # track failure
+                        self._record_provider_failure('polygon', status, text)
 
                         # If polygon is now disabled due to repeated 403s, skip directly to fallbacks
                         if self._is_provider_disabled('polygon'):
@@ -440,15 +498,36 @@ class MassiveMarketDataService:
         return None
 
     def _try_yfinance(self, symbol: str) -> float | None:
-        """Try yfinance to fetch recent close price."""
+        """Try yfinance to fetch recent close price with provider failure tracking.
+
+        Returns price as float or None on recoverable errors. On rate-limits or repeated
+        failures the provider may be disabled via _maybe_disable_provider().
+        """
         try:
             import yfinance as yf
             ticker = yf.Ticker(symbol)
             data = ticker.history(period='1d')
-            if data.empty:
+            if getattr(data, 'empty', True):
+                msg = 'No price data found'
+                logger.warning(f"YFinance returned empty data for {symbol}")
+                self._record_provider_failure('yfinance', None, msg)
                 return None
             price = float(data['Close'].iloc[-1])
+            # success -> reset failure counts
+            self._reset_provider_failures('yfinance')
             return price
-        except Exception:
+        except Exception as e:
+            msg = str(e)
             logger.exception('YFinance try failed')
+            # treat parsing/empty responses as transient
+            if 'Expecting value' in msg or 'No price data found' in msg:
+                self._record_provider_failure('yfinance', None, msg)
+                return None
+            # treat rate limit as disabling condition
+            if '429' in msg or 'Too Many Requests' in msg:
+                self._record_provider_failure('yfinance', None, msg)
+                self._maybe_disable_provider('yfinance')
+                return None
+            # other unexpected errors: record and return None
+            self._record_provider_failure('yfinance', None, msg)
             return None

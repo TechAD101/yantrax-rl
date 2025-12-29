@@ -16,7 +16,8 @@ def test_fetch_quote_polygon_403_fallback_alpha_vantage():
     mock_resp = Mock()
     mock_resp.ok = False
     mock_resp.status_code = 403
-    mock_resp.text = 'NOT_AUTHORIZED: api key missing'
+    # use a non-entitlement 403 message so fallback providers are attempted
+    mock_resp.text = '403 Forbidden: quota exceeded'
 
     with patch('requests.request', return_value=mock_resp):
         with patch.object(MassiveMarketDataService, '_try_alpha_vantage', return_value=101.0):
