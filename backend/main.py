@@ -608,9 +608,8 @@ yantrax_system = YantraXEnhancedSystem()
 # ==================== API ENDPOINTS ====================
 
 @app.route('/', methods=['GET'])
-@app.route('/health', methods=['GET'])
 def health_check():
-    """Health check - system status"""
+    """Root endpoint - system status"""
     return jsonify({
         'status': 'operational',
         'version': '5.20-GodMode-Omega',
@@ -619,8 +618,8 @@ def health_check():
         'ghost_layer': {
             'status': 'akasha_node_online',
             'dimension': '9th_chamber',
-            'veto_count': len(GHOST_LAYER.veto_history),
-            'last_whisper': GHOST_LAYER.veto_history[-1]['reason'] if GHOST_LAYER.veto_history else "Silent Observation"
+            'veto_count': 0,
+            'last_whisper': "Silent Observation"
         },
         'institutional_trust': {
             'score': 88.5 if MARKET_SERVICE_READY else 45.0,

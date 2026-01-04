@@ -1,10 +1,14 @@
 import logging
 import uuid
 from datetime import datetime, timedelta
-from typing import Dict, Any
+from typing import Dict, Any, List
+from .personas import Warren, Cathie, Quant, DegenAuditor
 
 class DebateEngine:
-    """Facilitates structured arguments and voting among AI agents"""
+    """
+    Facilitates structured arguments and voting among AI agents using formal Persona classes.
+    Implements weighted voting and consensus building.
+    """
     
     def __init__(self, agent_manager):
         self.agent_manager = agent_manager
@@ -12,6 +16,14 @@ class DebateEngine:
         self.debate_history = []
         self.debate_cache = {} # ticker -> {'result': dict, 'expiry': datetime}
         self.cache_ttl_seconds = 30
+        
+        # Initialize Personas
+        self.personas = [
+            Warren(),
+            Cathie(),
+            Quant(),
+            DegenAuditor()
+        ]
 
     def conduct_debate(self, ticker: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Hosts a debate between agents regarding a specific ticker/asset with throttling"""
@@ -20,7 +32,6 @@ class DebateEngine:
         if ticker in self.debate_cache:
             cached = self.debate_cache[ticker]
             if datetime.now() < cached['expiry']:
-                # self.logger.debug(f"🔇 Throttling debate for {ticker}")
                 return cached['result']
 
         self.logger.info(f"🎤 Starting debate for {ticker}")
@@ -28,21 +39,26 @@ class DebateEngine:
         arguments = []
         
         # 1. Gather Arguments from Personas
-        for agent_name, agent_data in self.agent_manager.enhanced_agents.items():
-            if agent_data.get('persona', False) or agent_data.get('role') == 'director':
-                signal = self.agent_manager._generate_agent_signal(agent_name, agent_data, context)
-                reasoning = self._generate_persona_reasoning(agent_name, signal, context)
-                
+        for persona in self.personas:
+            analysis = persona.analyze(context, context) # Pass context as market_data for now
+            
+            # Only include if confidence meets threshold
+            if analysis['confidence'] >= persona.confidence_threshold:
                 arguments.append({
-                    'agent': agent_name,
-                    'signal': signal,
-                    'reasoning': reasoning,
-                    'weight': self.agent_manager._get_vote_weight(agent_data['role']) * agent_data['confidence']
+                    'agent': persona.name,
+                    'role': persona.role,
+                    'signal': analysis['signal'],
+                    'reasoning': analysis['reasoning'],
+                    'concerns': analysis['concerns'],
+                    'weight': persona.vote_weight * analysis['confidence'],
+                    'confidence': analysis['confidence'],
+                    'quote': persona.get_philosophy_quote()
                 })
         
         # 2. Tally Votes
         vote_tally = {}
         total_weight = 0
+        
         for arg in arguments:
             sig = arg['signal']
             if sig not in vote_tally:
@@ -51,9 +67,13 @@ class DebateEngine:
             total_weight += arg['weight']
         
         # 3. Resolve Consensus
-        winning_signal = max(vote_tally.items(), key=lambda x: x[1])[0] if vote_tally else 'HOLD'
-        consensus_score = vote_tally[winning_signal] / total_weight if total_weight > 0 else 0
-        
+        if total_weight > 0:
+            winning_signal = max(vote_tally.items(), key=lambda x: x[1])[0]
+            consensus_score = vote_tally[winning_signal] / total_weight
+        else:
+            winning_signal = 'HOLD' # Default if no one votes
+            consensus_score = 0
+            
         debate_result = {
             'id': str(uuid.uuid4()),
             'ticker': ticker,
@@ -61,7 +81,8 @@ class DebateEngine:
             'arguments': arguments,
             'winning_signal': winning_signal,
             'consensus_score': round(consensus_score, 2),
-            'vote_distribution': {k: round(v/total_weight, 2) for k, v in vote_tally.items()} if total_weight > 0 else {}
+            'vote_distribution': {k: round(v/total_weight, 2) for k, v in vote_tally.items()} if total_weight > 0 else {},
+            'participants': [p.name for p in self.personas]
         }
         
         # Update Cache
@@ -72,27 +93,3 @@ class DebateEngine:
         
         self.debate_history.append(debate_result)
         return debate_result
-
-    def _generate_persona_reasoning(self, agent: str, signal: str, context: Dict) -> str:
-        """Generates deterministic pseudo-LLM reasoning for the agent's signal"""
-        fundamentals = context.get('fundamentals', {})
-        pe = fundamentals.get('pe_ratio', 'N/A')
-        roe = fundamentals.get('return_on_equity', 'N/A')
-        
-        if agent == 'warren':
-            if signal == 'BUY':
-                return f"Fundamentals are robust. P/E of {pe} and ROE of {roe} signify a margin of safety."
-            elif signal == 'SELL':
-                return f"The market is overvaluing this. P/E of {pe} is too high for the current yield."
-            return "Current pricing doesn't offer a significant enough discount to intrinsic value."
-            
-        elif agent == 'cathie':
-            if 'BUY' in signal:
-                return "Disruption is happening. Momentum indicators are surging, and we must bet on the future."
-            return "Seeking better entry points for high-growth innovation."
-            
-        elif agent == 'quant':
-            trend = context.get('market_trend', 'neutral')
-            return f"Regime detection shows a {trend} trend. Statistical probability favors this signal."
-            
-        return f"Aligned with department protocols and specialized metrics for {agent}."

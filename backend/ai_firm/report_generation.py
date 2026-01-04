@@ -685,9 +685,13 @@ class InstitutionalReportGenerator:
     def __init__(self, waterfall_service=None, trade_validator=None, ghost_layer=None):
         from services.market_data_service_waterfall import get_waterfall_service
         from services.trade_validator import get_trade_validator
+        from services.derivatives_service import DerivativesService
+        from services.microstructure_service import MicrostructureService
         
         self.waterfall = waterfall_service or get_waterfall_service()
         self.validator = trade_validator or get_trade_validator()
+        self.derivatives = DerivativesService()
+        self.microstructure = MicrostructureService()
         self.ghost = ghost_layer # Optional
         
     def generate_full_report(self, symbol: str) -> Dict[str, Any]:
@@ -696,7 +700,10 @@ class InstitutionalReportGenerator:
         
         # Data Gathering (Triple-Source)
         verified_data = self.waterfall.get_price_verified(symbol)
+        price = verified_data.get('price', 100.0) # Safety fallback
         fundamentals = self.waterfall.get_fundamentals(symbol)
+        derivatives_data = self.derivatives.get_derivatives_analytics(symbol, price)
+        micro_data = self.microstructure.get_microstructure_analytics(symbol, price, verified_data.get('volume', 1000000))
         
         # Calculate Trust Score (0-100)
         trust_score, confidence_band = self._calculate_institutional_trust(verified_data, fundamentals)
@@ -708,9 +715,9 @@ class InstitutionalReportGenerator:
         sections.append(self._section_2_macro_regime(symbol))
         sections.append(self._section_3_liquidity())
         sections.append(self._section_4_macro_output())
-        sections.append(self._section_5_capital_flows())
-        sections.append(self._section_6_derivatives(symbol))
-        sections.append(self._section_7_quant_signals(symbol))
+        sections.append(self._section_5_capital_flows(micro_data))
+        sections.append(self._section_6_derivatives(symbol, derivatives_data))
+        sections.append(self._section_7_quant_signals(symbol, micro_data))
         sections.append(self._section_8_causality())
         sections.append(self._section_9_risk_vectors(verified_data))
         sections.append(self._section_10_black_swan())
@@ -802,34 +809,47 @@ Primary risks include sectoral volatility and data age. This report is {'SUITABL
 **Coherence Score: 60/100**
 Interaction Narrative: Technical strength is leading, while liquidity tightness acts as a friction point. Expected outcome: Volatile upward drift."""
 
-    def _section_5_capital_flows(self):
-        return """### 5. CAPITAL FLOWS ANALYSIS
+    def _section_5_capital_flows(self, micro_data):
+        flows = micro_data.get('net_flows', {})
+        
+        return f"""### 5. CAPITAL FLOWS ANALYSIS
 
 | Flow Type | 7D Volume | 30D Trend | Momentum |
 |---|---|---|---|
-| Institutional (FII) | +$1.2B | 📈 | High |
-| Retail (DII) | +$0.4B | 📈 | Moderate |
-| Hedging Costs | -0.05% | 📉 | Low |"""
+| Institutional (FII) | ${flows.get('institutional_mm', 0)}M | 📈 | High |
+| Retail (DII) | ${flows.get('retail_mm', 0)}M | {'📈' if flows.get('retail_mm', 0) > 0 else '📉'} | Moderate |
+| Net Delta | ${flows.get('net_delta', 0)}M | {'Bullish' if flows.get('net_delta', 0) > 0 else 'Bearish'} | {flows.get('divergence', 'No')} Div |"""
 
-    def _section_6_derivatives(self, symbol):
+    def _section_6_derivatives(self, symbol, data):
+        gex = data.get('gamma_exposure', {})
+        pcr = data.get('put_call_ratio', 0)
+        iv = data.get('implied_volatility', {})
+        
         return f"""### 6. DERIVATIVES POSITIONING ({symbol})
 
 | Metric | Level | Impact |
 |---|---|---|
-| Gamma Wall | +5% | Resistance |
-| PCR Ratio | 0.92 | Neutral |
-| IV Percentile | 18% | Low |
+| Gamma Wall | {gex.get('gamma_wall', 'N/A')} | {gex.get('gamma_regime', 'Neutral')} |
+| Net GEX | ${gex.get('total_gex_notional_estimates_mm', 0)}M | {'Bullish' if gex.get('total_gex_notional_estimates_mm', 0) > 0 else 'Bearish'} |
+| PCR Ratio | {pcr} | {'Bearish' if pcr > 1.0 else 'Bullish'} |
+| IV Percentile | {iv.get('iv_percentile', 0)}% | {iv.get('status', 'Normal')} |
 
-**Narrative:** Options market indicates low fear and technical resistance just above current levels."""
+**Narrative:** {gex.get('gamma_regime', 'Neutral')} detected. Market makers are positioned to {'dampen' if gex.get('total_gex_notional_estimates_mm', 0) > 0 else 'amplify'} volatility."""
 
-    def _section_7_quant_signals(self, symbol):
+    def _section_7_quant_signals(self, symbol, micro_data):
+        vwap = micro_data.get('vwap_clusters', {})
+        obi = micro_data.get('obi', {})
+        fvg = micro_data.get('fvg', {})
+        
         return f"""### 7. QUANT & MICROSTRUCTURE SIGNALS
 
 | Signal Type | Value | Confidence | Bias |
 |---|---|---|---|
-| VWAP Cluster | ${symbol}_MID | 88% | Hold |
-| Orderbook OBI | +0.12 | 65% | Buy |
-| FVG Gap | None | 100% | Stable |"""
+| VWAP Cluster | ${vwap.get('anchored_vwap', 0)} | 88% | {vwap.get('status', 'Hold')} |
+| Orderbook OBI | {obi.get('value', 0)} | 75% | {obi.get('signal', 'Neutral')} |
+| FVG Gap | {'Active' if fvg.get('detected', False) else 'None'} | {'90%' if fvg.get('detected') else 'N/A'} | {fvg.get('type', 'Stable')} |
+
+**Narrative:** {vwap.get('narrative', '')} {obi.get('interpretation', '')}"""
 
     def _section_8_causality(self):
         return """### 8. CROSS-ASSET CAUSALITY
