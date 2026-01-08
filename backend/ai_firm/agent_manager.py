@@ -98,6 +98,14 @@ class AgentManager:
             'arbitrage_scout': {
                 'confidence': 0.75, 'performance': 17.2, 'specialty': 'Cross-Market Analysis',
                 'department': 'trade_operations', 'role': 'analyst', 'persona': False
+            },
+            'macro_monk': {
+                'confidence': 0.88, 'performance': 0.0, 'specialty': 'Geopolitics & Black Swan',
+                'department': 'market_intelligence', 'role': 'specialist', 'persona': True
+            },
+            'degen_auditor': {
+                'confidence': 0.95, 'performance': 0.0, 'specialty': 'Scam Detection',
+                'department': 'risk_control', 'role': 'director', 'persona': True
             }
         })
         

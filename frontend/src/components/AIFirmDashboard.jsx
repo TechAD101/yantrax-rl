@@ -4,6 +4,7 @@ import { BASE_URL } from '../api/api';
 import PainMeter from './PainMeter';
 import MarketMoodDial from './MarketMoodDial';
 import InstitutionalReport from './InstitutionalReport';
+import StrategyMarketplace from './StrategyMarketplace';
 
 const AIFirmDashboard = () => {
   const [firmStatus, setFirmStatus] = useState(null);
@@ -115,6 +116,16 @@ const AIFirmDashboard = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-4">
               <PainMeter painLevel={firmStatus.system_performance?.pain_level || 0} />
               <MarketMoodDial mood={firmStatus.system_performance?.market_mood || 'neutral'} />
+            </div>
+
+            {/* World Class Vision: Life & Social Layers */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <div className="bg-transparent">
+                <MarketMoodDial />
+              </div>
+              <div className="h-[400px]">
+                <StrategyMarketplace />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

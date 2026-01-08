@@ -384,7 +384,49 @@ export const api = {
   getVerificationStats,
   // New Institutional Phase Ω
   getInstitutionalReport: (symbol = 'AAPL') => fetchWithRetry(`${BASE_URL}/report/institutional?symbol=${symbol}`),
-  getSystemStatus: () => fetchWithRetry(`${BASE_URL}/health`)
+  getSystemStatus: () => fetchWithRetry(`${BASE_URL}/health`),
+  // WORLD CLASS API (Vision Upgrade)
+  getVisualMoodBoard: async () => {
+    try {
+      const resp = await fetchWithRetry(`${BASE_URL}/api/visual_mood_board`);
+      return resp;
+    } catch (e) {
+      console.error('Mood Board fetch failed:', e);
+      return { emotion_dial: { current_mood: 'neutral', pain_meter: 0 }, market_weather: 'Cloudy', philosophy_quote: 'Connecting...' };
+    }
+  },
+
+  getTopStrategies: async (limit = 10) => {
+    return fetchWithRetry(`${BASE_URL}/api/strategies/top?limit=${limit}`);
+  },
+
+  publishStrategy: async (data) => {
+    const response = await fetch(`${BASE_URL}/api/strategies/publish`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Failed to publish strategy');
+    return await response.json();
+  },
+
+  copyStrategy: async (data) => {
+    const response = await fetch(`${BASE_URL}/api/strategies/copy`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Failed to copy strategy');
+    return await response.json();
+  },
+
+  getActiveContest: async () => {
+    return fetchWithRetry(`${BASE_URL}/api/contests/active`);
+  }
 };
 
 export default api;
