@@ -8,6 +8,8 @@ const Journal = React.lazy(() => import("./pages/Journal"));
 const Onboarding = React.lazy(() => import("./pages/Onboarding"));
 const Moodboard = React.lazy(() => import("./pages/Moodboard"));
 const Settings = React.lazy(() => import("./pages/Settings"));
+const StrategyHub = React.lazy(() => import("./pages/StrategyHub"));
+const MemecoinHub = React.lazy(() => import("./pages/MemecoinHub"));
 
 function App() {
   return (
@@ -20,6 +22,8 @@ function App() {
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/moodboard" element={<Moodboard />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/strategies" element={<StrategyHub />} />
+            <Route path="/memecoins" element={<MemecoinHub />} />
             <Route path="*" element={<YantraDashboard />} />
           </Routes>
         </Suspense>

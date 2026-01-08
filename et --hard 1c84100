@@ -1,0 +1,10 @@
+[33mf3c5a01[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Fix: Correct indentation for alpha_key line 85
+[33maf9614d[m Add Alpha Vantage as free backup provider
+[33m1c84100[m feat: Implement AI firm personas, debate engine, report generation, and enhanced market data services.
+[33m33d0d04[m feat: Add YantraDashboard component for comprehensive market, AI firm, and performance monitoring.
+[33m31e0401[m EMERGENCY ROLLBACK: Disable Ghost and MacroMonk personas causing backend crash
+[33m1d98899[m feat: Implement core backend API, AI firm services, and a comprehensive frontend dashboard with live market data.
+[33m6f6a9a8[m Throttle market data updates to 1-minute intervals across backend and frontend
+[33mbe6db3c[m feat: Introduce AIFirmDashboard component for visualizing AI firm operational status, performance metrics, and agent insights with real-time data fetching.
+[33m5697947[m Fix frontend crash: flatten persona summary and register missing institutional personas
+[33mdba67b3[m Fix critical production deployment errors: MarketDataConfig init, AI Firm status flattening, and KB seeding

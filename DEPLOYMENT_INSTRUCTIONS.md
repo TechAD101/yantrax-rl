@@ -56,12 +56,26 @@ Flask==2.3.0
 flask-cors==4.0.0
 requests==2.31.0
 python-dotenv==1.0.0
+alembic==1.11.1
 ```
 
 ```bash
 cd backend
 pip install -r requirements.txt
 ```
+
+## 🔁 STEP 3.1: RUN DATABASE MIGRATIONS (1 minute)
+
+Make sure your `DATABASE_URL` env var is set (e.g., `sqlite:///./yantrax.db` or your Postgres URI), then run:
+
+```bash
+# From repo root
+export DATABASE_URL="sqlite:///./yantrax.db"
+cd backend
+alembic upgrade head
+```
+
+This will apply the schema changes (strategies, profiles, portfolios, positions, journal entries) before starting the service.
 
 ---
 

@@ -7,6 +7,7 @@ import StepStrategy from './StepStrategy';
 import StepCapital from './StepCapital';
 import StepRisk from './StepRisk';
 import ProgressBar from './ProgressBar';
+import { createPortfolio } from '../../api/api';
 
 const PortfolioWizard = () => {
     const navigate = useNavigate();
@@ -24,19 +25,19 @@ const PortfolioWizard = () => {
     const prevStep = () => setStep(s => Math.max(s - 1, 1));
 
     const handleSubmit = async () => {
-        setIsSubmitting(true);
+            setIsSubmitting(true);
         console.log('Submitting Portfolio Config:', config);
 
         try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            // Call backend API to create portfolio
+            const result = await createPortfolio(config);
 
-            // TODO: Real API call
-            // await fetch('/api/portfolio/create', { method: 'POST', body: JSON.stringify(config) ... });
-
-            // Success animation or logic here
-            alert('🚀 AI Firm Initialized! Welcome CEO.');
-            navigate('/dashboard');
+            if (result && result.portfolio) {
+                alert('🚀 AI Firm Initialized! Welcome CEO.');
+                navigate('/dashboard');
+            } else {
+                throw new Error('Invalid response from server');
+            }
         } catch (error) {
             console.error('Setup failed:', error);
             alert('Failed to initialize firm. Please try again.');

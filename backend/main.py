@@ -3,7 +3,12 @@ import os
 import sys
 import logging
 import json
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except Exception:
+    # dotenv is optional for tests/environments where python-dotenv is not installed
+    def load_dotenv(path=None):
+        return None
 
 # --- RENDER/CHROMA DB PATCH ---
 # Fix for old SQLite versions on Render/Linux
@@ -23,6 +28,7 @@ from functools import wraps
 from typing import Dict, Any, Optional
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
+from sqlalchemy import func, Float
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -33,6 +39,11 @@ logger = logging.getLogger(__name__)
 # Initialize Waterfall Market Data Service (The "Real Work")
 from services.market_data_service_waterfall import WaterfallMarketDataService
 market_provider = WaterfallMarketDataService()
+
+# Database helpers
+from db import get_session, init_db
+from models import Portfolio, PortfolioPosition, StrategyProfile, Strategy
+
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -201,6 +212,15 @@ try:
     
     # Initialize RL Environment
     rl_env = MarketSimEnv()
+
+    # Initialize Debate Engine (uses the PersonaRegistry/AgentManager)
+    try:
+        from ai_firm.debate_engine import DebateEngine
+        DEBATE_ENGINE = DebateEngine(agent_manager)
+        logger.info("✓ Debate Engine initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize Debate Engine: {e}")
+        DEBATE_ENGINE = None
     
     AI_FIRM_READY = True
     RL_ENV_READY = True
@@ -213,6 +233,22 @@ except Exception as e:
     # We continue, but god_cycle will degrade gracefully
 
 app = Flask(__name__)
+
+# Initialize DB tables (safe to call; in prod use Alembic migrations)
+try:
+    init_db()
+    logger.info("✓ Database initialized (tables created if missing)")
+except Exception as e:
+    logger.error(f"Failed to initialize DB on startup: {e}")
+
+# Fallback: Ensure Debate Engine exists even if AI Firm failed to initialize (useful for tests)
+try:
+    if 'DEBATE_ENGINE' not in globals() or DEBATE_ENGINE is None:
+        from ai_firm.debate_engine import DebateEngine
+        DEBATE_ENGINE = DebateEngine(None)
+        logger.info('✓ Debate Engine fallback initialized')
+except Exception as e:
+    logger.error(f'Failed to initialize Debate Engine fallback: {e}')
 CORS(app, origins=['*'])
 
 
@@ -1278,6 +1314,173 @@ def get_knowledge_stats():
 
 # ==================== TRIPLE-SOURCE DATA VERIFICATION ENDPOINTS ====================
 
+# ==================== STRATEGY / DEBATE ENDPOINTS ====================
+@app.route('/api/strategy/ai-debate/trigger', methods=['POST'])
+def trigger_ai_debate():
+    """Trigger a persona debate for a given symbol/ticker"""
+    data = request.get_json() or {}
+    symbol = data.get('symbol') or data.get('ticker')
+    context = data.get('context', {})
+    if not symbol:
+        return jsonify({'error': 'symbol is required'}), 400
+    if 'DEBATE_ENGINE' in globals() and DEBATE_ENGINE:
+        try:
+            result = DEBATE_ENGINE.conduct_debate(symbol.upper(), context)
+            return jsonify(result), 200
+        except Exception as e:
+            logger.error(f"Error running debate: {e}")
+            return jsonify({'error': str(e)}), 500
+    return jsonify({'error': 'Debate engine not available'}), 503
+
+
+# ------------------- Strategy Marketplace (Internal-only MVP) -------------------
+@app.route('/api/strategy/publish', methods=['POST'])
+def publish_strategy():
+    """Publish an internal strategy (admin/system only). Internal-only for MVP."""
+    data = request.get_json() or {}
+    name = data.get('name')
+    description = data.get('description')
+    archetype = data.get('archetype')
+    params = data.get('params', {})
+    metrics = data.get('metrics', {})
+
+    if not name:
+        return jsonify({'error': 'name is required'}), 400
+
+    session = get_session()
+    try:
+        strat = session.query(Strategy).filter_by(name=name).first()
+        if strat:
+            # Update existing
+            strat.description = description
+            strat.archetype = archetype
+            strat.params = params
+            strat.metrics = metrics
+            strat.published = 1
+        else:
+            strat = Strategy(name=name, description=description, archetype=archetype, params=params, metrics=metrics, published=1)
+            session.add(strat)
+        session.commit()
+        return jsonify({'strategy': strat.to_dict(), 'message': 'Strategy published (internal-only)'}), 201
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Failed to publish strategy: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/strategy/list', methods=['GET'])
+def list_strategies():
+    """List internal strategies (published only) with pagination and simple filters"""
+    session = get_session()
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+        per_page = min(100, max(1, int(request.args.get('per_page', 10))))
+        archetype = request.args.get('archetype')
+        q = request.args.get('q')
+        sort_by = request.args.get('sort_by', 'created_at')
+        order = request.args.get('order', 'desc').lower()
+        min_sharpe = request.args.get('min_sharpe')
+        min_win_rate = request.args.get('min_win_rate')
+
+        query = session.query(Strategy).filter(Strategy.published == 1)
+
+        if archetype:
+            query = query.filter(Strategy.archetype == archetype)
+        if q:
+            likeq = f"%{q}%"
+            query = query.filter((Strategy.name.ilike(likeq)) | (Strategy.description.ilike(likeq)))
+        # metrics filters: metrics stored as JSON; use SQLite json_extract for tests
+        if min_sharpe:
+            try:
+                ms = float(min_sharpe)
+                query = query.filter(func.json_extract(Strategy.metrics, '$.sharpe').cast(Float) >= ms)
+            except Exception:
+                pass
+        if min_win_rate:
+            try:
+                mw = float(min_win_rate)
+                query = query.filter(func.json_extract(Strategy.metrics, '$.win_rate').cast(Float) >= mw)
+            except Exception:
+                pass
+
+        total = query.count()
+
+        # Sorting - support created_at, sharpe, win_rate
+        if sort_by == 'created_at':
+            sort_col = Strategy.created_at
+        elif sort_by == 'sharpe':
+            sort_col = func.json_extract(Strategy.metrics, '$.sharpe').cast(Float)
+        elif sort_by == 'win_rate':
+            sort_col = func.json_extract(Strategy.metrics, '$.win_rate').cast(Float)
+        else:
+            sort_col = Strategy.created_at
+
+        if order == 'asc':
+            query = query.order_by(sort_col.asc())
+        else:
+            query = query.order_by(sort_col.desc())
+
+        strategies = query.offset((page - 1) * per_page).limit(per_page).all()
+
+        return jsonify({
+            'strategies': [s.to_dict() for s in strategies],
+            'page': page,
+            'per_page': per_page,
+            'total': total,
+            'total_pages': (total + per_page - 1) // per_page
+        }), 200
+    except Exception as e:
+        logger.error(f"Error listing strategies: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/strategy/top', methods=['GET'])
+def top_strategies():
+    """Return top N published strategies sorted by a metric (default: sharpe)"""
+    session = get_session()
+    try:
+        limit = min(50, max(1, int(request.args.get('limit', 3))))
+        metric = request.args.get('metric', 'sharpe')
+        order = request.args.get('order', 'desc').lower()
+
+        if metric not in ('sharpe', 'win_rate'):
+            metric = 'sharpe'
+
+        metric_col = func.json_extract(Strategy.metrics, f'$.{metric}').cast(Float)
+        query = session.query(Strategy).filter(Strategy.published == 1)
+
+        if order == 'asc':
+            query = query.order_by(metric_col.asc())
+        else:
+            query = query.order_by(metric_col.desc())
+
+        results = query.limit(limit).all()
+        return jsonify({'strategies': [s.to_dict() for s in results]}), 200
+    except Exception as e:
+        logger.error(f"Error fetching top strategies: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/strategy/<int:strategy_id>', methods=['GET'])
+def get_strategy(strategy_id: int):
+    session = get_session()
+    try:
+        s = session.query(Strategy).get(strategy_id)
+        if not s:
+            return jsonify({'error': 'Strategy not found'}), 404
+        return jsonify({'strategy': s.to_dict()}), 200
+    except Exception as e:
+        logger.error(f"Error fetching strategy {strategy_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
 @app.route('/api/data/price-verified', methods=['GET'])
 def get_verified_price():
     """Get triple-source verified price - ZERO MOCK DATA"""
@@ -1299,11 +1502,47 @@ def get_audit_trail():
         logs = market_provider.get_recent_audit_logs(limit)
         return jsonify({
             'audit_logs': logs,
-            'count': len(logs),
-            'timestamp': datetime.now().isoformat()
-        }), 200
+        })
     except Exception as e:
-        logger.error(f"Error getting audit trail: {e}")
+        logger.error(f"Error fetching audit trail: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ---------------- Memecoin Engine Prototype ----------------
+from memecoin_service import scan_market, get_top_memecoins, simulate_trade
+
+
+@app.route('/api/memecoin/scan', methods=['POST'])
+def scan_memecoins():
+    data = request.get_json() or {}
+    symbols = data.get('symbols', ['DOGE', 'SHIB', 'PEPE', 'WOJAK', 'MEME'])
+    results = scan_market(symbols)
+    return jsonify({'results': results}), 200
+
+
+@app.route('/api/memecoin/top', methods=['GET'])
+def top_memecoins():
+    limit = int(request.args.get('limit', 10))
+    try:
+        items = get_top_memecoins(limit)
+        return jsonify({'memecoins': items}), 200
+    except Exception as e:
+        logger.error(f"Error fetching memecoins: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/memecoin/simulate', methods=['POST'])
+def simulate_memecoin_trade():
+    data = request.get_json() or {}
+    symbol = data.get('symbol')
+    usd = float(data.get('usd', 100.0))
+    if not symbol:
+        return jsonify({'error': 'symbol is required'}), 400
+    try:
+        res = simulate_trade(symbol, usd)
+        return jsonify({'result': res}), 200
+    except Exception as e:
+        logger.error(f"Error simulating trade: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/data/verification-stats', methods=['GET'])
@@ -1480,16 +1719,98 @@ def get_journal():
 
 @app.route('/portfolio', methods=['GET'])
 def get_portfolio():
-    """Get current portfolio status"""
-    return jsonify({
-        'balance': 132450.00,
-        'cash': 45000.00,
-        'positions': [
-            {'symbol': 'AAPL', 'quantity': 150, 'avg_price': 175.50},
-            {'symbol': 'TSLA', 'quantity': 50, 'avg_price': 240.00}
-        ],
-        'total_value': 177450.00
-    })
+    """Backwards-compatible portfolio summary. If any persisted portfolios exist, return the first one; otherwise return a safe mock."""
+    try:
+        session = get_session()
+        # Return the most recently created persisted portfolio for summary
+        portfolio = session.query(Portfolio).order_by(Portfolio.created_at.desc()).first()
+        if portfolio:
+            # Build summary
+            summary = {
+                'id': portfolio.id,
+                'name': portfolio.name,
+                'total_value': portfolio.current_value or portfolio.initial_capital,
+                'initial_capital': portfolio.initial_capital,
+                'risk_profile': portfolio.risk_profile,
+                'positions': [p.to_dict() for p in portfolio.positions]
+            }
+            return jsonify(summary)
+        # Fallback mock for compatibility
+        return jsonify({
+            'balance': 132450.00,
+            'cash': 45000.00,
+            'positions': [
+                {'symbol': 'AAPL', 'quantity': 150, 'avg_price': 175.50},
+                {'symbol': 'TSLA', 'quantity': 50, 'avg_price': 240.00}
+            ],
+            'total_value': 177450.00
+        })
+    except Exception as e:
+        logger.error(f"Error fetching portfolio: {e}")
+        return jsonify({'error': 'Failed to fetch portfolio'}), 500
+    finally:
+        try:
+            session.close()
+        except Exception:
+            pass
+
+
+# ------------------- Portfolio Management API -------------------
+@app.route('/api/portfolio', methods=['POST'])
+def create_portfolio():
+    """Create a new portfolio with optional strategy profile"""
+    data = request.get_json() or {}
+    name = data.get('name', 'My Portfolio')
+    owner_id = data.get('owner_id')
+    risk_profile = data.get('risk_profile', 'moderate')
+    initial_capital = float(data.get('initial_capital', 100000.0))
+    strategy = data.get('strategy')
+
+    session = get_session()
+    try:
+        sp = None
+        if strategy:
+            # Attempt to find existing strategy by name, otherwise create
+            sp = session.query(StrategyProfile).filter_by(name=strategy.get('name')).first()
+            if not sp:
+                sp = StrategyProfile(name=strategy.get('name', 'default'), archetype=strategy.get('archetype'), params=strategy.get('params'))
+                session.add(sp)
+                session.flush()
+
+        portfolio = Portfolio(
+            name=name,
+            owner_id=owner_id,
+            risk_profile=risk_profile,
+            initial_capital=initial_capital,
+            current_value=initial_capital,
+            strategy_profile=sp
+        )
+        session.add(portfolio)
+        session.commit()
+
+        return jsonify({'portfolio': portfolio.to_dict(), 'message': 'Portfolio created'}), 201
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Failed to create portfolio: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/portfolio/<int:portfolio_id>', methods=['GET'])
+def get_portfolio_by_id(portfolio_id: int):
+    """Get a detailed portfolio by id"""
+    session = get_session()
+    try:
+        portfolio = session.query(Portfolio).get(portfolio_id)
+        if not portfolio:
+            return jsonify({'error': 'Portfolio not found'}), 404
+        return jsonify({'portfolio': portfolio.to_dict()}), 200
+    except Exception as e:
+        logger.error(f"Error fetching portfolio {portfolio_id}: {e}")
+        return jsonify({'error': 'Failed to fetch portfolio'}), 500
+    finally:
+        session.close()
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))

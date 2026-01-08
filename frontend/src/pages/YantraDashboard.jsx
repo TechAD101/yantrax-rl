@@ -58,8 +58,11 @@ const AnalyticsCard = ({ title, value, subtext }) => (
   </div>
 )
 
+import { useNavigate } from 'react-router-dom';
+
 const YantraDashboard = () => {
   // Enhanced State Management
+  const navigate = useNavigate();
   const [marketData, setMarketData] = useState({});
   const [agentStatus, setAgentStatus] = useState({});
   const [portfolioMetrics, setPortfolioMetrics] = useState({});
@@ -75,6 +78,8 @@ const YantraDashboard = () => {
   const [renderError, setRenderError] = useState(null)
   const [altarOpen, setAltarOpen] = useState(false);
   const [logoClicks, setLogoClicks] = useState(0);
+  // Add quick link to strategy hub
+  const gotoStrategies = () => navigate('/strategies');
 
   const handleLogoClick = () => {
     setLogoClicks(prev => {

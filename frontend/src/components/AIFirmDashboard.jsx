@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BASE_URL } from '../api/api';
 import PainMeter from './PainMeter';
 import MarketMoodDial from './MarketMoodDial';
@@ -11,6 +12,8 @@ const AIFirmDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [topStrategies, setTopStrategies] = useState([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchAIFirmData();
@@ -23,15 +26,16 @@ const AIFirmDashboard = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch AI firm status, Personas, and Wisdom in parallel
-      const [statusRes, personaRes, wisdomRes] = await Promise.allSettled([
+      // Fetch AI firm status, Personas, Wisdom, and top strategies in parallel
+      const [statusRes, personaRes, wisdomRes, topRes] = await Promise.allSettled([
         fetch(`${BASE_URL}/api/ai-firm/status`).then(r => r.json()),
         fetch(`${BASE_URL}/api/personas`).then(r => r.json()),
         fetch(`${BASE_URL}/api/knowledge/query`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ topic: 'philosophy', max_results: 1 })
-        }).then(r => r.json())
+        }).then(r => r.json()),
+        fetch(`${BASE_URL}/api/strategy/top?limit=3&metric=sharpe`).then(r => r.json())
       ]);
 
       if (statusRes.status === 'fulfilled') setFirmStatus(statusRes.value);
@@ -41,6 +45,9 @@ const AIFirmDashboard = () => {
       }
       if (wisdomRes.status === 'fulfilled') {
         setWisdom(wisdomRes.value.wisdom?.[0]);
+      }
+      if (topRes.status === 'fulfilled') {
+        setTopStrategies(topRes.value.strategies || []);
       }
 
     } catch (err) {
@@ -96,6 +103,9 @@ const AIFirmDashboard = () => {
             >
               {loading ? '🔄' : '↻'} Refresh
             </button>
+            <button onClick={() => navigate('/strategies')} className="px-3 py-1 bg-purple-600/20 hover:bg-purple-600/30 rounded-lg text-purple-400 text-xs font-medium transition-colors">
+              🔍 Strategies
+            </button>
           </div>
         </div>
 
@@ -139,6 +149,23 @@ const AIFirmDashboard = () => {
                 <div className="text-xs text-orange-400 mt-1">
                   🏢 Full Management
                 </div>
+              </div>
+            </div>
+
+            {/* Top Strategies (internal) */}
+            <div className="bg-gray-900/40 rounded-lg p-4 border border-white/5">
+              <h4 className="text-sm font-bold text-purple-300 mb-2">Top Strategies (internal)</h4>
+              <div className="space-y-2">
+                {topStrategies.length === 0 ? (
+                  <div className="text-xs text-gray-400">No top strategies available</div>
+                ) : (
+                  topStrategies.map(s => (
+                    <div key={s.id} className="flex items-center justify-between">
+                      <div className="text-sm text-white">{s.name}</div>
+                      <div className="text-xs text-gray-400">Sharpe: {s.metrics?.sharpe ?? '—'}</div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 

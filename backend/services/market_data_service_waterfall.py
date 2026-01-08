@@ -12,11 +12,14 @@ from datetime import datetime
 from typing import Dict, Any
 from threading import Lock
 
-# Third-party imports moved to lazy load inside methods to save memory
-from dotenv import load_dotenv
+# dotenv is optional in test environments
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    def load_dotenv(*args, **kwargs):
+        return None
 
-# Load environment variables
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 

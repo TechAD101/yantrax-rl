@@ -211,6 +211,41 @@ export const getRiskMetrics = () => fetchWithRetry(`${BASE_URL}/risk-metrics`);
 export const getPerformance = () => fetchWithRetry(`${BASE_URL}/performance`);
 
 
+export const createPortfolio = (config) => fetchWithRetry(`${BASE_URL}/api/portfolio`, { method: 'POST', body: JSON.stringify(config) });
+
+export const listStrategies = async (opts = {}) => {
+  const qs = new URLSearchParams();
+  if (opts.page) qs.set('page', opts.page);
+  if (opts.per_page) qs.set('per_page', opts.per_page);
+  if (opts.archetype) qs.set('archetype', opts.archetype);
+  if (opts.q) qs.set('q', opts.q);
+  if (opts.min_sharpe) qs.set('min_sharpe', opts.min_sharpe);
+  if (opts.min_win_rate) qs.set('min_win_rate', opts.min_win_rate);
+  if (opts.sort_by) qs.set('sort_by', opts.sort_by);
+  if (opts.order) qs.set('order', opts.order);
+
+  return fetchWithRetry(`${BASE_URL}/api/strategy/list?${qs.toString()}`);
+};
+
+export const getTopStrategies = async (opts = {}) => {
+  const qs = new URLSearchParams();
+  qs.set('limit', opts.limit || 3);
+  qs.set('metric', opts.metric || 'sharpe');
+  qs.set('order', opts.order || 'desc');
+  return fetchWithRetry(`${BASE_URL}/api/strategy/top?${qs.toString()}`);
+};
+
+export const scanMemecoins = async (symbols = []) => {
+  return fetchWithRetry(`${BASE_URL}/api/memecoin/scan`, { method: 'POST', body: JSON.stringify({ symbols }) });
+};
+
+export const getTopMemecoins = async (limit = 10) => {
+  return fetchWithRetry(`${BASE_URL}/api/memecoin/top?limit=${limit}`);
+};
+
+export const simulateMemecoin = async (symbol, usd = 100) => {
+  return fetchWithRetry(`${BASE_URL}/api/memecoin/simulate`, { method: 'POST', body: JSON.stringify({ symbol, usd }) });
+};
 
 export const runTradingCycle = () => fetchWithRetry(`${BASE_URL}/run-cycle`, { method: 'POST' });
 
