@@ -47,6 +47,8 @@ class AutonomousCEO:
         self.agent_manager = AgentManager()
         self.debate_engine = DebateEngine(self.agent_manager)
         self.ghost_layer = GhostLayer()
+        from .philosophy import PhilosophyManager
+        self.philosophy = PhilosophyManager()
         
     def make_strategic_decision(self, context: Dict[str, Any]) -> CEODecision:
         """Make strategic decision based on context and memory"""
@@ -73,6 +75,17 @@ class AutonomousCEO:
             reasoning += f" | {ghost_nudge['origin']}: {ghost_nudge['whisper']} [{ghost_nudge['influence_level']}]"
             if ghost_nudge['influence_level'] == 'VETO_RECOMMENDED':
                 final_confidence *= 0.5 # Severe confidence penalty on Ghost Veto
+        
+        # 5. Philosophical Guidance (The Soul Layer)
+        soul_guidance = self.philosophy.get_guidance(context)
+        reasoning += f" | {soul_guidance}"
+        
+        # Check for Philosophical Veto
+        # Construct temp decision dict for check
+        temp_decision = {'risk_score': context.get('risk_score', 5), 'type': context.get('type', 'standard')}
+        if not self.philosophy.check_compliance(temp_decision):
+             final_confidence = 0.0
+             reasoning += " | ⛔ VETOED BY PHILOSOPHY (Adharma detected)."
         
         # 5. Create decision
         decision = CEODecision(

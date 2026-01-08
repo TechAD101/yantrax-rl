@@ -1491,6 +1491,69 @@ def get_portfolio():
         'total_value': 177450.00
     })
 
+# --- WORLD CLASS VISUAL MOOD BOARD ---
+@app.route('/api/visual_mood_board', methods=['GET'])
+def visual_mood_board():
+    """Gamified Mood Board & Trivia Endpoint"""
+    if not AI_FIRM_READY: return jsonify({'error': 'offline'}), 500
+    
+    # Lazy Init of MoodBoardManager if needed
+    if not hasattr(app, 'mood_board_manager'):
+        from ai_firm.mood_board import MoodBoardManager
+        app.mood_board_manager = MoodBoardManager(ceo, market_provider)
+        
+    dashboard_data = app.mood_board_manager.get_dashboard_state()
+    return jsonify(dashboard_data), 200
+
+# --- WORLD CLASS SOCIAL LAYER (Marketplace & Contests) ---
+@app.route('/api/strategies/publish', methods=['POST'])
+def publish_strategy():
+    """Publish a user strategy to the marketplace"""
+    if not hasattr(app, 'marketplace_service'):
+        from services.marketplace_service import MarketplaceService
+        app.marketplace_service = MarketplaceService()
+        
+    data = request.json or {}
+    result = app.marketplace_service.publish_strategy(data)
+    return jsonify(result), 201
+
+@app.route('/api/strategies/top', methods=['GET'])
+def get_top_strategies():
+    """Get the leaderboard"""
+    if not hasattr(app, 'marketplace_service'):
+        from services.marketplace_service import MarketplaceService
+        app.marketplace_service = MarketplaceService()
+        
+    limit = int(request.args.get('limit', 10))
+    strategies = app.marketplace_service.get_top_strategies(limit)
+    return jsonify(strategies), 200
+
+@app.route('/api/strategies/copy', methods=['POST'])
+def copy_strategy():
+    """Copy a strategy"""
+    if not hasattr(app, 'marketplace_service'):
+        from services.marketplace_service import MarketplaceService
+        app.marketplace_service = MarketplaceService()
+        
+    data = request.json or {}
+    # Mock user_id for now
+    result = app.marketplace_service.copy_strategy(
+        data.get('strategy_id'), 
+        data.get('user_id', 'user_001'), 
+        float(data.get('amount', 1000))
+    )
+    return jsonify(result), 200
+
+@app.route('/api/contests/active', methods=['GET'])
+def get_active_contest():
+    """Get current active contest"""
+    if not hasattr(app, 'marketplace_service'):
+        from services.marketplace_service import MarketplaceService
+        app.marketplace_service = MarketplaceService()
+        
+    contest = app.marketplace_service.get_active_contest()
+    return jsonify(contest), 200
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
