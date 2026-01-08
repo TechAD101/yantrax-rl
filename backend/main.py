@@ -1827,7 +1827,7 @@ def visual_mood_board():
     return jsonify(dashboard_data), 200
 
 # --- WORLD CLASS SOCIAL LAYER (Marketplace & Contests) ---
-@app.route('/api/strategies/publish', methods=['POST'])
+@app.route('/api/strategies/publish-to-hub', methods=['POST'])
 def publish_strategy():
     """Publish a user strategy to the marketplace"""
     if not hasattr(app, 'marketplace_service'):
