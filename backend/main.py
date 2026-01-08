@@ -1828,7 +1828,7 @@ def visual_mood_board():
 
 # --- WORLD CLASS SOCIAL LAYER (Marketplace & Contests) ---
 @app.route('/api/strategies/publish-to-hub', methods=['POST'])
-def publish_strategy():
+def publish_strategy_hub():
     """Publish a user strategy to the marketplace"""
     if not hasattr(app, 'marketplace_service'):
         from services.marketplace_service import MarketplaceService
