@@ -431,9 +431,9 @@ if __name__ == '__main__':
     logger.info(f"✅ PersonaRegistry initialized with {len(PERSONA_REGISTRY.get_all_personas())} personas")
     logger.info(f"✅ Knowledge Base initialized with {KNOWLEDGE_BASE.get_statistics()['total_items']} items")
     logger.info("✅ Trade Validator initialized with 8-point strict validation")
-except Exception as e:
-    logger.error(f"❌ AI Firm initialization failed: {e}")
-    # We continue, but god_cycle will degrade gracefully
+
+# Note: Any AI Firm initialization errors are logged in their local try/except
+# blocks above; continue startup without raising here.
 
 app = Flask(__name__)
 
