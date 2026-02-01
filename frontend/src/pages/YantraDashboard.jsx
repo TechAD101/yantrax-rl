@@ -15,6 +15,8 @@ import {
   getMarketPrice,
 } from "../api/api";
 
+// Version: 6.1 - Portfolio APIs Live (Feb 1, 2026 22:50 UTC)
+
 // Lightweight local UI primitives (fallbacks to avoid rendering crashes if dedicated components are missing)
 const AgentCard = ({ agent, status }) => (
   <div className="agent-card p-3">
@@ -61,6 +63,7 @@ const AnalyticsCard = ({ title, value, subtext }) => (
 import { useNavigate } from 'react-router-dom';
 
 const YantraDashboard = () => {
+  const FRONTEND_BUILD_VERSION = '6.1 - MVP Routes Active';
   // Enhanced State Management
   const navigate = useNavigate();
   const [marketData, setMarketData] = useState({});
@@ -100,6 +103,13 @@ const YantraDashboard = () => {
     "Indices": ["SPY", "QQQ", "IWM", "VIX"],
     "Forex": ["EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF"]
   };
+
+  // Small visible banner for quick verification of deployed frontend
+  const VersionBanner = () => (
+    <div className="fixed top-4 right-4 z-50 px-3 py-1 rounded-md bg-green-600 text-white text-xs font-semibold shadow-lg">
+      {FRONTEND_BUILD_VERSION}
+    </div>
+  );
 
   // Enhanced Data Fetching
   const fetchComprehensiveData = async () => {
