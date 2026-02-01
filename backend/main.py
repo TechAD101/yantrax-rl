@@ -1,203 +1,406 @@
+"""
+YANTRAX MVP Backend - Clean, Focused, Production-Ready
+v6.0 - Portfolio Creation + AI Debate + Paper Trading Foundation
+"""
 
 import os
 import sys
-import logging
 import json
-try:
-    from dotenv import load_dotenv
-except Exception:
-    # dotenv is optional for tests/environments where python-dotenv is not installed
-    def load_dotenv(path=None):
-        return None
-
-# --- RENDER/CHROMA DB PATCH ---
-# Fix for old SQLite versions on Render/Linux
-try:
-    __import__('pysqlite3')
-    import sys
-    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-except ImportError:
-    pass
-# ------------------------------
-
-load_dotenv()
-
-import numpy as np
+import logging
 from datetime import datetime, timedelta
+from typing import Dict, Any, Optional, List
 from functools import wraps
-from typing import Dict, Any, Optional
-from flask import Flask, jsonify, request, Response
-from flask_cors import CORS
-from sqlalchemy import func, Float
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# ==================== SETUP ====================
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-# ==================== MAIN SYSTEM INTEGRATION ====================
+# Load environment
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
+except Exception:
+    logger.warning("python-dotenv not installed, relying on environment variables")
 
-# Initialize Waterfall Market Data Service (The "Real Work")
-from services.market_data_service_waterfall import WaterfallMarketDataService
-market_provider = WaterfallMarketDataService()
+# ==================== FLASK SETUP ====================
+from flask import Flask, jsonify, request, Response
+from flask_cors import CORS
 
-# Database helpers
-from db import get_session, init_db
-from models import Portfolio, PortfolioPosition, StrategyProfile, Strategy
+app = Flask(__name__)
+CORS(app)
+
+# ==================== DATABASE SETUP ====================
+sys.path.insert(0, os.path.dirname(__file__))
+
+try:
+    from db import get_session, init_db
+    from models import Portfolio, PortfolioPosition, StrategyProfile, Strategy, User, JournalEntry
+    init_db()  # Initialize database on startup
+    logger.info("✓ Database initialized")
+except Exception as e:
+    logger.error(f"✗ Database initialization failed: {e}")
+    sys.exit(1)
+
+# ==================== MARKET DATA SERVICE ====================
+try:
+    from services.market_data_service_waterfall import WaterfallMarketDataService
+    market_provider = WaterfallMarketDataService()
+    logger.info("✓ Market data service initialized")
+except Exception as e:
+    logger.error(f"✗ Market data service failed: {e}")
+    market_provider = None
+
+# ==================== AI FIRM SETUP ====================
+try:
+    from ai_firm.agent_manager import AgentManager
+    from ai_firm.debate_engine import DebateEngine
+    from ai_firm.memory_system import FirmMemorySystem
+    
+    agent_manager = AgentManager()
+    memory_system = FirmMemorySystem()
+    debate_engine = DebateEngine(agent_manager)
+    
+    logger.info(f"✓ AI Firm initialized with {len(agent_manager.agents)} agents")
+    AI_FIRM_READY = True
+except Exception as e:
+    logger.warning(f"⚠ AI Firm initialization warning: {e}")
+    # Don't fail - MVP can work without full AI Firm
+    AI_FIRM_READY = False
+
+# ==================== HEALTH CHECK ====================
+
+@app.route('/', methods=['GET'])
+def health_check():
+    """Root endpoint with system status"""
+    return jsonify({
+        'status': 'online',
+        'version': '6.0',
+        'timestamp': datetime.now().isoformat(),
+        'components': {
+            'database': 'ok',
+            'market_data': 'ok' if market_provider else 'offline',
+            'ai_firm': 'ok' if AI_FIRM_READY else 'offline'
+        }
+    }), 200
 
 
-def _load_dotenv_fallback(filepath: str) -> None:
-    """Fallback loader for .env when python-dotenv isn't available.
+# ==================== PORTFOLIO API ====================
 
-    Reads simple KEY=VALUE lines and sets os.environ for missing keys.
-    Does not overwrite existing environment variables.
+@app.route('/api/portfolio/create', methods=['POST'])
+def create_portfolio():
+    """
+    Create a new portfolio with risk profile and initial capital
     """
     try:
-        if not os.path.exists(filepath):
-            logger.debug("No local .env file at %s", filepath)
-            return
-
-        logger.info("Loading local .env fallback from %s", filepath)
-        with open(filepath, 'r', encoding='utf-8') as f:
-            for raw in f:
-                line = raw.strip()
-                if not line or line.startswith('#'):
-                    continue
-                if '=' not in line:
-                    continue
-                k, v = line.split('=', 1)
-                k = k.strip()
-                v = v.strip().strip('"').strip("'")
-                if k and (k not in os.environ or not os.environ.get(k)):
-                    os.environ[k] = v
-                    logger.debug("Set env var from .env: %s", k)
+        data = request.get_json() or {}
+        
+        # Validate required fields
+        name = data.get('name', 'My Portfolio')
+        risk_profile = data.get('risk_profile', 'moderate').lower()
+        initial_capital = float(data.get('initial_capital', 50000))
+        
+        # Validate inputs
+        if not name:
+            return jsonify({'error': 'Portfolio name is required'}), 400
+        if risk_profile not in ['conservative', 'moderate', 'aggressive', 'custom']:
+            return jsonify({'error': 'Invalid risk profile'}), 400
+        if initial_capital <= 0:
+            return jsonify({'error': 'Initial capital must be positive'}), 400
+        
+        # Create portfolio in database
+        session = get_session()
+        try:
+            portfolio = Portfolio(
+                name=name,
+                risk_profile=risk_profile,
+                initial_capital=initial_capital,
+                current_value=initial_capital,
+                meta={
+                    'created_via': 'api',
+                    'strategy_preference': data.get('strategy_preference', 'balanced')
+                }
+            )
+            session.add(portfolio)
+            session.commit()
+            
+            logger.info(f"✓ Portfolio created: {name} (${initial_capital})")
+            
+            return jsonify({
+                'success': True,
+                'portfolio': portfolio.to_dict(),
+                'message': 'Portfolio created successfully'
+            }), 201
+            
+        finally:
+            session.close()
+            
+    except ValueError as e:
+        return jsonify({'error': f'Invalid input: {str(e)}'}), 400
     except Exception as e:
-        logger.warning(f"Failed to load .env fallback: {e}")
+        logger.error(f"✗ Portfolio creation failed: {e}")
+        return jsonify({'error': 'Failed to create portfolio'}), 500
 
 
-# Ensure local .env is loaded even if python-dotenv is missing
-_load_dotenv_fallback(os.path.join(os.path.dirname(__file__), '.env'))
+@app.route('/api/portfolio/<int:portfolio_id>', methods=['GET'])
+def get_portfolio(portfolio_id: int):
+    """Get portfolio details by ID"""
+    session = get_session()
+    try:
+        portfolio = session.query(Portfolio).get(portfolio_id)
+        if not portfolio:
+            return jsonify({'error': 'Portfolio not found'}), 404
+        
+        return jsonify({
+            'portfolio': portfolio.to_dict()
+        }), 200
+    finally:
+        session.close()
 
-# ==================== CRITICAL DIAGNOSTIC ====================
 
-logger.info("\n" + "="*80)
-logger.info("🔍 YANTRAX RL v4.6 - DIAGNOSTIC MODE")
-logger.info("="*80)
+@app.route('/api/portfolios', methods=['GET'])
+def list_portfolios():
+    """List all portfolios (pagination support)"""
+    session = get_session()
+    try:
+        limit = int(request.args.get('limit', 20))
+        offset = int(request.args.get('offset', 0))
+        
+        portfolios = session.query(Portfolio).limit(limit).offset(offset).all()
+        total = session.query(Portfolio).count()
+        
+        return jsonify({
+            'portfolios': [p.to_dict() for p in portfolios],
+            'total': total,
+            'limit': limit,
+            'offset': offset
+        }), 200
+    finally:
+        session.close()
 
-# Log all environment variables
-logger.info("📋 ENVIRONMENT VARIABLES CHECK:")
 
+# ==================== MARKET DATA API ====================
 
-def _get_fmp_key() -> str:
-    """Return the FinancialModelingPrep key from commonly used env var names."""
-    return (
-        os.getenv('FMP_API_KEY') or
-        os.getenv('FMP_KEY') or
-        os.getenv('FMP') or
-        ''
-    )
-
-def _get_alpha_vantage_key() -> str:
-    """Return the Alpha Vantage key from commonly used env var names."""
-    return (
-        os.getenv('ALPHAVANTAGE_API_KEY') or
-        os.getenv('ALPHA_VANTAGE_KEY') or
-        os.getenv('ALPHA_VANTAGE') or
-        ''
-    )
-
-fmp_key_env = _get_fmp_key()
-alpaca_key_env = os.getenv('ALPACA_API_KEY', '')
-alpaca_secret_env = os.getenv('ALPACA_SECRET_KEY', '')
-
-logger.info(f"  FMP_API_KEY present: {bool(fmp_key_env)} (first 10 chars: {fmp_key_env[:10] if fmp_key_env else 'EMPTY'})")
-logger.info(f"  ALPACA_API_KEY present: {bool(alpaca_key_env)} (first 10 chars: {alpaca_key_env[:10] if alpaca_key_env else 'EMPTY'})")
-logger.info(f"  ALPACA_SECRET_KEY present: {bool(alpaca_secret_env)} (first 10 chars: {alpaca_secret_env[:10] if alpaca_secret_env else 'EMPTY'})")
-
-# FIXED: Properly import and instantiate MarketDataService v2
-MARKET_SERVICE_READY = False
-market_data = None
-MARKET_DATA_CONFIG = None
-MARKET_SERVICE_INIT_ERROR = None
-
-try:
-    from services.market_data_service_v2 import MarketDataService, MarketDataConfig
-    # Massive market data client (supports equities, crypto, indices, forex)
-    from services.market_data_service_massive import MassiveMarketDataService
+@app.route('/api/market-price', methods=['GET'])
+@app.route('/market-price', methods=['GET'])
+def get_market_price():
+    """
+    Get current market price for a symbol
+    """
+    symbol = request.args.get('symbol', '').upper()
     
-    logger.info("✅ MarketDataService v2 imported successfully")
+    if not symbol:
+        return jsonify({'error': 'symbol parameter required'}), 400
     
-    # Get API keys from environment (accept many common names)
-    fmp_key_env = _get_fmp_key()
-    alpaca_key = os.getenv('ALPACA_API_KEY', '')
-    alpaca_secret = os.getenv('ALPACA_SECRET_KEY', '')
-
-    logger.info("\n🔑 API KEYS CHECK:")
-    logger.info(f"  FMP: {'✅ SET' if fmp_key_env else '❌ MISSING'}")
-    logger.info(f"  Alpaca API Key: {'✅ SET' if alpaca_key else '❌ MISSING'}")
-    logger.info(f"  Alpaca Secret: {'✅ SET' if alpaca_secret else '❌ MISSING'}")
+    if not market_provider:
+        return jsonify({'error': 'Market data service unavailable'}), 503
     
-    # Use FinancialModelingPrep (FMP) as the single, authoritative provider
-    fmp_key = os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY') or os.getenv('FMP') or '14uTc09TMyUVJEuFKriHayCTnLcyGhyy'
+    try:
+        price_data = market_provider.get_price(symbol)
+        return jsonify(price_data), 200
+    except Exception as e:
+        logger.error(f"✗ Failed to get price for {symbol}: {e}")
+        return jsonify({'error': f'Failed to fetch price for {symbol}'}), 500
 
-    if fmp_key:
-        logger.info("\n🔨 CREATING MarketDataConfig (FMP-only)...")
 
-        config = MarketDataConfig(
-            fmp_api_key=fmp_key,
-            cache_ttl_seconds=60,
-            rate_limit_calls=300,
-            rate_limit_period=60,
-            batch_size=50
+@app.route('/api/market-search', methods=['GET'])
+def search_market():
+    """Search for symbols and market data"""
+    query = request.args.get('query', '').upper()
+    limit = int(request.args.get('limit', 5))
+    
+    if not query or len(query) < 1:
+        return jsonify({'error': 'query parameter required'}), 400
+    
+    mock_results = [
+        {'symbol': 'AAPL', 'name': 'Apple Inc.', 'type': 'stock'},
+        {'symbol': 'MSFT', 'name': 'Microsoft Corporation', 'type': 'stock'},
+    ]
+    
+    return jsonify({
+        'results': mock_results[:limit],
+        'query': query
+    }), 200
+
+
+# ==================== AI DEBATE / COUNCIL API ====================
+
+@app.route('/api/strategy/ai-debate', methods=['POST'])
+def ai_debate():
+    if not AI_FIRM_READY:
+        return jsonify({'error': 'AI Firm not initialized'}), 503
+    
+    try:
+        data = request.get_json() or {}
+        symbol = data.get('symbol', '').upper()
+        context = data.get('context', {})
+        
+        if not symbol:
+            return jsonify({'error': 'symbol required'}), 400
+        
+        debate_result = debate_engine.conduct_debate(symbol, context)
+        
+        return jsonify(debate_result), 200
+    except Exception as e:
+        logger.error(f"✗ AI debate failed: {e}")
+        return jsonify({'error': 'Debate failed'}), 500
+
+
+@app.route('/api/ai-firm/status', methods=['GET'])
+def ai_firm_status():
+    if not AI_FIRM_READY:
+        return jsonify({'error': 'AI Firm offline'}), 503
+    
+    try:
+        return jsonify({
+            'status': 'online',
+            'total_agents': len(agent_manager.agents),
+            'departments': list(agent_manager.departments.keys()),
+            'memory_items': memory_system.get_total_memories(),
+            'last_debate': debate_engine.debate_history[-1] if debate_engine.debate_history else None
+        }), 200
+    except Exception as e:
+        logger.error(f"✗ Status check failed: {e}")
+        return jsonify({'error': 'Status check failed'}), 500
+
+
+# ==================== PAPER TRADING API ====================
+
+@app.route('/api/portfolio/<int:portfolio_id>/trade', methods=['POST'])
+def execute_trade(portfolio_id: int):
+    session = get_session()
+    try:
+        portfolio = session.query(Portfolio).get(portfolio_id)
+        if not portfolio:
+            return jsonify({'error': 'Portfolio not found'}), 404
+        
+        data = request.get_json() or {}
+        action = data.get('action', '').upper()
+        symbol = data.get('symbol', '').upper()
+        quantity = float(data.get('quantity', 0))
+        price = float(data.get('price', 0))
+        
+        if action not in ['BUY', 'SELL']:
+            return jsonify({'error': 'action must be BUY or SELL'}), 400
+        if not symbol or quantity <= 0 or price <= 0:
+            return jsonify({'error': 'Invalid parameters'}), 400
+        
+        total_value = quantity * price
+        
+        if action == 'BUY':
+            if portfolio.current_value < total_value:
+                return jsonify({'error': 'Insufficient capital'}), 400
+            
+            portfolio.current_value -= total_value
+            position = session.query(PortfolioPosition).filter_by(
+                portfolio_id=portfolio_id, symbol=symbol
+            ).first()
+            
+            if position:
+                position.quantity += quantity
+                position.avg_price = (position.avg_price * (position.quantity - quantity) + price * quantity) / position.quantity
+            else:
+                position = PortfolioPosition(
+                    portfolio_id=portfolio_id,
+                    symbol=symbol,
+                    quantity=quantity,
+                    avg_price=price
+                )
+                session.add(position)
+        
+        elif action == 'SELL':
+            position = session.query(PortfolioPosition).filter_by(
+                portfolio_id=portfolio_id, symbol=symbol
+            ).first()
+            
+            if not position or position.quantity < quantity:
+                return jsonify({'error': 'Insufficient position to sell'}), 400
+            
+            position.quantity -= quantity
+            portfolio.current_value += total_value
+            
+            if position.quantity == 0:
+                session.delete(position)
+        
+        journal_entry = JournalEntry(
+            action=action,
+            reward=total_value if action == 'SELL' else -total_value,
+            balance=portfolio.current_value,
+            notes=f"{action} {quantity} {symbol} @ ${price} - {data.get('reasoning', 'Manual trade')}"
         )
+        session.add(journal_entry)
+        session.commit()
+        
+        logger.info(f"✓ Trade executed: {action} {quantity} {symbol} @ ${price}")
+        
+        return jsonify({
+            'success': True,
+            'trade': {
+                'action': action,
+                'symbol': symbol,
+                'quantity': quantity,
+                'price': price,
+                'total_value': total_value,
+                'timestamp': datetime.now().isoformat()
+            },
+            'portfolio_value': portfolio.current_value
+        }), 200
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f"✗ Trade failed: {e}")
+        return jsonify({'error': 'Trade execution failed'}), 500
+    finally:
+        session.close()
 
-        logger.info("  Config created:")
-        logger.info(f"    - fmp_api_key: {'✅ SET' if config.fmp_api_key else '❌ MISSING'}")
-        logger.info(f"    - cache_ttl_seconds: {config.cache_ttl_seconds}")
-        MARKET_DATA_CONFIG = config
 
-        logger.info("\n🚀 INITIALIZING MarketDataService (FMP-only)...")
-        market_data = MarketDataService(config)
+# ==================== JOURNAL API ====================
 
-        MARKET_SERVICE_READY = True
-        logger.info("✅ MarketDataService initialized successfully")
-        logger.info(f"📊 Available providers: {[p.value for p in market_data.providers]}")
-        logger.info("📡 Data Pipeline: FinancialModelingPrep (FMP) - batch quote API")
-    else:
-        logger.error("❌ NO FMP API KEY FOUND! Set FMP_API_KEY in environment or pass via MarketDataConfig.")
-        MARKET_SERVICE_READY = False
+@app.route('/api/journal', methods=['GET'])
+def get_journal():
+    session = get_session()
+    try:
+        limit = int(request.args.get('limit', 50))
+        entries = session.query(JournalEntry).order_by(JournalEntry.timestamp.desc()).limit(limit).all()
+        
+        return jsonify({
+            'entries': [e.to_dict() for e in entries],
+            'total': len(entries)
+        }), 200
+    finally:
+        session.close()
 
-except ImportError as e:
-    logger.error(f"❌ MarketDataService v2 import failed: {e}")
-    logger.error(f"   Import error details: {str(e)}")
-    MARKET_SERVICE_INIT_ERROR = str(e)
-    MARKET_SERVICE_READY = False
-except Exception as e:
-    logger.error(f"❌ MarketDataService v2 initialization failed: {e}")
-    logger.error(f"   Traceback: {str(e)}")
-    MARKET_SERVICE_INIT_ERROR = str(e)
-    MARKET_SERVICE_READY = False
 
-logger.info("="*80 + "\n")
+# ==================== ERROR HANDLERS ====================
 
-# AI Firm imports with enhanced error handling
-AI_FIRM_READY = False
-RL_ENV_READY = False # Initialize explicitly
-PERSONA_REGISTRY = None
-KNOWLEDGE_BASE = None
-TRADE_VALIDATOR = None
-try:
-    from ai_firm.ceo import AutonomousCEO, CEOPersonality
-    from ai_agents.personas.warren import WarrenAgent
-    from ai_agents.personas.cathie import CathieAgent
-    from ai_agents.persona_registry import get_persona_registry
-    from services.knowledge_base_service import get_knowledge_base
-    from services.trade_validator import get_trade_validator
-    from ai_firm.agent_manager import AgentManager
-    from rl_core.env_market_sim import MarketSimEnv
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'Endpoint not found'}), 404
+
+
+@app.errorhandler(500)
+def internal_error(error):
+    logger.error(f"Internal server error: {error}")
+    return jsonify({'error': 'Internal server error'}), 500
+
+
+# ==================== STARTUP ====================
+
+if __name__ == '__main__':
+    port = int(os.getenv('PORT', 5000))
+    debug = os.getenv('FLASK_ENV', 'production') == 'development'
     
-    # Initialize Core Agents
-    ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
-    warren = WarrenAgent()
+    logger.info("\n" + "="*60)
+    logger.info("🚀 YANTRAX MVP v6.0 Starting")
+    logger.info("="*60)
+    logger.info(f"Port: {port}")
+    logger.info(f"Debug: {debug}")
+    logger.info(f"AI Firm: {'✓ Online' if AI_FIRM_READY else '✗ Offline'}")
+    logger.info("="*60 + "\n")
+    
+    app.run(host='0.0.0.0', port=port, debug=debug)
     cathie = CathieAgent()
     agent_manager = AgentManager()
     
