@@ -42,7 +42,7 @@ market_provider = WaterfallMarketDataService()
 
 # Database helpers
 from db import get_session, init_db
-from models import Portfolio, PortfolioPosition, StrategyProfile, Strategy
+from models import Portfolio, PortfolioPosition, StrategyProfile, Strategy, JournalEntry
 
 
 def _load_dotenv_fallback(filepath: str) -> None:
