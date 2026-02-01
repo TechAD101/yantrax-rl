@@ -247,6 +247,19 @@ export const simulateMemecoin = async (symbol, usd = 100) => {
   return fetchWithRetry(`${BASE_URL}/api/memecoin/simulate`, { method: 'POST', body: JSON.stringify({ symbol, usd }) });
 };
 
+// Order Manager (paper)
+export const createOrder = async (symbol, usd = 100) => {
+  return fetchWithRetry(`${BASE_URL}/api/orders`, { method: 'POST', body: JSON.stringify({ symbol, usd }) });
+};
+
+export const listOrders = async (limit = 100) => {
+  return fetchWithRetry(`${BASE_URL}/api/orders?limit=${limit}`);
+};
+
+export const getOrder = async (orderId) => {
+  return fetchWithRetry(`${BASE_URL}/api/orders/${orderId}`);
+};
+
 export const runTradingCycle = () => fetchWithRetry(`${BASE_URL}/run-cycle`, { method: 'POST' });
 
 // ==================== INSTITUTIONAL ENDPOINTS ====================
