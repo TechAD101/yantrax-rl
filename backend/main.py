@@ -648,7 +648,7 @@ def health_check():
     """Root endpoint - system status"""
     return jsonify({
         'status': 'operational',
-        'version': '5.20-GodMode-Omega',
+        'version': '5.21-MVP-Routes-Active',
         'data_source': 'Waterfall (YFinance/FMP/Alpaca)',
         'ai_firm': 'active' if AI_FIRM_READY else 'degraded',
         'ghost_layer': {
