@@ -191,7 +191,9 @@ def list_portfolios():
 
 # ==================== MARKET DATA API ====================
 
+def get_market_price():
 @app.route('/api/market-price', methods=['GET'])
+@app.route('/market-price', methods=['GET'])
 def get_market_price():
     """
     Get current market price for a symbol
