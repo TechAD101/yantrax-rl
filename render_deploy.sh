@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # render_deploy.sh - Production Deploy Script for Yantra X
+# Force redeploy: 2026-02-01T21:59:30Z
 set -e
 
 echo "🌊 Starting Yantra X Institutional Deployment..."
@@ -21,5 +22,5 @@ export PORT=${PORT:-10000}
 cd backend
 export PYTHONPATH=$PYTHONPATH:.
 echo "🚀 Deployment Port: $PORT"
-echo "✅ System Version: 5.15-Institutional"
+echo "✅ System Version: 5.21-MVP-Routes-Active"
 gunicorn wsgi:app --bind 0.0.0.0:$PORT --log-level info --timeout 120 --workers 2
