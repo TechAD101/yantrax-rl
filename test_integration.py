@@ -20,7 +20,7 @@ def print_status(test_name, passed, message=""):
 def test_imports():
     """Test all critical imports"""
     try:
-        from main_mvp import app, market_provider, AI_FIRM_READY
+        from main import app, market_provider, AI_FIRM_READY
         print_status("Backend imports", True)
         return True
     except Exception as e:
@@ -49,7 +49,7 @@ def test_database():
 def test_portfolio_creation():
     """Test portfolio creation logic"""
     try:
-        from main_mvp import app
+        from main import app
         from db import get_session
         from models import Portfolio
         
@@ -88,7 +88,7 @@ def test_portfolio_creation():
 def test_market_price_api():
     """Test market price endpoint"""
     try:
-        from main_mvp import app
+        from main import app
         
         client = app.test_client()
         response = client.get('/api/market-price?symbol=AAPL')
@@ -109,7 +109,7 @@ def test_market_price_api():
 def test_ai_debate_api():
     """Test AI debate endpoint"""
     try:
-        from main_mvp import app, AI_FIRM_READY
+        from main import app, AI_FIRM_READY
         
         if not AI_FIRM_READY:
             print_status("AI debate API", False, "AI Firm not initialized (non-critical)")
@@ -139,7 +139,7 @@ def test_ai_debate_api():
 def test_paper_trading():
     """Test BUY/SELL execution"""
     try:
-        from main_mvp import app
+        from main import app
         from db import get_session
         from models import Portfolio
         
@@ -185,7 +185,7 @@ def test_paper_trading():
 def test_health_check():
     """Test system health endpoint"""
     try:
-        from main_mvp import app
+        from main import app
         
         client = app.test_client()
         response = client.get('/')

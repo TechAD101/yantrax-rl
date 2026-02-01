@@ -55,7 +55,7 @@ def test_perplexity_key():
 def test_backend_startup():
     """Test backend initializes with all components"""
     try:
-        from main_mvp import app, market_provider, AI_FIRM_READY, agent_manager
+        from main import app, market_provider, AI_FIRM_READY, agent_manager
         client = app.test_client()
         
         # Health check
@@ -73,7 +73,7 @@ def test_backend_startup():
 def test_market_price_with_perplexity():
     """Test market price endpoint uses Perplexity API"""
     try:
-        from main_mvp import app
+        from main import app
         client = app.test_client()
         
         # Test multiple symbols
@@ -99,7 +99,7 @@ def test_market_price_with_perplexity():
 def test_ai_debate_with_real_data():
     """Test AI debate with real market context"""
     try:
-        from main_mvp import app, AI_FIRM_READY
+        from main import app, AI_FIRM_READY
         
         if not AI_FIRM_READY:
             print_test("AI Debate (Real data)", True, "AI Firm initializing (non-critical)")
@@ -159,7 +159,7 @@ def test_ai_debate_with_real_data():
 def test_full_trading_flow():
     """Test complete trading flow: create → trade → verify"""
     try:
-        from main_mvp import app
+        from main import app
         client = app.test_client()
         
         # 1. Create portfolio
@@ -204,7 +204,7 @@ def test_full_trading_flow():
 def test_ai_firm_ready():
     """Test AI Firm system is online"""
     try:
-        from main_mvp import app, AI_FIRM_READY
+        from main import app, AI_FIRM_READY
         client = app.test_client()
         
         if AI_FIRM_READY:
@@ -226,7 +226,7 @@ def test_ai_firm_ready():
 def test_journal_entries():
     """Test trading journal is recording entries"""
     try:
-        from main_mvp import app
+        from main import app
         client = app.test_client()
         
         response = client.get('/api/journal?limit=10')
