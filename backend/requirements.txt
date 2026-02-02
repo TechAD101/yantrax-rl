@@ -1,32 +1,41 @@
-# Backend Dependencies - Slim Build (v5.13)
+# Backend Dependencies
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+sqlalchemy==2.0.27
+alembic==1.13.1
 
-# Core Web Framework
-flask==3.0.3
-flask-cors==6.0.0
-gunicorn==22.0.0
-
-# HTTP & Environment
-requests==2.32.5
-python-dotenv==1.0.0
-urllib3==2.6.0
-filelock==3.20.1
-werkzeug==3.1.4
-
-# Data Processing
-numpy==1.26.4
-# pandas is a dependency of yfinance, so pip will install it automatically,
-# but we can list it if we want to pin version. Let's let yfinance decide.
-
-# Market Data
-# Add yfinance to provide fallback market data retrieval for symbols and historicals
-yfinance==0.2.27
-
-# AI Firm / RAG Dependencies
-chromadb==0.4.15
-pydantic==2.4.2
-pysqlite3-binary==0.5.2.post3
-typing_extensions>=4.5.0
+# Security
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.9
+python-jose[cryptography]==3.3.0
+bcrypt==4.1.2
 
 # Database
-sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+redis==5.0.1
 
+# Agent & AI
+langchain==0.1.9
+langchain-community==0.0.24
+chromadb==0.4.22
+openai==1.12.0
+tiktoken==0.6.0
+numpy==1.26.4
+pandas==2.2.0
+
+# Utilities
+pydantic==2.6.1
+pydantic-settings==2.1.0
+python-dotenv==1.0.1
+requests==2.31.0
+httpx==0.27.0
+aiofiles==23.2.1
+
+# Finance
+yfinance==0.2.36
+
+# Development
+pytest==8.0.0
+pytest-asyncio==0.23.5
+black==24.2.0
+flake8==7.0.0

@@ -4,7 +4,7 @@ const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && i
   ? import.meta.env.VITE_API_URL
   : 'https://yantrax-backend.onrender.com';
 
-const BASE_URL = API_BASE_URL;
+const BASE_URL = `${API_BASE_URL}/api/v1`;
 export { BASE_URL };
 
 const UPDATE_INTERVAL = 60000; // 60 seconds (1 minute updates)
@@ -131,7 +131,7 @@ export const runRLCycle = async (config = {}) => {
 
 export const getAiFirmStatus = async () => {
   try {
-    const r = await fetch(`${BASE_URL}/api/ai-firm/status`);
+    return fetchWithRetry(`${BASE_URL}/ai-firm/status`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return await r.json();
   } catch (e) {
@@ -219,10 +219,10 @@ export const createPortfolio = async (config) => {
     initial_capital: config.capital || 50000,
     strategy_preference: config.strategy || 'balanced'
   };
-  
-  return fetchWithRetry(`${BASE_URL}/api/portfolio/create`, { 
-    method: 'POST', 
-    body: JSON.stringify(portfolioData) 
+
+  return fetchWithRetry(`${BASE_URL}/api/portfolio/create`, {
+    method: 'POST',
+    body: JSON.stringify(portfolioData)
   });
 };
 
@@ -468,7 +468,7 @@ export const executeTrade = async (portfolioId, tradeData) => {
 };
 
 // Market Search
-export const searchMarket = (query, limit = 5) => 
+export const searchMarket = (query, limit = 5) =>
   fetchWithRetry(`${BASE_URL}/api/market-search?query=${encodeURIComponent(query)}&limit=${limit}`);
 
 // AI Debate Engine
@@ -486,7 +486,7 @@ export const triggerAIDebate = async (symbol, context = {}) => {
 export const getAIFirmStatus = () => fetchWithRetry(`${BASE_URL}/api/ai-firm/status`);
 
 // Trading Journal
-export const getJournalEntries = (limit = 50) => 
+export const getJournalEntries = (limit = 50) =>
   fetchWithRetry(`${BASE_URL}/api/journal?limit=${limit}`);
 
 export default api;

@@ -191,38 +191,43 @@ const AIFirmDashboard = () => {
               </div>
             </div>
 
-            {/* Council of Ghosts: 24-Agent Matrix */}
+            {/* Loki Swarm Intelligence Grid */}
             <div className="industrial-panel p-6 relative">
               <div className="flex items-center justify-between mb-6 pb-2 border-b border-[var(--border-muted)]">
                 <h4 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-[0.2em]">
-                  Council of Ghosts (Agent Grid)
+                  Loki Swarm Intelligence
                 </h4>
                 <span className="text-[10px] text-[var(--color-success)] font-mono border border-[var(--color-success)] px-2 py-1">
-                  CONSENSUS: {firmStatus.system_performance?.success_rate}%
+                  MODE: AUTONOMOUS
                 </span>
               </div>
 
-              <div className="grid grid-cols-6 md:grid-cols-12 gap-2 mb-4">
-                {firmStatus.ai_firm?.all_agents?.map((agent, i) => (
-                  <div key={agent.name} className="group/agent relative flex flex-col items-center justify-center p-2 border border-[var(--border-muted)] bg-[var(--bg-surface)] hover:border-[var(--color-info)] transition-colors cursor-help h-12">
-                    <div
-                      className={`w-2 h-2 transition-all duration-0 ${agent.confidence > 0.8 ? 'bg-[var(--color-success)]' :
-                        agent.confidence > 0.6 ? 'bg-[var(--color-info)]' :
-                          'bg-[var(--text-muted)]'
-                        } ${i % 3 === 0 ? 'animate-pulse' : ''}`}
-                    ></div>
-                    {/* Tooltip on hover */}
-                    <div className="absolute bottom-full mb-2 hidden group-hover/agent:block z-50 w-48 bg-[var(--bg-deep)] border border-[var(--color-info)] p-3 text-xs shadow-xl pointer-events-none">
-                      <div className="font-bold text-white border-b border-[var(--border-muted)] pb-1 mb-1 font-mono uppercase">{agent.name}</div>
-                      <div className="text-[var(--text-muted)] mb-1">{agent.role}</div>
-                      <div className="text-[var(--color-info)] font-mono">CONF: {(agent.confidence * 100).toFixed(0)}%</div>
+              {/* Render Swarms */}
+              <div className="space-y-6">
+                {firmStatus.ai_firm?.departments && Object.entries(firmStatus.ai_firm.departments).map(([key, swarm]) => (
+                  <div key={key} className="bg-[var(--bg-deep)] p-4 border border-[var(--border-muted)]">
+                    <h5 className="text-sm font-bold text-[var(--color-info)] uppercase mb-3 font-mono">{swarm.swarm || key}</h5>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {swarm.agents && Object.entries(swarm.agents).map(([agentName, state]) => (
+                        <div key={agentName} className="flex items-center justify-between p-2 bg-[var(--bg-surface)] border border-[var(--border-muted)]">
+                          <span className="text-xs font-mono text-white">{agentName}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${state === 'IDLE' ? 'text-[var(--text-muted)] bg-[var(--text-muted)]/10' :
+                              state === 'VERIFYING' ? 'text-[var(--color-success)] bg-[var(--color-success)]/10 animate-pulse' :
+                                state === 'ERROR' ? 'text-[var(--color-danger)] bg-[var(--color-danger)]/10' :
+                                  'text-[var(--color-info)] bg-[var(--color-info)]/10'
+                            }`}>
+                            {state}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="flex justify-between text-[10px] text-[var(--text-muted)] mt-2 font-mono uppercase tracking-wider">
-                <span>Stealth Mode: ENABLED</span>
-                <span>Active Synapses: {firmStatus.ai_firm?.total_agents * 1024}</span>
+
+              <div className="flex justify-between text-[10px] text-[var(--text-muted)] mt-4 font-mono uppercase tracking-wider">
+                <span>Architecture: SWARM V2</span>
+                <span>Cycle: RARV (Reason-Act-Reflect-Verify)</span>
               </div>
             </div>
 
