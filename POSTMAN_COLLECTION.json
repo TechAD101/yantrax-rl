@@ -1,0 +1,227 @@
+{
+  "info": {
+    "name": "YantraX API Collection",
+    "description": "Complete API test collection for YantraX trading platform",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": {"raw": "{{BASE_URL}}/api/auth/register", "host": ["{{BASE_URL}}"], "path": ["api", "auth", "register"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\": \"trader1\", \"email\": \"trader@example.com\", \"password\": \"secure123\"}"
+            }
+          }
+        },
+        {
+          "name": "Login User",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": {"raw": "{{BASE_URL}}/api/auth/login", "host": ["{{BASE_URL}}"], "path": ["api", "auth", "login"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\": \"trader1\", \"password\": \"secure123\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Portfolio",
+      "item": [
+        {
+          "name": "Create Portfolio",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": {"raw": "{{BASE_URL}}/api/portfolio", "host": ["{{BASE_URL}}"], "path": ["api", "portfolio"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"My Portfolio\", \"owner_id\": 1, \"risk_profile\": \"moderate\", \"initial_capital\": 100000}"
+            }
+          }
+        },
+        {
+          "name": "Get Portfolio",
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{BASE_URL}}/api/portfolio/1", "host": ["{{BASE_URL}}"], "path": ["api", "portfolio", "1"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Strategies",
+      "item": [
+        {
+          "name": "Publish Strategy",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": {"raw": "{{BASE_URL}}/api/strategy/publish", "host": ["{{BASE_URL}}"], "path": ["api", "strategy", "publish"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Momentum v1\", \"description\": \"Momentum strategy\", \"archetype\": \"quant\", \"metrics\": {\"sharpe\": 1.25, \"win_rate\": 0.65}}"
+            }
+          }
+        },
+        {
+          "name": "List Strategies",
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{BASE_URL}}/api/strategy/list?page=1&per_page=10&sort_by=sharpe&order=desc", "host": ["{{BASE_URL}}"], "path": ["api", "strategy", "list"]}
+          }
+        },
+        {
+          "name": "Get Top Strategies",
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{BASE_URL}}/api/strategy/top?limit=5&metric=sharpe", "host": ["{{BASE_URL}}"], "path": ["api", "strategy", "top"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Backtesting",
+      "item": [
+        {
+          "name": "Run Backtest",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": {"raw": "{{BASE_URL}}/api/backtest", "host": ["{{BASE_URL}}"], "path": ["api", "backtest"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\"strategy_id\": 1, \"symbol\": \"AAPL\", \"days\": 30, \"initial_capital\": 100000}"
+            }
+          }
+        },
+        {
+          "name": "Get Backtest Results",
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{BASE_URL}}/api/backtest/results?limit=10", "host": ["{{BASE_URL}}"], "path": ["api", "backtest", "results"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Create Order",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": {"raw": "{{BASE_URL}}/api/orders", "host": ["{{BASE_URL}}"], "path": ["api", "orders"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\"symbol\": \"AAPL\", \"usd\": 5000}"
+            }
+          }
+        },
+        {
+          "name": "List Orders",
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{BASE_URL}}/api/orders?limit=20", "host": ["{{BASE_URL}}"], "path": ["api", "orders"]}
+          }
+        },
+        {
+          "name": "Get Order",
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{BASE_URL}}/api/orders/1", "host": ["{{BASE_URL}}"], "path": ["api", "orders", "1"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Memecoins",
+      "item": [
+        {
+          "name": "Scan Market",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": {"raw": "{{BASE_URL}}/api/memecoin/scan", "host": ["{{BASE_URL}}"], "path": ["api", "memecoin", "scan"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\"symbols\": [\"DOGE\", \"SHIB\", \"PEPE\"]}"
+            }
+          }
+        },
+        {
+          "name": "Get Top Memecoins",
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{BASE_URL}}/api/memecoin/top?limit=10", "host": ["{{BASE_URL}}"], "path": ["api", "memecoin", "top"]}
+          }
+        },
+        {
+          "name": "Simulate Memecoin Trade",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": {"raw": "{{BASE_URL}}/api/memecoin/simulate", "host": ["{{BASE_URL}}"], "path": ["api", "memecoin", "simulate"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\"symbol\": \"DOGE\", \"usd\": 500}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Market Data",
+      "item": [
+        {
+          "name": "Get Verified Price",
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{BASE_URL}}/api/data/price-verified?symbol=AAPL", "host": ["{{BASE_URL}}"], "path": ["api", "data", "price-verified"]}
+          }
+        },
+        {
+          "name": "Get Verification Stats",
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{BASE_URL}}/api/data/verification-stats", "host": ["{{BASE_URL}}"], "path": ["api", "data", "verification-stats"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Trade Validation",
+      "item": [
+        {
+          "name": "Validate Trade",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": {"raw": "{{BASE_URL}}/api/trade/validate", "host": ["{{BASE_URL}}"], "path": ["api", "trade", "validate"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\"trade\": {\"symbol\": \"AAPL\", \"action\": \"BUY\", \"quantity\": 100, \"price\": 175.50}, \"market_context\": {\"volatility\": 0.18}}"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "http://localhost:5000",
+      "type": "string"
+    }
+  ]
+}

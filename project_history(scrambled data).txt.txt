@@ -1,3 +1,9 @@
+ls -la backend/ | grep requirements
+cp requirements.txt backend/requirements.txt
+ls -la backend/requirements.txt
+git add backend/requirements.txt
+git commit -m 'Add backend/requirements.txt to fix missing sqlalchemy in Render deployment'
+git status
 1. CORE PHILOSOPHY & VISION
 
 Mantra: “From Chaos, Order. From Emotion, Intelligence. From Strategy, Immortality.”

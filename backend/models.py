@@ -4,6 +4,26 @@ from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
 
+
+# -------------------- User Model --------------------
+class User(Base):
+    __tablename__ = 'users'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(128), nullable=False, unique=True)
+    email = Column(String(128), nullable=False, unique=True)
+    password_hash = Column(String(256), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'email': self.email,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
 class JournalEntry(Base):
     __tablename__ = 'journal_entries'
 
@@ -143,4 +163,32 @@ class PortfolioPosition(Base):
             'quantity': self.quantity,
             'avg_price': self.avg_price,
             'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+# -------------------- Order Manager (Paper) --------------------
+class Order(Base):
+    __tablename__ = 'orders'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    symbol = Column(String(32), nullable=False)
+    usd = Column(Float, nullable=False)
+    quantity = Column(Float, nullable=False, default=0.0)
+    price = Column(Float, nullable=True)
+    status = Column(String(32), nullable=False, default='pending')  # pending, filled, cancelled
+    meta = Column(JSON, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    executed_at = Column(DateTime, nullable=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'symbol': self.symbol,
+            'usd': self.usd,
+            'quantity': self.quantity,
+            'price': self.price,
+            'status': self.status,
+            'meta': self.meta or {},
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'executed_at': self.executed_at.isoformat() if self.executed_at else None
         }

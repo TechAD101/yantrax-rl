@@ -211,7 +211,20 @@ export const getRiskMetrics = () => fetchWithRetry(`${BASE_URL}/risk-metrics`);
 export const getPerformance = () => fetchWithRetry(`${BASE_URL}/performance`);
 
 
-export const createPortfolio = (config) => fetchWithRetry(`${BASE_URL}/api/portfolio`, { method: 'POST', body: JSON.stringify(config) });
+export const createPortfolio = async (config) => {
+  // Map frontend wizard config to backend API format
+  const portfolioData = {
+    name: config.name || 'My Portfolio',
+    risk_profile: config.risk || 'moderate',
+    initial_capital: config.capital || 50000,
+    strategy_preference: config.strategy || 'balanced'
+  };
+  
+  return fetchWithRetry(`${BASE_URL}/api/portfolio/create`, { 
+    method: 'POST', 
+    body: JSON.stringify(portfolioData) 
+  });
+};
 
 export const listStrategies = async (opts = {}) => {
   const qs = new URLSearchParams();
@@ -245,6 +258,19 @@ export const getTopMemecoins = async (limit = 10) => {
 
 export const simulateMemecoin = async (symbol, usd = 100) => {
   return fetchWithRetry(`${BASE_URL}/api/memecoin/simulate`, { method: 'POST', body: JSON.stringify({ symbol, usd }) });
+};
+
+// Order Manager (paper)
+export const createOrder = async (symbol, usd = 100) => {
+  return fetchWithRetry(`${BASE_URL}/api/orders`, { method: 'POST', body: JSON.stringify({ symbol, usd }) });
+};
+
+export const listOrders = async (limit = 100) => {
+  return fetchWithRetry(`${BASE_URL}/api/orders?limit=${limit}`);
+};
+
+export const getOrder = async (orderId) => {
+  return fetchWithRetry(`${BASE_URL}/api/orders/${orderId}`);
 };
 
 export const runTradingCycle = () => fetchWithRetry(`${BASE_URL}/run-cycle`, { method: 'POST' });
@@ -428,5 +454,39 @@ export const api = {
     return fetchWithRetry(`${BASE_URL}/api/contests/active`);
   }
 };
+
+// ==================== NEW MVP ENDPOINTS ====================
+
+// Portfolio Trading
+export const getPortfolioById = (id) => fetchWithRetry(`${BASE_URL}/api/portfolio/${id}`);
+
+export const executeTrade = async (portfolioId, tradeData) => {
+  return fetchWithRetry(`${BASE_URL}/api/portfolio/${portfolioId}/trade`, {
+    method: 'POST',
+    body: JSON.stringify(tradeData)
+  });
+};
+
+// Market Search
+export const searchMarket = (query, limit = 5) => 
+  fetchWithRetry(`${BASE_URL}/api/market-search?query=${encodeURIComponent(query)}&limit=${limit}`);
+
+// AI Debate Engine
+export const triggerAIDebate = async (symbol, context = {}) => {
+  return fetchWithRetry(`${BASE_URL}/api/strategy/ai-debate`, {
+    method: 'POST',
+    body: JSON.stringify({
+      symbol: symbol.toUpperCase(),
+      context: context
+    })
+  });
+};
+
+// AI Firm Status
+export const getAIFirmStatus = () => fetchWithRetry(`${BASE_URL}/api/ai-firm/status`);
+
+// Trading Journal
+export const getJournalEntries = (limit = 50) => 
+  fetchWithRetry(`${BASE_URL}/api/journal?limit=${limit}`);
 
 export default api;

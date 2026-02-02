@@ -42,7 +42,7 @@ market_provider = WaterfallMarketDataService()
 
 # Database helpers
 from db import get_session, init_db
-from models import Portfolio, PortfolioPosition, StrategyProfile, Strategy
+from models import Portfolio, PortfolioPosition, StrategyProfile, Strategy, JournalEntry
 
 
 def _load_dotenv_fallback(filepath: str) -> None:
@@ -648,7 +648,7 @@ def health_check():
     """Root endpoint - system status"""
     return jsonify({
         'status': 'operational',
-        'version': '5.20-GodMode-Omega',
+        'version': '5.21-MVP-Routes-Active',
         'data_source': 'Waterfall (YFinance/FMP/Alpaca)',
         'ai_firm': 'active' if AI_FIRM_READY else 'degraded',
         'ghost_layer': {
@@ -1510,6 +1510,9 @@ def get_audit_trail():
 
 # ---------------- Memecoin Engine Prototype ----------------
 from memecoin_service import scan_market, get_top_memecoins, simulate_trade
+from order_manager import create_order, list_orders, get_order
+from backtest_service import backtest_strategy, list_backtest_results
+from auth_service import register_user, authenticate_user, get_user
 
 
 @app.route('/api/memecoin/scan', methods=['POST'])
@@ -1544,6 +1547,126 @@ def simulate_memecoin_trade():
     except Exception as e:
         logger.error(f"Error simulating trade: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/orders', methods=['POST'])
+def create_order_endpoint():
+    data = request.get_json() or {}
+    symbol = data.get('symbol')
+    usd = float(data.get('usd', 100.0))
+    if not symbol:
+        return jsonify({'error': 'symbol is required'}), 400
+    try:
+        o = create_order(symbol, usd)
+        return jsonify({'order': o}), 201
+    except Exception as e:
+        logger.error(f"Error creating order: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/orders', methods=['GET'])
+def list_orders_endpoint():
+    limit = int(request.args.get('limit', 100))
+    try:
+        items = list_orders(limit)
+        return jsonify({'orders': items}), 200
+    except Exception as e:
+        logger.error(f"Error listing orders: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/orders/<int:order_id>', methods=['GET'])
+def get_order_endpoint(order_id):
+    try:
+        o = get_order(order_id)
+        if not o:
+            return jsonify({'error': 'order not found'}), 404
+        return jsonify({'order': o}), 200
+    except Exception as e:
+        logger.error(f"Error fetching order: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# -------------------- Backtester + KB Feedback ----------------
+@app.route('/api/backtest', methods=['POST'])
+def run_backtest():
+    data = request.get_json() or {}
+    strategy_id = data.get('strategy_id')
+    symbol = data.get('symbol', 'AAPL')
+    days = int(data.get('days', 30))
+    initial_capital = float(data.get('initial_capital', 100000))
+    
+    if not strategy_id:
+        return jsonify({'error': 'strategy_id is required'}), 400
+    
+    try:
+        result = backtest_strategy(strategy_id, symbol, days, initial_capital)
+        return jsonify({'backtest': result}), 200
+    except Exception as e:
+        logger.error(f"Error running backtest: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/backtest/results', methods=['GET'])
+def get_backtest_results():
+    limit = int(request.args.get('limit', 10))
+    try:
+        results = list_backtest_results(limit)
+        return jsonify({'results': results}), 200
+    except Exception as e:
+        logger.error(f"Error fetching backtest results: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# -------------------- User Authentication ----------------
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    data = request.get_json() or {}
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    
+    if not (username and email and password):
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    try:
+        user = register_user(username, email, password)
+        return jsonify({'user': user, 'message': 'User registered'}), 201
+    except Exception as e:
+        logger.error(f"Error registering user: {e}")
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    data = request.get_json() or {}
+    username = data.get('username')
+    password = data.get('password')
+    
+    if not (username and password):
+        return jsonify({'error': 'Missing credentials'}), 400
+    
+    try:
+        user = authenticate_user(username, password)
+        if not user:
+            return jsonify({'error': 'Invalid credentials'}), 401
+        return jsonify({'user': user, 'message': 'Logged in'}), 200
+    except Exception as e:
+        logger.error(f"Error logging in: {e}")
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/auth/user/<int:user_id>', methods=['GET'])
+def get_user_endpoint(user_id):
+    try:
+        user = get_user(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        return jsonify({'user': user}), 200
+    except Exception as e:
+        logger.error(f"Error fetching user: {e}")
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/data/verification-stats', methods=['GET'])
 def get_verification_stats():
@@ -1874,6 +1997,105 @@ def get_active_contest():
         
     contest = app.marketplace_service.get_active_contest()
     return jsonify(contest), 200
+
+
+# ==================== CLEAN MVP PORTFOLIO API ====================
+
+@app.route('/api/portfolio/create', methods=['POST'])
+def create_portfolio_mvp():
+    """Create a new portfolio with risk profile and initial capital"""
+    try:
+        data = request.get_json() or {}
+        name = data.get('name', 'My Portfolio')
+        risk_profile = data.get('risk_profile', 'moderate').lower()
+        initial_capital = float(data.get('initial_capital', 50000))
+        
+        if not name or risk_profile not in ['conservative', 'moderate', 'aggressive', 'custom'] or initial_capital <= 0:
+            return jsonify({'error': 'Invalid input'}), 400
+        
+        session = get_session()
+        try:
+            portfolio = Portfolio(
+                name=name,
+                risk_profile=risk_profile,
+                initial_capital=initial_capital,
+                current_value=initial_capital
+            )
+            session.add(portfolio)
+            session.commit()
+            logger.info(f"✓ Portfolio created: {name} (${initial_capital})")
+            return jsonify({'success': True, 'portfolio': portfolio.to_dict()}), 201
+        finally:
+            session.close()
+    except Exception as e:
+        logger.error(f"✗ Portfolio creation failed: {e}")
+        return jsonify({'error': 'Failed to create portfolio'}), 500
+
+
+@app.route('/api/portfolio/<int:portfolio_id>/trade', methods=['POST'])
+def execute_trade_mvp(portfolio_id: int):
+    """Execute a paper trade (BUY/SELL)"""
+    session = get_session()
+    try:
+        portfolio = session.query(Portfolio).get(portfolio_id)
+        if not portfolio:
+            return jsonify({'error': 'Portfolio not found'}), 404
+        
+        data = request.get_json() or {}
+        action = data.get('action', '').upper()
+        symbol = data.get('symbol', '').upper()
+        quantity = float(data.get('quantity', 0))
+        price = float(data.get('price', 0))
+        
+        if action not in ['BUY', 'SELL'] or not symbol or quantity <= 0 or price <= 0:
+            return jsonify({'error': 'Invalid parameters'}), 400
+        
+        total_value = quantity * price
+        
+        if action == 'BUY':
+            if portfolio.current_value < total_value:
+                return jsonify({'error': 'Insufficient capital'}), 400
+            portfolio.current_value -= total_value
+            position = session.query(PortfolioPosition).filter_by(portfolio_id=portfolio_id, symbol=symbol).first()
+            if position:
+                position.quantity += quantity
+            else:
+                position = PortfolioPosition(portfolio_id=portfolio_id, symbol=symbol, quantity=quantity, avg_price=price)
+                session.add(position)
+        elif action == 'SELL':
+            position = session.query(PortfolioPosition).filter_by(portfolio_id=portfolio_id, symbol=symbol).first()
+            if not position or position.quantity < quantity:
+                return jsonify({'error': 'Insufficient position'}), 400
+            position.quantity -= quantity
+            portfolio.current_value += total_value
+            if position.quantity == 0:
+                session.delete(position)
+        
+        session.commit()
+        logger.info(f"✓ Trade: {action} {quantity} {symbol} @ ${price}")
+        return jsonify({'success': True, 'portfolio_value': portfolio.current_value}), 200
+    except Exception as e:
+        session.rollback()
+        logger.error(f"✗ Trade failed: {e}")
+        return jsonify({'error': 'Trade execution failed'}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/journal', methods=['GET'])
+def get_journal_mvp():
+    """Get trading journal entries"""
+    session = get_session()
+    try:
+        limit = int(request.args.get('limit', 50))
+        entries = session.query(JournalEntry).order_by(JournalEntry.timestamp.desc()).limit(limit).all()
+        return jsonify({'entries': [e.to_dict() if hasattr(e, 'to_dict') else e.__dict__ for e in entries]}), 200
+    except Exception as e:
+        logger.error(f"Journal fetch failed: {e}")
+        return jsonify({'entries': []}), 200
+    finally:
+        session.close()
+
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
