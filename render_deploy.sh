@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # render_deploy.sh - Production Deploy Script for Yantra X
-# Force redeploy: 2026-02-03T07:15:30Z
+# Force redeploy: 2026-02-04T01:05:00Z
 set -e
 
 echo "🌊 Starting Yantra X Institutional Deployment..."
