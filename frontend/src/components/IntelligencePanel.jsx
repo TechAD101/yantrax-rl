@@ -58,18 +58,34 @@ const IntelligencePanel = ({ ticker = 'AAPL', showNews = true }) => {
     };
 
     const getMoodIcon = (mood) => {
+        const color = moodColors[mood?.toLowerCase()] || moodColors.neutral;
         switch (mood?.toLowerCase()) {
-            case 'bullish': return '📈';
-            case 'bearish': return '📉';
-            case 'mixed': return '⚖️';
-            default: return '📊';
+            case 'bullish': return (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                    <polyline points="17 6 23 6 23 12"></polyline>
+                </svg>
+            );
+            case 'bearish': return (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline>
+                    <polyline points="17 18 23 18 23 12"></polyline>
+                </svg>
+            );
+            default: return (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+            );
         }
     };
 
     if (loading) return (
         <div className="border border-[var(--border-muted)] bg-[var(--bg-panel)] p-4 h-[200px] flex items-center justify-center">
-            <div className="text-[var(--color-info)] font-mono text-xs tracking-widest flex items-center">
-                <span className="animate-pulse mr-3">🧠</span>
+            <div className="text-[var(--color-info)] font-mono text-[10px] tracking-[0.3em] flex flex-col items-center">
+                <div className="w-8 h-8 border-2 border-t-transparent border-[var(--color-info)] animate-spin rounded-full mb-4"></div>
                 ANALYZING MARKET SIGNALS...
             </div>
         </div>
@@ -80,18 +96,18 @@ const IntelligencePanel = ({ ticker = 'AAPL', showNews = true }) => {
     const moodColor = moodColors[mood] || moodColors.neutral;
 
     return (
-        <div className="border border-[var(--border-muted)] bg-[var(--bg-deep)] relative p-4 overflow-hidden">
+        <div className="border border-[var(--border-muted)] bg-[var(--bg-deep)] relative p-4 overflow-hidden group">
             {/* Header */}
             <div className="flex justify-between items-center mb-4 pb-2 border-b border-[var(--border-muted)]">
-                <h3 className="text-[var(--text-muted)] text-xs font-bold uppercase tracking-[0.2em] font-mono flex items-center">
-                    <span className="w-2 h-2 mr-2 animate-pulse" style={{ backgroundColor: moodColor }}></span>
+                <h3 className="text-[var(--text-muted)] text-[10px] font-bold uppercase tracking-[0.2em] font-mono flex items-center">
+                    <span className="w-1.5 h-1.5 mr-2 animate-pulse" style={{ backgroundColor: moodColor }}></span>
                     AI.INTELLIGENCE
                 </h3>
                 <div className="flex gap-2">
                     <button
                         onClick={handleTriggerDebate}
                         disabled={debating}
-                        className={`text-[9px] font-mono border px-2 py-0.5 transition-all
+                        className={`text-[9px] font-mono border px-2 py-0.5 transition-all cursor-pointer
                             ${debating ? 'border-[var(--color-warning)] text-[var(--color-warning)] animate-pulse' :
                                 'border-[var(--border-muted)] text-[var(--text-muted)] hover:border-[var(--color-info)] hover:text-white'}`}
                     >

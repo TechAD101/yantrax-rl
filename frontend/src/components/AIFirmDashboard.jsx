@@ -79,7 +79,7 @@ const AIFirmDashboard = () => {
   const painLevel = firmStatus?.system_performance?.pain_level || 0;
 
   return (
-    <div className={`min-h-screen bg-black text-[#e2e8f0] transition-colors duration-1000 ${isPanic ? 'bg-red-950/20' : ''}`}>
+    <div className={`min-h-screen bg-black text-[#e2e8f0] transition-colors duration-1000 cursor-pointer-all ${isPanic ? 'bg-red-950/20' : ''}`}>
       <div className="flex h-screen overflow-hidden">
         {/* Left Side: Neural Spine (Visual Anchor) */}
         <NeuralSpine painLevel={painLevel} isPanic={isPanic} />
@@ -175,21 +175,21 @@ const AIFirmDashboard = () => {
 
                   {/* Institutional Wow: Pain Meter & Mood Dial */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="industrial-panel p-6 bg-[var(--bg-surface)]">
+                    <div className="neon-card p-6 bg-[var(--bg-surface)]">
                       <div className="border-b border-[var(--border-muted)] mb-4 pb-2 flex justify-between items-center">
                         <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">Market Sentiment Engine</h4>
                         <div className="text-[10px] font-mono text-[var(--color-info)]">MODULE: SENTIMENT</div>
                       </div>
                       <MarketMoodDial mood={firmStatus.system_performance?.market_mood || 'neutral'} />
                     </div>
-                    <div className="industrial-panel p-6 bg-[var(--bg-surface)]">
+                    <div className="neon-card p-6 bg-[var(--bg-surface)]">
                       <div className="border-b border-[var(--border-muted)] mb-4 pb-2 flex justify-between items-center">
                         <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">AI Intelligence</h4>
                         <div className="text-[10px] font-mono text-[var(--color-success)]">PERPLEXITY.AI</div>
                       </div>
                       <IntelligencePanel ticker="AAPL" showNews={true} />
                     </div>
-                    <div className="industrial-panel p-6 bg-[var(--bg-surface)] h-full">
+                    <div className="neon-card p-6 bg-[var(--bg-surface)] h-full">
                       <div className="border-b border-[var(--border-muted)] mb-4 pb-2 flex justify-between items-center">
                         <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">Strategy Nexus</h4>
                         <div className="text-[10px] font-mono text-[var(--color-info)]">MODULE: STRATEGY</div>

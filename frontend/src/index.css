@@ -1,14 +1,16 @@
-/* src/index.css - Cyber-Industrial Precision Design System */
+/* src/index.css - Cyber-Industrial Precision Design System v2 (World Class) */
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&family=Chakra+Petch:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
 @import 'tailwindcss/base';
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 
 /* 
-   DESIGN SYSTEM: CYBER-INDUSTRIAL PRECISION 
-   -----------------------------------------
-   Aesthetic: Raw, Data-First, High Contrast
-   Fonts: Chakra Petch (Headers), JetBrains Mono (Data/UI)
-   Colors: Deep Black, Terminal Green, System Alert Red
+   DESIGN SYSTEM: YANTRA X - INDUSTRIAL NEON (OLED OPTIMIZED)
+   --------------------------------------------------------
+   Aesthetic: Raw, Data-First, High Contrast Neon
+   Fonts: Chakra Petch (Headers), Fira Code (Data), Fira Sans (Body)
+   Colors: OLED Black, System Green, Cyber Blue
 */
 
 :root {
@@ -16,7 +18,7 @@
   --bg-deep: #050505;
   --bg-panel: #0A0A0A;
   --bg-surface: #111111;
-  
+
   --border-muted: #333333;
   --border-active: #555555;
   --border-highlight: #00FF94;
@@ -25,13 +27,17 @@
   --text-primary: #E0E0E0;
   --text-secondary: #A0A0A0;
   --text-muted: #666666;
-  
+
   /* Functional Colors */
-  --color-success: #00FF94; /* Terminal Green */
-  --color-danger: #FF3366;  /* System Alert */
-  --color-warning: #FFCC00; /* Caution Amber */
-  --color-info: #00E5FF;    /* Data Blue */
-  
+  --color-success: #00FF94;
+  /* Terminal Green */
+  --color-danger: #FF3366;
+  /* System Alert */
+  --color-warning: #FFCC00;
+  /* Caution Amber */
+  --color-info: #00E5FF;
+  /* Data Blue */
+
   /* Spacing & Rhythm */
   --grid-unit: 4px;
 }
@@ -39,19 +45,34 @@
 body {
   background-color: var(--bg-deep);
   color: var(--text-primary);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Fira Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
-  background-image: 
+  background-image:
     linear-gradient(rgba(18, 18, 18, 0.4) 1px, transparent 1px),
     linear-gradient(90deg, rgba(18, 18, 18, 0.4) 1px, transparent 1px);
   background-size: 40px 40px;
+  overflow-x: hidden;
 }
 
-h1, h2, h3, h4, h5, h6 {
+code,
+.font-mono {
+  font-family: 'Fira Code', monospace;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: 'Chakra Petch', sans-serif;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 600;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+}
+
+.cursor-pointer-all *:not(input):not(textarea) {
+  cursor: pointer;
 }
 
 /* UTILITIES: Industrial Panels */
@@ -66,19 +87,17 @@ h1, h2, h3, h4, h5, h6 {
   .industrial-panel::after {
     content: "";
     @apply absolute inset-0 pointer-events-none opacity-[0.03];
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      #ffffff 3px
-    );
+    background: repeating-linear-gradient(0deg,
+        transparent,
+        transparent 2px,
+        #ffffff 3px);
     z-index: 1;
   }
 
   .industrial-border-top {
     @apply relative;
   }
-  
+
   .industrial-border-top::before {
     content: "";
     @apply absolute top-0 left-0 w-full h-[2px] bg-[var(--border-active)];
@@ -87,35 +106,43 @@ h1, h2, h3, h4, h5, h6 {
   .text-glow-success {
     text-shadow: 0 0 10px rgba(0, 255, 148, 0.5);
   }
-  
+
   .text-glow-danger {
     text-shadow: 0 0 10px rgba(255, 51, 102, 0.5);
   }
 
   /* Cyber Buttons */
   .btn-cyber {
-    @apply font-mono uppercase text-xs tracking-wider px-4 py-2 border transition-all duration-200;
+    @apply font-mono uppercase text-[10px] tracking-widest px-4 py-2 border transition-all duration-300 cursor-pointer;
   }
-  
+
   .btn-cyber-primary {
-    @apply bg-[var(--color-success)] text-black border-[var(--color-success)] hover:brightness-110 font-bold;
-    box-shadow: 0 0 10px rgba(0, 255, 148, 0.2);
+    @apply bg-transparent text-[var(--color-success)] border-[var(--color-success)] hover:bg-[var(--color-success)] hover:text-black font-bold;
+    box-shadow: inset 0 0 10px rgba(0, 255, 148, 0.1), 0 0 10px rgba(0, 255, 148, 0.1);
   }
-  
+
   .btn-cyber-ghost {
     @apply bg-transparent text-[var(--color-info)] border-[var(--color-info)] hover:bg-[var(--color-info)] hover:text-black;
+  }
+
+  .neon-card {
+    @apply industrial-panel hover:border-[var(--color-info)] transition-all duration-500 cursor-pointer;
+  }
+
+  .neon-card:hover {
+    box-shadow: 0 0 20px rgba(0, 229, 255, 0.15);
   }
 
   /* Status Indicators */
   .status-dot {
     @apply w-2 h-2 rounded-full inline-block mr-2;
   }
-  
+
   .status-dot.active {
     @apply bg-[var(--color-success)];
     box-shadow: 0 0 8px var(--color-success);
   }
-  
+
   .status-dot.error {
     @apply bg-[var(--color-danger)];
     box-shadow: 0 0 8px var(--color-danger);
@@ -124,8 +151,15 @@ h1, h2, h3, h4, h5, h6 {
 
 /* ANIMATIONS */
 @keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
 }
 
 .cursor-blink {
