@@ -79,10 +79,17 @@ const AIFirmDashboard = () => {
   const painLevel = firmStatus?.system_performance?.pain_level || 0;
 
   return (
-    <div className={`min-h-screen bg-black text-[#e2e8f0] transition-colors duration-1000 cursor-pointer-all ${isPanic ? 'bg-red-950/20' : ''}`}>
+    <div className={`min-h-screen bg-[var(--bg-deep)] text-[var(--text-primary)] transition-colors duration-1000 cursor-pointer-all ${isPanic ? 'bg-red-950/20' : ''}`}>
       <div className="flex h-screen overflow-hidden">
-        {/* Left Side: Neural Spine (Visual Anchor) */}
-        <NeuralSpine painLevel={painLevel} isPanic={isPanic} />
+        {/* Left Sidebar - AI Spine */}
+        <div className="w-24 border-r border-[var(--border-muted)] bg-[var(--bg-panel)] flex flex-col items-center py-8 relative">
+          <NeuralSpine painLevel={painLevel} isPanic={isPanic} />
+          <div className="mt-auto group cursor-pointer" onClick={() => navigate('/audit')}>
+            <div className="text-[10px] font-mono text-[var(--text-muted)] vertical-text tracking-widest group-hover:text-white transition-colors">
+              SYSTEM.AUDIT.V5.23.STABLE
+            </div>
+          </div>
+        </div>
 
         {/* Main Fluid Content */}
         <div className="flex-1 overflow-y-auto scrollbar-hide">

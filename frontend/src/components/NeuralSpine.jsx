@@ -77,7 +77,7 @@ const NeuralSpine = ({ painLevel = 0, isPanic = false }) => {
 
             {/* Aesthetic Label */}
             <div className="absolute bottom-4 rotate-90 origin-bottom-left text-[8px] font-mono text-white/20 whitespace-nowrap tracking-[0.4em] translate-x-3">
-                SYNAPTIC_SPINE_v4.7 // STATUS: {isPanic ? 'PANIC_LOCK' : 'STABLE'}
+                SYNAPTIC_SPINE_v5.23 // STATUS: {isPanic ? 'PANIC_LOCK' : 'STABLE'}
             </div>
 
             <style jsx>{`

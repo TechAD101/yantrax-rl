@@ -38,10 +38,14 @@ class KnowledgeBaseService:
         # Create persist directory if it doesn't exist
         os.makedirs(persist_directory, exist_ok=True)
         
-        # Initialize ChromaDB client with current API
+        # Initialize ChromaDB client with telemetry disabled
         try:
-            self.client = chromadb.PersistentClient(path=persist_directory)
-            self.logger.info(f"✓ ChromaDB client initialized at {persist_directory}")
+            from chromadb.config import Settings
+            self.client = chromadb.PersistentClient(
+                path=persist_directory,
+                settings=Settings(anonymized_telemetry=False)
+            )
+            self.logger.info(f"✓ ChromaDB client initialized at {persist_directory} (Telemetry Disabled)")
         except Exception as e:
             self.logger.error(f"Failed to initialize ChromaDB: {e}")
             raise

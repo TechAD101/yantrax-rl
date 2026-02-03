@@ -25,11 +25,11 @@ const MarketMoodDial = () => {
     const mood = data?.emotion_dial?.current_mood || 'neutral';
 
     const moods = {
-        euphoria: { color: '#ec4899', label: 'EUPHORIA', angle: -60, emoji: '🚀' },
-        greed: { color: '#10b981', label: 'GREED', angle: -30, emoji: '🤑' },
-        neutral: { color: '#6b7280', label: 'NEUTRAL', angle: 0, emoji: '⚖️' },
-        fear: { color: '#f59e0b', label: 'FEAR', angle: 30, emoji: '😨' },
-        despair: { color: '#ef4444', label: 'DESPAIR', angle: 60, emoji: '💀' }
+        euphoria: { color: 'var(--color-info)', label: 'EUPHORIA', angle: -60, emoji: '⚡' },
+        greed: { color: 'var(--color-success)', label: 'GREED', angle: -30, emoji: '↗️' },
+        neutral: { color: 'var(--text-muted)', label: 'NEUTRAL', angle: 0, emoji: '⚖️' },
+        fear: { color: 'var(--color-warning)', label: 'FEAR', angle: 30, emoji: '↘️' },
+        despair: { color: 'var(--color-danger)', label: 'DESPAIR', angle: 60, emoji: '⚠️' }
     };
 
     const current = moods[mood.toLowerCase()] || moods.neutral;
@@ -120,7 +120,7 @@ const MarketMoodDial = () => {
                 {/* AI Philosophy Quote */}
                 <div className="mt-6 text-center w-full border-t border-[var(--border-muted)] pt-4 relative">
                     <p className="text-[10px] text-[var(--text-secondary)] font-mono leading-relaxed uppercase tracking-wide">
-                        <span className="text-[var(--color-info)] mr-2">>></span>
+                        <span className="text-[var(--color-info)] mr-2">{">>"}</span>
                         {data?.philosophy_quote || 'SILENCE IS STRATEGY.'}
                     </p>
                 </div>
