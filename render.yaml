@@ -5,7 +5,7 @@ services:
     env: python
     region: oregon
     branch: main
-    buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt && chmod +x render_deploy.sh
+    buildCommand: pip install -r backend/requirements.txt && chmod +x render_deploy.sh
     startCommand: ./render_deploy.sh
     healthCheckPath: /health
     envVars:

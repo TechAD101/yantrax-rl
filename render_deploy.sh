@@ -15,7 +15,7 @@ echo "🏢 Starting Institutional Gunicorn server..."
 # Standardizing on Render's dynamic port
 export PORT=${PORT:-10000}
 cd backend
-export PYTHONPATH=$PYTHONPATH:.
+export PYTHONPATH=$PYTHONPATH:$(pwd)
 echo "🚀 Deployment Port: $PORT"
-echo "✅ System Version: 5.22-MVP-Routes-Active"
+echo "✅ System Version: 5.23-STABLE"
 python -m gunicorn wsgi:app --bind 0.0.0.0:$PORT --log-level info --timeout 120 --workers 2

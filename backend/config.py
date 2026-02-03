@@ -8,7 +8,7 @@ class Config:
     """Centralized configuration for YantraX RL"""
     
     # System Info
-    VERSION = "4.7.0"
+    VERSION = "5.23-STABLE"
     ENVIRONMENT = os.getenv('FLASK_ENV', 'development')
     DEBUG = os.getenv('DEBUG', 'true').lower() == 'true'
     PORT = int(os.getenv('PORT', 5000))
