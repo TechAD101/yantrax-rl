@@ -378,7 +378,8 @@ export const optimizePortfolio = async (assets, constraints = {}) => {
 // Default object export for backward compatibility
 export const api = {
   getStatus,
-  getAiFirmStatus,
+  getAIFirmStatus: () => fetchWithRetry(`${BASE_URL}/api/ai-firm/status`),
+  getAiFirmStatus: () => fetchWithRetry(`${BASE_URL}/api/ai-firm/status`),
   getGodCycle,
   getMarketPrice,
   getPortfolio,
@@ -433,8 +434,10 @@ export const api = {
     }
   },
 
-  getTopStrategies: async (limit = 10) => {
-    return fetchWithRetry(`${BASE_URL}/api/strategies/top?limit=${limit}`);
+  getTopStrategies: async (opts = {}) => {
+    const limit = typeof opts === 'object' ? (opts.limit || 10) : opts;
+    const metric = opts.metric || 'sharpe';
+    return fetchWithRetry(`${BASE_URL}/api/strategy/top?limit=${limit}&metric=${metric}`);
   },
 
   publishStrategy: async (data) => {
@@ -549,7 +552,21 @@ export const api = {
     } catch (e) {
       return { configured: false, error: e.message };
     }
-  }
+  },
+
+  // NEW MVP ENDPOINTS (mapped into object for consistency)
+  executeTrade: (portfolioId, tradeData) => fetchWithRetry(`${BASE_URL}/api/portfolio/${portfolioId}/trade`, {
+    method: 'POST',
+    body: JSON.stringify(tradeData)
+  }),
+  triggerAIDebate: (symbol, context = {}) => fetchWithRetry(`${BASE_URL}/api/strategy/ai-debate/trigger`, {
+    method: 'POST',
+    body: JSON.stringify({ symbol: symbol.toUpperCase(), context })
+  }),
+  triggerKnowledgeIngest: () => fetchWithRetry(`${BASE_URL}/api/knowledge/ingest`, { method: 'POST' }),
+  getJournalEntries: (limit = 50) => fetchWithRetry(`${BASE_URL}/api/journal?limit=${limit}`),
+  searchMarket: (query, limit = 5) => fetchWithRetry(`${BASE_URL}/api/market-search?query=${encodeURIComponent(query)}&limit=${limit}`),
+  getAIFirmStatus: () => fetchWithRetry(`${BASE_URL}/api/ai-firm/status`),
 };
 
 // ==================== NEW MVP ENDPOINTS ====================
@@ -557,37 +574,21 @@ export const api = {
 // Portfolio Trading
 export const getPortfolioById = (id) => fetchWithRetry(`${BASE_URL}/api/portfolio/${id}`);
 
-export const executeTrade = async (portfolioId, tradeData) => {
-  return fetchWithRetry(`${BASE_URL}/api/portfolio/${portfolioId}/trade`, {
-    method: 'POST',
-    body: JSON.stringify(tradeData)
-  });
-};
+export const executeTrade = api.executeTrade;
 
 // Market Search
-export const searchMarket = (query, limit = 5) =>
-  fetchWithRetry(`${BASE_URL}/api/market-search?query=${encodeURIComponent(query)}&limit=${limit}`);
+export const searchMarket = api.searchMarket;
 
 // AI Debate Engine
-export const triggerAIDebate = async (symbol, context = {}) => {
-  return fetchWithRetry(`${BASE_URL}/api/strategy/ai-debate/trigger`, {
-    method: 'POST',
-    body: JSON.stringify({
-      symbol: symbol.toUpperCase(),
-      context: context
-    })
-  });
-};
+export const triggerAIDebate = api.triggerAIDebate;
 
 // Ingestion Trigger
-export const triggerKnowledgeIngest = () => fetchWithRetry(`${BASE_URL}/api/knowledge/ingest`, { method: 'POST' });
-
+export const triggerKnowledgeIngest = api.triggerKnowledgeIngest;
 
 // AI Firm Status
-export const getAIFirmStatus = () => fetchWithRetry(`${BASE_URL}/api/ai-firm/status`);
+export const getAIFirmStatus = api.getAIFirmStatus;
 
 // Trading Journal
-export const getJournalEntries = (limit = 50) =>
-  fetchWithRetry(`${BASE_URL}/api/journal?limit=${limit}`);
+export const getJournalEntries = api.getJournalEntries;
 
 export default api;
