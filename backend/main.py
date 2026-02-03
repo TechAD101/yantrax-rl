@@ -22,6 +22,9 @@ except ImportError:
 
 load_dotenv()
 
+# Suppress ChromaDB telemetry noise
+os.environ['ANONYMIZED_TELEMETRY'] = 'False'
+
 import numpy as np
 from datetime import datetime, timedelta
 from functools import wraps
@@ -39,6 +42,8 @@ logger = logging.getLogger(__name__)
 # ==================== MAIN SYSTEM INTEGRATION ====================
 from config import Config
 from service_registry import registry
+from ai_agents.persona_registry import get_persona_registry
+PERSONA_REGISTRY = get_persona_registry()
 
 # Database helpers
 from db import init_db
