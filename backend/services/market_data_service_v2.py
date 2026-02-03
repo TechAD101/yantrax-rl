@@ -169,16 +169,17 @@ class MarketDataService:
 
         for chunk in chunks:
             symbols_csv = ",".join(chunk)
-            url = f"https://financialmodelingprep.com/api/v3/quote/{symbols_csv}"
+            # Default to v4 to avoid legacy 403 warnings seen in logs
+            url = f"https://financialmodelingprep.com/api/v4/quote/{symbols_csv}"
             params = { 'apikey': self.config.fmp_api_key }
 
             try:
                 resp = requests.get(url, params=params, timeout=self.config.request_timeout)
 
-                # If FMP responds with a 403 and mentions legacy endpoints, try fallback v4 endpoint
-                if resp.status_code == 403 and 'Legacy Endpoint' in (resp.text or ''):
-                    logger.warning(f"⚠️ FMP 403 Legacy Endpoint for {symbols_csv}, attempting v4 endpoint as fallback")
-                    alt_url = f"https://financialmodelingprep.com/api/v4/quote/{symbols_csv}"
+                # If v4 fails (e.g. not authorized for v4), try v3 as fallback
+                if not resp.ok:
+                    logger.debug(f"ℹ️ FMP v4 failed for {symbols_csv}, attempting v3 endpoint as fallback")
+                    alt_url = f"https://financialmodelingprep.com/api/v3/quote/{symbols_csv}"
                     resp = requests.get(alt_url, params=params, timeout=self.config.request_timeout)
 
                 # If still not OK, try the 'quote-short' endpoint which some keys allow
