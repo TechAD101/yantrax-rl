@@ -954,7 +954,8 @@ def ai_firm_status():
                 'portfolio_balance': 132450.00,
                 'success_rate': 92,
                 'pain_level': ceo_stats.get('institutional_metrics', {}).get('pain_level', 0),
-                'market_mood': ceo_stats.get('institutional_metrics', {}).get('market_mood', 'neutral')
+                'market_mood': ceo_stats.get('institutional_metrics', {}).get('market_mood', 'neutral'),
+                'is_in_panic': ceo_stats.get('is_in_panic', False)
             },
             'institutional_audit': {
                 'fundamental_check': ceo_stats.get('institutional_metrics', {}).get('last_fundamental_check', {}),

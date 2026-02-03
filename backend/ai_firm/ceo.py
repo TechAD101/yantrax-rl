@@ -60,7 +60,11 @@ class AutonomousCEO:
     async def make_strategic_decision(self, context: Dict[str, Any]) -> CEODecision:
         """Make strategic decision based on context and memory"""
         
-        # 1. Conduct Multi-Agent Debate (now async)
+        # 1. Emotional Circuit Breaker (Mouna Mode)
+        pain_level = self._calculate_pain_level(context)
+        if pain_level > 85:
+            self.logger.warning("🚨 EMERGENCY: PAIN LEVEL CRITICAL (%s%%). ENTERING MOUNA MODE.", pain_level)
+            return self._generate_panic_decision(context, pain_level)
         ticker = context.get('ticker', 'UNKNOWN')
         debate_result = await self.debate_engine.conduct_debate(ticker, context)
         
@@ -261,6 +265,7 @@ class AutonomousCEO:
                 for d in self.decision_history[-5:]
             ],
             'average_confidence': sum(d.confidence for d in recent_decisions) / len(recent_decisions) if recent_decisions else 0,
+            'is_in_panic': self._calculate_pain_level() > 85,
             'memory_items': len(self.memory_system.memories),
             'uptime_days': (datetime.now() - self.created_at).days,
             'institutional_metrics': {
@@ -271,14 +276,49 @@ class AutonomousCEO:
             }
         }
 
-    def _calculate_pain_level(self) -> int:
-        """Calculate pain level based on recent decision confidence and history"""
-        if not self.decision_history: return 0
-        recent = self.decision_history[-5:]
-        avg_conf = sum(d.confidence for d in recent) / len(recent)
-        # High confidence = Low pain, Low confidence = High pain
-        pain = int((1.0 - avg_conf) * 100)
+    def _calculate_pain_level(self, current_context: Optional[Dict] = None) -> int:
+        """Calculate pain level based on drawdown, decision history, and current context."""
+        # 1. Base pain from confidence (The Psychological Pain)
+        confidence_pain = 0
+        if self.decision_history:
+            recent = self.decision_history[-5:]
+            avg_conf = sum(d.confidence for d in recent) / len(recent)
+            confidence_pain = int((1.0 - avg_conf) * 50)
+            
+        # 2. Risk/Technical Pain (The Drawdown Pain)
+        # In a real environment, this comes from portfolio.get_drawdown()
+        # Mocking or extracting from context
+        drawdown_pain = 0
+        if current_context:
+            drawdown = current_context.get('drawdown', 0.0)
+            drawdown_pain = int(drawdown * 100 * 2) # 10% drawdown = 20 pain
+            
+            # Consecutive losses boost pain significantly
+            loss_streak = current_context.get('loss_streak', 0)
+            drawdown_pain += (loss_streak * 10)
+
+        pain = confidence_pain + drawdown_pain
         return max(0, min(100, pain))
+
+    def _generate_panic_decision(self, context: Dict, pain: int) -> CEODecision:
+        """Generates a defensive mission-critical decision when in Panic/Mouna mode."""
+        reasoning = f"⚠️ SYSTEMIC RESTRAINT (Mouna Mode) active. Pain: {pain}%. Strategy: Defense. Focus: Stop-loss only."
+        soul_guidance = self.philosophy.get_guidance({'drawdown': pain/100, 'loss_streak': 5})
+        reasoning += f" | {soul_guidance}"
+        
+        decision = CEODecision(
+            id=str(uuid.uuid4()),
+            timestamp=datetime.now(),
+            decision_type='defensive_lockdown',
+            context=context,
+            reasoning=reasoning,
+            confidence=0.1,
+            expected_impact="Protective / Capital Preservation",
+            agent_overrides=["ALL_STRATEGIC_ACTIONS_BLOCKED"],
+            memory_references=[]
+        )
+        self.decision_history.append(decision)
+        return decision
 
     def _determine_market_mood(self) -> str:
         """Determine market mood from aggregate agent signals and confidence"""
