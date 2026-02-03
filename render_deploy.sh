@@ -23,4 +23,4 @@ cd backend
 export PYTHONPATH=$PYTHONPATH:.
 echo "🚀 Deployment Port: $PORT"
 echo "✅ System Version: 5.21-MVP-Routes-Active"
-uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+gunicorn wsgi:app --bind 0.0.0.0:$PORT --log-level info --timeout 120 --workers 2

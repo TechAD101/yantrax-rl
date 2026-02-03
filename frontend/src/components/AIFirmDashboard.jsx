@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BASE_URL } from '../api/api';
+import api from '../api/api';
 import PainMeter from './PainMeter';
 import MarketMoodDial from './MarketMoodDial';
 import InstitutionalReport from './InstitutionalReport';
 import StrategyMarketplace from './StrategyMarketplace';
+import IntelligencePanel from './IntelligencePanel';
+import WisdomPulse from './WisdomPulse';
 
 const AIFirmDashboard = () => {
   const [firmStatus, setFirmStatus] = useState(null);
@@ -27,28 +29,24 @@ const AIFirmDashboard = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch AI firm status, Personas, Wisdom, and top strategies in parallel
-      const [statusRes, personaRes, wisdomRes, topRes] = await Promise.allSettled([
-        fetch(`${BASE_URL}/api/ai-firm/status`).then(r => r.json()),
-        fetch(`${BASE_URL}/api/personas`).then(r => r.json()),
-        fetch(`${BASE_URL}/api/knowledge/query`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topic: 'philosophy', max_results: 1 })
-        }).then(r => r.json()),
-        fetch(`${BASE_URL}/api/strategy/top?limit=3&metric=sharpe`).then(r => r.json())
+      // Using standardized API client for architecture consistency
+      const [statusData, personaData, wisdomData, topData] = await Promise.allSettled([
+        api.getAIFirmStatus(),
+        api.getPersonas(),
+        api.queryKnowledge('philosophy', null),
+        api.getTopStrategies({ limit: 3, metric: 'sharpe' })
       ]);
 
-      if (statusRes.status === 'fulfilled') setFirmStatus(statusRes.value);
-      if (personaRes.status === 'fulfilled') {
-        const personaList = personaRes.value.personas || [];
+      if (statusData.status === 'fulfilled') setFirmStatus(statusData.value);
+      if (personaData.status === 'fulfilled') {
+        const personaList = personaData.value.personas || [];
         setPersonas(personaList);
       }
-      if (wisdomRes.status === 'fulfilled') {
-        setWisdom(wisdomRes.value.wisdom?.[0]);
+      if (wisdomData.status === 'fulfilled') {
+        setWisdom(wisdomData.value.wisdom?.[0]);
       }
-      if (topRes.status === 'fulfilled') {
-        setTopStrategies(topRes.value.strategies || []);
+      if (topData.status === 'fulfilled') {
+        setTopStrategies(topData.value.strategies || []);
       }
 
     } catch (err) {
@@ -151,13 +149,20 @@ const AIFirmDashboard = () => {
             </div>
 
             {/* Institutional Wow: Pain Meter & Mood Dial */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="industrial-panel p-6 bg-[var(--bg-surface)]">
                 <div className="border-b border-[var(--border-muted)] mb-4 pb-2 flex justify-between items-center">
                   <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">Market Sentiment Engine</h4>
                   <div className="text-[10px] font-mono text-[var(--color-info)]">MODULE: SENTIMENT</div>
                 </div>
                 <MarketMoodDial mood={firmStatus.system_performance?.market_mood || 'neutral'} />
+              </div>
+              <div className="industrial-panel p-6 bg-[var(--bg-surface)]">
+                <div className="border-b border-[var(--border-muted)] mb-4 pb-2 flex justify-between items-center">
+                  <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">AI Intelligence</h4>
+                  <div className="text-[10px] font-mono text-[var(--color-success)]">PERPLEXITY.AI</div>
+                </div>
+                <IntelligencePanel ticker="AAPL" showNews={true} />
               </div>
               <div className="industrial-panel p-6 bg-[var(--bg-surface)] h-full">
                 <div className="border-b border-[var(--border-muted)] mb-4 pb-2 flex justify-between items-center">
@@ -172,7 +177,7 @@ const AIFirmDashboard = () => {
             <div className="p-4 border border-[var(--border-muted)] bg-[var(--bg-deep)]">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-widest pl-2 border-l-2 border-[var(--color-info)]">Top Internal Strategies</h4>
-                <button className="text-[10px] font-mono text-[var(--color-info)] hover:underline">VIEW ALL ></button>
+                <button className="text-[10px] font-mono text-[var(--color-info)] hover:underline">VIEW ALL →</button>
               </div>
               <div className="space-y-1">
                 {topStrategies.length === 0 ? (
@@ -191,59 +196,57 @@ const AIFirmDashboard = () => {
               </div>
             </div>
 
-            {/* Loki Swarm Intelligence Grid */}
+            {/* Council of Ghosts: 24-Agent Matrix */}
             <div className="industrial-panel p-6 relative">
               <div className="flex items-center justify-between mb-6 pb-2 border-b border-[var(--border-muted)]">
                 <h4 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-[0.2em]">
-                  Loki Swarm Intelligence
+                  Council of Ghosts (Agent Grid)
                 </h4>
                 <span className="text-[10px] text-[var(--color-success)] font-mono border border-[var(--color-success)] px-2 py-1">
-                  MODE: AUTONOMOUS
+                  CONSENSUS: {firmStatus.system_performance?.success_rate}%
                 </span>
               </div>
 
-              {/* Render Swarms */}
-              <div className="space-y-6">
-                {firmStatus.ai_firm?.departments && Object.entries(firmStatus.ai_firm.departments).map(([key, swarm]) => (
-                  <div key={key} className="bg-[var(--bg-deep)] p-4 border border-[var(--border-muted)]">
-                    <h5 className="text-sm font-bold text-[var(--color-info)] uppercase mb-3 font-mono">{swarm.swarm || key}</h5>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      {swarm.agents && Object.entries(swarm.agents).map(([agentName, state]) => (
-                        <div key={agentName} className="flex items-center justify-between p-2 bg-[var(--bg-surface)] border border-[var(--border-muted)]">
-                          <span className="text-xs font-mono text-white">{agentName}</span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${state === 'IDLE' ? 'text-[var(--text-muted)] bg-[var(--text-muted)]/10' :
-                              state === 'VERIFYING' ? 'text-[var(--color-success)] bg-[var(--color-success)]/10 animate-pulse' :
-                                state === 'ERROR' ? 'text-[var(--color-danger)] bg-[var(--color-danger)]/10' :
-                                  'text-[var(--color-info)] bg-[var(--color-info)]/10'
-                            }`}>
-                            {state}
-                          </span>
-                        </div>
-                      ))}
+              <div className="grid grid-cols-6 md:grid-cols-12 gap-2 mb-4">
+                {firmStatus.ai_firm?.all_agents?.map((agent, i) => (
+                  <div key={agent.name} className="group/agent relative flex flex-col items-center justify-center p-2 border border-[var(--border-muted)] bg-[var(--bg-surface)] hover:border-[var(--color-info)] transition-colors cursor-help h-12">
+                    <div
+                      className={`w-2 h-2 transition-all duration-0 ${agent.confidence > 0.8 ? 'bg-[var(--color-success)]' :
+                        agent.confidence > 0.6 ? 'bg-[var(--color-info)]' :
+                          'bg-[var(--text-muted)]'
+                        } ${i % 3 === 0 ? 'animate-pulse' : ''}`}
+                    ></div>
+                    {/* Tooltip on hover */}
+                    <div className="absolute bottom-full mb-2 hidden group-hover/agent:block z-50 w-48 bg-[var(--bg-deep)] border border-[var(--color-info)] p-3 text-xs shadow-xl pointer-events-none">
+                      <div className="font-bold text-white border-b border-[var(--border-muted)] pb-1 mb-1 font-mono uppercase">{agent.name}</div>
+                      <div className="text-[var(--text-muted)] mb-1">{agent.role}</div>
+                      <div className="text-[var(--color-info)] font-mono">CONF: {(agent.confidence * 100).toFixed(0)}%</div>
                     </div>
                   </div>
                 ))}
               </div>
-
-              <div className="flex justify-between text-[10px] text-[var(--text-muted)] mt-4 font-mono uppercase tracking-wider">
-                <span>Architecture: SWARM V2</span>
-                <span>Cycle: RARV (Reason-Act-Reflect-Verify)</span>
+              <div className="flex justify-between text-[10px] text-[var(--text-muted)] mt-2 font-mono uppercase tracking-wider">
+                <span>Stealth Mode: ENABLED</span>
+                <span>Active Synapses: {firmStatus.ai_firm?.total_agents * 1024}</span>
               </div>
             </div>
 
             {/* CEO Reasoning & Ghost Whispers */}
             {wisdom && (
-              <div className="border border-[var(--border-muted)] bg-[var(--bg-surface)] p-6 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1 h-full bg-[var(--color-info)]"></div>
-                <h4 className="text-xs font-bold text-[var(--color-info)] mb-3 flex items-center uppercase tracking-widest">
-                  Institutional Wisdom
-                </h4>
-                <div className="text-lg text-[var(--text-primary)] leading-relaxed font-serif italic pl-4">
-                  "{wisdom.text || "Boond boond se ghada bharta hai."}"
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 border border-[var(--border-muted)] bg-[var(--bg-surface)] p-6 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-[var(--color-info)]"></div>
+                  <h4 className="text-xs font-bold text-[var(--color-info)] mb-3 flex items-center uppercase tracking-widest">
+                    Institutional Wisdom
+                  </h4>
+                  <div className="text-lg text-[var(--text-primary)] leading-relaxed font-serif italic pl-4">
+                    "{wisdom.text || "Boond boond se ghada bharta hai."}"
+                  </div>
+                  <div className="mt-4 text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-widest pl-4">
+                    — {wisdom.metadata?.source || "YantraX Core DNA"}
+                  </div>
                 </div>
-                <div className="mt-4 text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-widest pl-4">
-                  — {wisdom.metadata?.source || "YantraX Core DNA"}
-                </div>
+                <WisdomPulse />
               </div>
             )}
 

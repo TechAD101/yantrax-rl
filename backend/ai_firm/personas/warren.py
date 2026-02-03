@@ -33,6 +33,14 @@ class Warren(BasePersona):
         else:
             reasoning = f"P/E of {pe} is average. Nothing remarkable to justify capital allocation."
 
+        # Fetch Wisdom for enrichment
+        wisdom = self.kb.query_wisdom(topic=f"value investing in {context.get('market_trend', 'neutral')} market", archetype_filter="warren", max_results=1)
+        if wisdom:
+            reasoning += f" As logic dictates: \"{wisdom[0]['content']}\""
+            if wisdom[0].get('relevance_score', 0) > 0.8:
+                confidence = min(0.98, confidence + 0.05)
+
+
         return {
             'signal': signal,
             'confidence': confidence,

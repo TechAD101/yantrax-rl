@@ -12,6 +12,9 @@ class BasePersona(ABC):
         self.role = role
         self.confidence_threshold = 0.6  # Default confidence needed to vote
         self.vote_weight = 1.0           # Default voting weight
+        # Late import to avoid circular dependency
+        from services.knowledge_base_service import get_knowledge_base
+        self.kb = get_knowledge_base()
 
     @abstractmethod
     def analyze(self, market_data: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:

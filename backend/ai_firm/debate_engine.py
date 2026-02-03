@@ -24,9 +24,15 @@ class DebateEngine:
             Quant(),
             DegenAuditor()
         ]
+        
+        # Perplexity Service placeholder (set by main.py)
+        self.perplexity_service = None
 
-    def conduct_debate(self, ticker: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Hosts a debate between agents regarding a specific ticker/asset with throttling"""
+    def set_perplexity_service(self, service):
+        self.perplexity_service = service
+
+    async def conduct_debate(self, ticker: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Hosts a debate between agents regarding a specific ticker/asset with Perplexity context"""
         
         # 0. Check Cache
         if ticker in self.debate_cache:
@@ -34,13 +40,29 @@ class DebateEngine:
             if datetime.now() < cached['expiry']:
                 return cached['result']
 
-        self.logger.info(f"🎤 Starting debate for {ticker}")
+        self.logger.info(f"🎤 Starting enhanced debate for {ticker}")
+        
+        # 0.5 Fetch Perplexity Debate Context for "World Class" Intelligence
+        perplexity_context = ""
+        if self.perplexity_service:
+            try:
+                topic = f"Critical debate points for {ticker} in the current {context.get('market_trend', 'neutral')} market"
+                search_res = await self.perplexity_service.get_debate_context(topic, [ticker])
+                perplexity_context = search_res.get('market_context', '')
+                if perplexity_context:
+                    self.logger.info(f"✓ Perplexity Context Injected: {len(perplexity_context)} chars")
+            except Exception as e:
+                self.logger.error(f"Perplexity context fetch failed: {e}")
+
+        # Add Perplexity context to market_data for persona analysis
+        enriched_context = dict(context)
+        enriched_context['perplexity_market_lore'] = perplexity_context
         
         arguments = []
         
-        # 1. Gather Arguments from Personas
+        # 1. Round 1: Initial Analysis
         for persona in self.personas:
-            analysis = persona.analyze(context, context) # Pass context as market_data for now
+            analysis = persona.analyze(enriched_context, enriched_context)
             
             # Only include if confidence meets threshold
             if analysis['confidence'] >= persona.confidence_threshold:
@@ -52,10 +74,24 @@ class DebateEngine:
                     'concerns': analysis['concerns'],
                     'weight': persona.vote_weight * analysis['confidence'],
                     'confidence': analysis['confidence'],
-                    'quote': persona.get_philosophy_quote()
+                    'quote': persona.get_philosophy_quote(),
+                    'rebuttals': []
                 })
         
-        # 2. Tally Votes
+        # 2. Round 2: Rebuttals (Simple Multi-Turn)
+        if len(arguments) > 1:
+            winning_temp = max(arguments, key=lambda x: x['weight'])['signal']
+            for arg in arguments:
+                if arg['signal'] != winning_temp:
+                    # Dissenter rebuttal
+                    rebuttal = f"Wait, {arg['agent']} notes that while the majority looks for {winning_temp}, we cannot ignore {arg['concerns'][0] if arg['concerns'] else 'the underlying risk'}."
+                    arg['rebuttals'].append(rebuttal)
+                elif arg['confidence'] > 0.85:
+                    # Supporter strong reinforcement
+                     reinforcement = f"{arg['agent']} double-confirms the {winning_temp} thesis based on Institutional Wisdom."
+                     arg['rebuttals'].append(reinforcement)
+
+        # 3. Tally Votes
         vote_tally = {}
         total_weight = 0
         
@@ -66,7 +102,7 @@ class DebateEngine:
             vote_tally[sig] += arg['weight']
             total_weight += arg['weight']
         
-        # 3. Resolve Consensus
+        # 4. Resolve Consensus
         if total_weight > 0:
             winning_signal = max(vote_tally.items(), key=lambda x: x[1])[0]
             consensus_score = vote_tally[winning_signal] / total_weight
@@ -78,6 +114,7 @@ class DebateEngine:
             'id': str(uuid.uuid4()),
             'ticker': ticker,
             'timestamp': datetime.now().isoformat(),
+            'perplexity_context': perplexity_context,
             'arguments': arguments,
             'winning_signal': winning_signal,
             'consensus_score': round(consensus_score, 2),

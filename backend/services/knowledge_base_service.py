@@ -103,6 +103,36 @@ class KnowledgeBaseService:
                 "source": "Hindi Wisdom",
                 "tags": ["compounding"],
                 "archetype": ["warren"]
+            },
+            {
+                "content": "The trend is your friend until the end when it bends.",
+                "source": "Ed Seykota",
+                "tags": ["trend", "momentum"],
+                "archetype": ["quant", "cathie"]
+            },
+            {
+                "content": "In trading, you have to be defensive and aggressive at the same time. If you are not aggressive, you are not going to make money; and if you are not defensive, you are not going to keep money.",
+                "source": "Paul Tudor Jones",
+                "tags": ["risk_management", "defense"],
+                "archetype": ["macros", "degen_auditor"]
+            },
+            {
+                "content": "Markets can remain irrational longer than you can remain solvent.",
+                "source": "John Maynard Keynes",
+                "tags": ["irrationality", "margin"],
+                "archetype": ["philosopher", "ghost"]
+            },
+            {
+                "content": "The most important quality for an investor is temperament, not intellect.",
+                "source": "Warren Buffett",
+                "tags": ["psychology", "patience"],
+                "archetype": ["warren"]
+            },
+            {
+                "content": "Everything is a paradox. The more certain the crowd is, the more likely the surprise.",
+                "source": "The Ghost",
+                "tags": ["paradox", "contrarian"],
+                "archetype": ["ghost"]
             }
         ]
         
@@ -356,6 +386,57 @@ class KnowledgeBaseService:
             'wisdom_count': len(wisdom)
         }
     
+    async def autonomous_wisdom_ingestion(self, perplexity_service) -> Dict[str, Any]:
+        """
+        Autonomously fetch and ingest new market wisdom using Perplexity AI.
+        
+        Fetches current market regimes, legendary analyst takes, and regime-specific playbooks.
+        """
+        if not perplexity_service:
+            return {"success": False, "error": "Perplexity service not provided"}
+            
+        topics = [
+            "What is the current global market regime and what is the best investment playbook for it?",
+            "Recent contrarian investment insights from legendary hedge fund managers",
+            "Hidden risks in the current technology and AI sector according to top analysts",
+            "Ancient philosophical wisdom applied to modern algorithmic trading"
+        ]
+        
+        ingested_count = 0
+        results = []
+        
+        for topic in topics:
+            try:
+                # Use Perplexity Search for real-time/deep insights
+                search_data = await perplexity_service.search_financial_news(topic, max_results=3)
+                
+                if search_data.get('results'):
+                    for news_item in search_data['results']:
+                        content = f"{news_item['title']}: {news_item['summary'][:500]}"
+                        source = news_item.get('source', 'Perplexity Insight')
+                        
+                        # Store in KB
+                        doc_id = self.store_wisdom(
+                            content=content,
+                            source=source,
+                            tags=["autonomous", "real_time_insight"],
+                            archetype=["macros", "quant", "ghost"],
+                            url=news_item.get('url', ''),
+                            ingestion_type="autonomous"
+                        )
+                        ingested_count += 1
+                        results.append(doc_id)
+            except Exception as e:
+                self.logger.error(f"Autonomous ingestion error for topic '{topic}': {e}")
+                
+        self.logger.info(f"🧠 Autonomous Ingestion complete. Added {ingested_count} items to memory.")
+        return {
+            "success": True,
+            "ingested_count": ingested_count,
+            "document_ids": results,
+            "timestamp": datetime.now().isoformat()
+        }
+
     def get_statistics(self) -> Dict[str, Any]:
         """Get knowledge base statistics"""
         return {

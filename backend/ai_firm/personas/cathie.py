@@ -33,6 +33,13 @@ class Cathie(BasePersona):
         else:
             reasoning = "Innovation signals are mixed."
 
+        # Fetch Wisdom for enrichment
+        wisdom = self.kb.query_wisdom(topic=f"growth and innovation in {context.get('market_trend', 'neutral')} market", archetype_filter="cathie", max_results=1)
+        if wisdom:
+            reasoning += f" Remember: \"{wisdom[0]['content']}\""
+            if wisdom[0].get('relevance_score', 0) > 0.8:
+                confidence = min(0.98, confidence + 0.05)
+
         return {
             'signal': signal,
             'confidence': confidence,

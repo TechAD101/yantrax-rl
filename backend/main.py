@@ -26,6 +26,8 @@ import numpy as np
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import Dict, Any, Optional
+import threading
+import asyncio
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from sqlalchemy import func, Float
@@ -35,15 +37,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 # ==================== MAIN SYSTEM INTEGRATION ====================
-
-# Initialize Waterfall Market Data Service (The "Real Work")
-from services.market_data_service_waterfall import WaterfallMarketDataService
-market_provider = WaterfallMarketDataService()
+from config import Config
+from service_registry import registry
 
 # Database helpers
-from db import get_session, init_db
-from models import Portfolio, PortfolioPosition, StrategyProfile, Strategy, JournalEntry
-
+from db import init_db
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -73,166 +71,62 @@ def _load_dotenv_fallback(filepath: str) -> None:
     except Exception as e:
         logger.warning(f"Failed to load .env fallback: {e}")
 
-
-# Ensure local .env is loaded even if python-dotenv is missing
+# Ensure local .env is loaded (if not already handled by load_dotenv)
+# _load_dotenv_fallback is kept for safety
 _load_dotenv_fallback(os.path.join(os.path.dirname(__file__), '.env'))
 
-# ==================== CRITICAL DIAGNOSTIC ====================
+# Diagnostics
+logger.info(f"🔍 YANTRAX RL v{Config.VERSION} - ARCHITECT MODE")
 
-logger.info("\n" + "="*80)
-logger.info("🔍 YANTRAX RL v4.6 - DIAGNOSTIC MODE")
-logger.info("="*80)
+# Initialize Authored Services via Registry
+KNOWLEDGE_BASE = registry.get_service('kb')
+PERPLEXITY_SERVICE = registry.get_service('perplexity')
+PERPLEXITY_READY = bool(PERPLEXITY_SERVICE and PERPLEXITY_SERVICE.is_configured())
+TRADE_VALIDATOR = registry.get_service('trade_validator')
 
-# Log all environment variables
-logger.info("📋 ENVIRONMENT VARIABLES CHECK:")
-
-
-def _get_fmp_key() -> str:
-    """Return the FinancialModelingPrep key from commonly used env var names."""
-    return (
-        os.getenv('FMP_API_KEY') or
-        os.getenv('FMP_KEY') or
-        os.getenv('FMP') or
-        ''
-    )
-
-def _get_alpha_vantage_key() -> str:
-    """Return the Alpha Vantage key from commonly used env var names."""
-    return (
-        os.getenv('ALPHAVANTAGE_API_KEY') or
-        os.getenv('ALPHA_VANTAGE_KEY') or
-        os.getenv('ALPHA_VANTAGE') or
-        ''
-    )
-
-fmp_key_env = _get_fmp_key()
-alpaca_key_env = os.getenv('ALPACA_API_KEY', '')
-alpaca_secret_env = os.getenv('ALPACA_SECRET_KEY', '')
-
-logger.info(f"  FMP_API_KEY present: {bool(fmp_key_env)} (first 10 chars: {fmp_key_env[:10] if fmp_key_env else 'EMPTY'})")
-logger.info(f"  ALPACA_API_KEY present: {bool(alpaca_key_env)} (first 10 chars: {alpaca_key_env[:10] if alpaca_key_env else 'EMPTY'})")
-logger.info(f"  ALPACA_SECRET_KEY present: {bool(alpaca_secret_env)} (first 10 chars: {alpaca_secret_env[:10] if alpaca_secret_env else 'EMPTY'})")
-
-# FIXED: Properly import and instantiate MarketDataService v2
+# Initialize Market Data
 MARKET_SERVICE_READY = False
 market_data = None
-MARKET_DATA_CONFIG = None
-MARKET_SERVICE_INIT_ERROR = None
-
 try:
     from services.market_data_service_v2 import MarketDataService, MarketDataConfig
-    # Massive market data client (supports equities, crypto, indices, forex)
-    from services.market_data_service_massive import MassiveMarketDataService
-    
-    logger.info("✅ MarketDataService v2 imported successfully")
-    
-    # Get API keys from environment (accept many common names)
-    fmp_key_env = _get_fmp_key()
-    alpaca_key = os.getenv('ALPACA_API_KEY', '')
-    alpaca_secret = os.getenv('ALPACA_SECRET_KEY', '')
-
-    logger.info("\n🔑 API KEYS CHECK:")
-    logger.info(f"  FMP: {'✅ SET' if fmp_key_env else '❌ MISSING'}")
-    logger.info(f"  Alpaca API Key: {'✅ SET' if alpaca_key else '❌ MISSING'}")
-    logger.info(f"  Alpaca Secret: {'✅ SET' if alpaca_secret else '❌ MISSING'}")
-    
-    # Use FinancialModelingPrep (FMP) as the single, authoritative provider
-    fmp_key = os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY') or os.getenv('FMP') or '14uTc09TMyUVJEuFKriHayCTnLcyGhyy'
-
-    if fmp_key:
-        logger.info("\n🔨 CREATING MarketDataConfig (FMP-only)...")
-
-        config = MarketDataConfig(
-            fmp_api_key=fmp_key,
-            cache_ttl_seconds=60,
-            rate_limit_calls=300,
-            rate_limit_period=60,
-            batch_size=50
-        )
-
-        logger.info("  Config created:")
-        logger.info(f"    - fmp_api_key: {'✅ SET' if config.fmp_api_key else '❌ MISSING'}")
-        logger.info(f"    - cache_ttl_seconds: {config.cache_ttl_seconds}")
-        MARKET_DATA_CONFIG = config
-
-        logger.info("\n🚀 INITIALIZING MarketDataService (FMP-only)...")
-        market_data = MarketDataService(config)
-
-        MARKET_SERVICE_READY = True
-        logger.info("✅ MarketDataService initialized successfully")
-        logger.info(f"📊 Available providers: {[p.value for p in market_data.providers]}")
-        logger.info("📡 Data Pipeline: FinancialModelingPrep (FMP) - batch quote API")
-    else:
-        logger.error("❌ NO FMP API KEY FOUND! Set FMP_API_KEY in environment or pass via MarketDataConfig.")
-        MARKET_SERVICE_READY = False
-
-except ImportError as e:
-    logger.error(f"❌ MarketDataService v2 import failed: {e}")
-    logger.error(f"   Import error details: {str(e)}")
-    MARKET_SERVICE_INIT_ERROR = str(e)
-    MARKET_SERVICE_READY = False
+    config_data = Config.get_market_config()
+    market_config = MarketDataConfig(**config_data)
+    market_data = MarketDataService(market_config)
+    registry.register_service('market_data', market_data)
+    MARKET_SERVICE_READY = True
+    logger.info("✅ MarketDataService initialized successfully")
 except Exception as e:
-    logger.error(f"❌ MarketDataService v2 initialization failed: {e}")
-    logger.error(f"   Traceback: {str(e)}")
-    MARKET_SERVICE_INIT_ERROR = str(e)
-    MARKET_SERVICE_READY = False
+    logger.error(f"❌ MarketDataService initialization failed: {e}")
 
-logger.info("="*80 + "\n")
-
-# AI Firm imports with enhanced error handling
+# Initialize AI Firm
 AI_FIRM_READY = False
-RL_ENV_READY = False # Initialize explicitly
-PERSONA_REGISTRY = None
-KNOWLEDGE_BASE = None
-TRADE_VALIDATOR = None
+RL_ENV_READY = False
 try:
     from ai_firm.ceo import AutonomousCEO, CEOPersonality
-    from ai_agents.personas.warren import WarrenAgent
-    from ai_agents.personas.cathie import CathieAgent
-    from ai_agents.persona_registry import get_persona_registry
-    from services.knowledge_base_service import get_knowledge_base
-    from services.trade_validator import get_trade_validator
     from ai_firm.agent_manager import AgentManager
     from rl_core.env_market_sim import MarketSimEnv
     
-    # Initialize Core Agents
-    ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
-    warren = WarrenAgent()
-    cathie = CathieAgent()
     agent_manager = AgentManager()
+    ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
+    if PERPLEXITY_READY:
+        ceo.set_perplexity_service(PERPLEXITY_SERVICE)
     
-    # Initialize Persona Registry
-    PERSONA_REGISTRY = get_persona_registry()
-    
-    # Initialize Knowledge Base
-    KNOWLEDGE_BASE = get_knowledge_base()
-    
-    # Initialize Trade Validator
-    TRADE_VALIDATOR = get_trade_validator()
-    
-    # Initialize RL Environment
     rl_env = MarketSimEnv()
-
-    # Initialize Debate Engine (uses the PersonaRegistry/AgentManager)
-    try:
-        from ai_firm.debate_engine import DebateEngine
-        DEBATE_ENGINE = DebateEngine(agent_manager)
-        logger.info("✓ Debate Engine initialized")
-    except Exception as e:
-        logger.error(f"Failed to initialize Debate Engine: {e}")
-        DEBATE_ENGINE = None
     
+    # Debate Engine
+    from ai_firm.debate_engine import DebateEngine
+    DEBATE_ENGINE = DebateEngine(agent_manager)
+    if PERPLEXITY_READY:
+        DEBATE_ENGINE.set_perplexity_service(PERPLEXITY_SERVICE)
+        
     AI_FIRM_READY = True
     RL_ENV_READY = True
-    logger.info("✅ AI FIRM & RL CORE FULLY OPERATIONAL")
-    logger.info(f"✅ PersonaRegistry initialized with {len(PERSONA_REGISTRY.get_all_personas())} personas")
-    logger.info(f"✅ Knowledge Base initialized with {KNOWLEDGE_BASE.get_statistics()['total_items']} items")
-    logger.info("✅ Trade Validator initialized with 8-point strict validation")
+    logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
-    logger.error(f"❌ AI Firm initialization failed: {e}")
-    # We continue, but god_cycle will degrade gracefully
+    logger.error(f"❌ AI Firm core initialization failed: {e}")
 
 app = Flask(__name__)
+CORS(app, origins=['*'])
 
 # Initialize DB tables (safe to call; in prod use Alembic migrations)
 try:
@@ -241,16 +135,41 @@ try:
 except Exception as e:
     logger.error(f"Failed to initialize DB on startup: {e}")
 
-# Fallback: Ensure Debate Engine exists even if AI Firm failed to initialize (useful for tests)
-try:
-    if 'DEBATE_ENGINE' not in globals() or DEBATE_ENGINE is None:
-        from ai_firm.debate_engine import DebateEngine
-        DEBATE_ENGINE = DebateEngine(None)
-        logger.info('✓ Debate Engine fallback initialized')
-except Exception as e:
-    logger.error(f'Failed to initialize Debate Engine fallback: {e}')
-CORS(app, origins=['*'])
+# Global Metrics and Tracks
+metrics_registry = {
+    'yantrax_requests_total': 0,
+    'yantrax_agent_latency_seconds_count': 0,
+    'yantrax_agent_latency_seconds_sum': 0.0,
+    'successful_requests': 0,
+    'api_call_errors': 0
+}
 
+@app.before_request
+def before_request_metric():
+    metrics_registry['yantrax_requests_total'] += 1
+
+@app.after_request
+def after_request_metric(response):
+    if response.status_code < 400:
+        metrics_registry['successful_requests'] += 1
+    return response
+
+@app.errorhandler(Exception)
+def handle_global_error(e):
+    metrics_registry['api_call_errors'] += 1
+    logger.exception("Global Error Handler caught anomaly")
+    return jsonify({
+        'error': 'internal_server_error',
+        'message': str(e),
+        'timestamp': datetime.now().isoformat()
+    }), 500
+
+# Legacy Decorator Support (kept for compatibility with existing routes)
+def handle_errors(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    return wrapper
 
 def _get_git_version() -> Dict[str, str]:
     """Return git short sha and branch if available."""
@@ -262,89 +181,6 @@ def _get_git_version() -> Dict[str, str]:
     except Exception:
         return {'sha': 'unknown', 'branch': 'unknown'}
 
-# Error tracking
-error_counts = {
-    'total_requests': 0,
-    'successful_requests': 0, 
-    'api_call_errors': 0
-}
-
-# Simple Prometheus-like metrics registry (lightweight)
-metrics_registry = {
-    'yantrax_requests_total': 0,
-    'yantrax_agent_latency_seconds_count': 0,
-    'yantrax_agent_latency_seconds_sum': 0.0
-}
-
-def handle_errors(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        error_counts['total_requests'] += 1
-        try:
-            metrics_registry['yantrax_requests_total'] += 1
-        except Exception:
-            pass
-        try:
-            result = func(*args, **kwargs)
-            error_counts['successful_requests'] += 1
-            return result
-        except Exception as e:
-            error_counts['api_call_errors'] += 1
-            logger.exception("API error occurred")
-            return jsonify({
-                'error': 'internal_server_error',
-                'message': str(e),
-                'timestamp': datetime.now().isoformat()
-            }), 500
-    return wrapper
-
-# Initialize AI Firm components
-if AI_FIRM_READY:
-    try:
-        ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
-        warren = WarrenAgent()
-        cathie = CathieAgent()
-        agent_manager = AgentManager()
-        logger.info("🏢 AI FIRM FULLY OPERATIONAL!")
-        logger.info(f"🤖 CEO ACTIVE: {ceo.personality.value}")
-        logger.info("📊 WARREN & CATHIE PERSONAS LOADED")
-        logger.info("🔄 20+ AGENT COORDINATION READY")
-    except Exception as e:
-        logger.error(f"⚠️ AI Firm initialization error: {e}")
-        AI_FIRM_READY = False
-        logger.info("🔄 Falling back to legacy mode")
-
-# FIXED #3: Market Data Service initialization with safety check
-market_data = None
-if MARKET_SERVICE_READY:
-    try:
-        # Build config from environment variables (alpha vantage key, etc.)
-        try:
-            from services.market_data_service_v2 import MarketDataConfig
-            # Use the robust key detection to pick the alpha key and include alpaca creds
-            av_key = _get_alpha_vantage_key() or os.getenv('ALPHA_VANTAGE') or ''
-            alpaca_key_env = os.getenv('ALPACA_API_KEY') or os.getenv('ALPACA_KEY')
-            alpaca_secret_env = os.getenv('ALPACA_SECRET_KEY') or os.getenv('ALPACA_SECRET')
-            polygon = os.getenv('POLYGON_KEY') or os.getenv('POLYGON') or None
-            finnhub = os.getenv('FINNHUB_KEY') or os.getenv('FINNHUB') or None
-            cfg = MarketDataConfig(
-                fmp_api_key=fmp_key_env,
-                cache_ttl_seconds=60
-            )
-            market_data = MarketDataService(cfg)
-            logger.info("✅ MarketDataService v2 initialized with config from env")
-            logger.info("📊 Providers in use: %s", [p.value for p in market_data.providers])
-        except Exception as e_cfg:
-            logger.error(f"⚠️  Failed to initialize MarketDataService with config: {e_cfg}")
-            MARKET_SERVICE_INIT_ERROR = str(e_cfg)
-            market_data = None
-    except Exception as e:
-        logger.error(f"⚠️  MarketDataService v2 init failed: {e}")
-        MARKET_SERVICE_INIT_ERROR = str(e)
-        MARKET_SERVICE_READY = False
-        market_data = None
-else:
-    logger.info("📊 Using fallback market data (MarketDataService v2 not available)")
 
 
 def unified_get_market_price(symbol: str) -> Dict[str, Any]:
@@ -1033,7 +869,7 @@ def metrics():
 
 
 @app.route('/god-cycle', methods=['GET'])
-def god_cycle():
+async def god_cycle():
     """Execute 24-agent voting cycle with REAL DATA & Debate Engine"""
     symbol = request.args.get('symbol', 'AAPL').upper()
     
@@ -1063,7 +899,7 @@ def god_cycle():
     
     if AI_FIRM_READY:
         # 3. CEO Strategic Decision (Triggers Debate & Ghost inside)
-        ceo_decision = ceo.make_strategic_decision(context)
+        ceo_decision = await ceo.make_strategic_decision(context)
         
         return jsonify({
             'status': 'success',
@@ -1316,7 +1152,7 @@ def get_knowledge_stats():
 
 # ==================== STRATEGY / DEBATE ENDPOINTS ====================
 @app.route('/api/strategy/ai-debate/trigger', methods=['POST'])
-def trigger_ai_debate():
+async def trigger_ai_debate():
     """Trigger a persona debate for a given symbol/ticker"""
     data = request.get_json() or {}
     symbol = data.get('symbol') or data.get('ticker')
@@ -1325,7 +1161,7 @@ def trigger_ai_debate():
         return jsonify({'error': 'symbol is required'}), 400
     if 'DEBATE_ENGINE' in globals() and DEBATE_ENGINE:
         try:
-            result = DEBATE_ENGINE.conduct_debate(symbol.upper(), context)
+            result = await DEBATE_ENGINE.conduct_debate(symbol.upper(), context)
             return jsonify(result), 200
         except Exception as e:
             logger.error(f"Error running debate: {e}")
@@ -1949,6 +1785,137 @@ def visual_mood_board():
     dashboard_data = app.mood_board_manager.get_dashboard_state()
     return jsonify(dashboard_data), 200
 
+# --- PERPLEXITY INTELLIGENCE API ---
+@app.route('/api/intelligence/sentiment', methods=['GET'])
+@handle_errors
+def get_market_sentiment_endpoint():
+    """Get AI-powered market sentiment for a ticker"""
+    if not globals().get('PERPLEXITY_SERVICE'):
+        return jsonify({
+            'error': 'Perplexity service not available',
+            'configured': False,
+            'message': 'Set PERPLEXITY_API_KEY in environment'
+        }), 503
+    
+    ticker = request.args.get('ticker', 'AAPL').upper()
+    include_news = request.args.get('include_news', 'true').lower() == 'true'
+    
+    sentiment = PERPLEXITY_SERVICE.get_market_sentiment_sync(ticker, include_news)
+    return jsonify(sentiment.to_dict()), 200
+
+@app.route('/api/intelligence/trending', methods=['GET'])
+@handle_errors
+def get_trending_endpoint():
+    """Get AI analysis of trending opportunities in a sector"""
+    import asyncio
+    
+    if not globals().get('PERPLEXITY_SERVICE'):
+        return jsonify({
+            'error': 'Perplexity service not available',
+            'configured': False
+        }), 503
+    
+    sector = request.args.get('sector', 'technology')
+    focus = request.args.get('focus', 'opportunities')
+    
+    try:
+        analysis = asyncio.run(PERPLEXITY_SERVICE.get_trending_analysis(sector, focus))
+        return jsonify(analysis.to_dict()), 200
+    except Exception as e:
+        return jsonify({'error': str(e), 'sector': sector}), 500
+
+@app.route('/api/intelligence/commentary', methods=['GET'])
+@handle_errors
+def get_ai_commentary_endpoint():
+    """Generate AI market commentary for tickers"""
+    import asyncio
+    
+    if not globals().get('PERPLEXITY_SERVICE'):
+        return jsonify({
+            'error': 'Perplexity service not available',
+            'configured': False
+        }), 503
+    
+    tickers_str = request.args.get('tickers', 'AAPL,MSFT,GOOGL')
+    tickers = [t.strip().upper() for t in tickers_str.split(',')][:5]
+    persona = request.args.get('persona')  # Optional: Warren, Cathie, Quant, Degen
+    
+    try:
+        commentary = asyncio.run(PERPLEXITY_SERVICE.generate_market_commentary(tickers, persona))
+        return jsonify(commentary.to_dict()), 200
+    except Exception as e:
+        return jsonify({'error': str(e), 'tickers': tickers}), 500
+
+@app.route('/api/intelligence/debate-context', methods=['GET'])
+@handle_errors
+def get_debate_context_endpoint():
+    """Get real-time market context for AI debate engine"""
+    import asyncio
+    
+    if not globals().get('PERPLEXITY_SERVICE'):
+        return jsonify({
+            'error': 'Perplexity service not available',
+            'configured': False
+        }), 503
+    
+    topic = request.args.get('topic', 'Should we invest in technology stocks?')
+    tickers_str = request.args.get('tickers', '')
+    tickers = [t.strip().upper() for t in tickers_str.split(',') if t.strip()][:3] if tickers_str else None
+    
+    try:
+        context = asyncio.run(PERPLEXITY_SERVICE.get_debate_context(topic, tickers))
+        return jsonify(context), 200
+    except Exception as e:
+        return jsonify({'error': str(e), 'topic': topic}), 500
+
+@app.route('/api/intelligence/search', methods=['GET'])
+@handle_errors
+def search_financial_news_endpoint():
+    """Search real-time financial news from trusted sources"""
+    import asyncio
+    
+    if not globals().get('PERPLEXITY_SERVICE'):
+        return jsonify({'error': 'Perplexity service not available'}), 503
+    
+    query = request.args.get('query', 'stock market news')
+    max_results = min(int(request.args.get('max_results', 5)), 20)
+    trusted_only = request.args.get('trusted_sources', 'true').lower() == 'true'
+    
+    try:
+        results = asyncio.run(PERPLEXITY_SERVICE.search_financial_news(query, max_results, trusted_only))
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({'error': str(e), 'query': query}), 500
+
+@app.route('/api/intelligence/ticker-news', methods=['GET'])
+@handle_errors
+def search_ticker_news_endpoint():
+    """Search news for a specific ticker"""
+    import asyncio
+    
+    if not globals().get('PERPLEXITY_SERVICE'):
+        return jsonify({'error': 'Perplexity service not available'}), 503
+    
+    ticker = request.args.get('ticker', 'AAPL').upper()
+    news_type = request.args.get('type', 'all')  # all, earnings, analyst, sec
+    
+    try:
+        results = asyncio.run(PERPLEXITY_SERVICE.search_ticker_news(ticker, news_type))
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({'error': str(e), 'ticker': ticker}), 500
+
+@app.route('/api/intelligence/status', methods=['GET'])
+def get_intelligence_status():
+    """Check Perplexity Intelligence service status"""
+    if globals().get('PERPLEXITY_SERVICE'):
+        return jsonify(PERPLEXITY_SERVICE.get_status()), 200
+    return jsonify({
+        'service': 'PerplexityIntelligenceService',
+        'configured': False,
+        'message': 'Service not initialized. Set PERPLEXITY_API_KEY.'
+    }), 200
+
 # --- WORLD CLASS SOCIAL LAYER (Marketplace & Contests) ---
 @app.route('/api/strategies/publish-to-hub', methods=['POST'])
 def publish_strategy_hub():
@@ -2082,6 +2049,52 @@ def execute_trade_mvp(portfolio_id: int):
         session.close()
 
 
+# ==================== KNOWLEDGE BASE INGESTION ====================
+
+@app.route('/api/knowledge/ingest', methods=['POST'])
+async def trigger_knowledge_ingest():
+    """Manually trigger autonomous wisdom ingestion"""
+    kb = registry.get_service('kb')
+    perp = registry.get_service('perplexity')
+    
+    if not kb or not perp:
+        return jsonify({'error': 'Intelligence services not fully operational'}), 503
+        
+    try:
+        result = await kb.autonomous_wisdom_ingestion(perp)
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f"Manual ingestion failed: {e}")
+        return jsonify({'error': str(e)}), 500
+
+def autonomous_ingestion_loop():
+    """Background worker for periodic wisdom ingestion"""
+    logger.info("🧠 Autonomous Ingestion worker started")
+    
+    # Wait for system to stabilize
+    import time
+    time.sleep(30)
+    
+    while True:
+        try:
+            kb = registry.get_service('kb')
+            perp = registry.get_service('perplexity')
+            
+            if kb and perp and perp.is_configured():
+                logger.info("🧠 Executing scheduled autonomous ingestion...")
+                
+                # Run async method in sync thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(kb.autonomous_wisdom_ingestion(perp))
+                loop.close()
+                
+            # Sleep for 6 hours
+            time.sleep(6 * 3600)
+        except Exception as e:
+            logger.error(f"Error in ingestion loop: {e}")
+            time.sleep(300)
+
 @app.route('/api/journal', methods=['GET'])
 def get_journal_mvp():
     """Get trading journal entries"""
@@ -2098,5 +2111,9 @@ def get_journal_mvp():
 
 
 if __name__ == '__main__':
+    # Start autonomous ingestion thread
+    ingest_thread = threading.Thread(target=autonomous_ingestion_loop, daemon=True)
+    ingest_thread.start()
+    
     port = int(os.getenv('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)

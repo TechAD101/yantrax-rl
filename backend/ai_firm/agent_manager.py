@@ -7,7 +7,8 @@ import logging
 import uuid
 import numpy as np
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
+from services.knowledge_base_service import get_knowledge_base
 
 class Agent:
     """Lightweight Agent representation used by the package API.
@@ -51,6 +52,7 @@ class AgentManager:
         self.enhanced_agents = self._initialize_20_plus_agents()
         self.voting_sessions = []
         self.logger = logging.getLogger(__name__)
+        self.kb = get_knowledge_base()
         
     def _initialize_20_plus_agents(self) -> Dict[str, Dict]:
         """Initialize 20+ agent ecosystem"""
@@ -236,9 +238,22 @@ class AgentManager:
         return voting_result
     
     def _generate_agent_signal(self, agent_name: str, agent_data: Dict, context: Dict = None) -> str:
-        """Generate trading signal based on agent specialty and real data"""
+        """Generate trading signal based on agent specialty and real data + KB context"""
         confidence = agent_data['confidence']
         specialty = agent_data.get('specialty', '')
+        
+        # 0. Fetch Contextual Wisdom from KB
+        market_condition = context.get('market_trend', 'neutral') if context else 'neutral'
+        query = f"{specialty} in {market_condition} market"
+        wisdom_items = self.kb.query_wisdom(topic=query, archetype_filter=agent_name, max_results=1)
+        
+        wisdom_citation = ""
+        if wisdom_items:
+            wisdom = wisdom_items[0]
+            wisdom_citation = f" [Wisdom: \"{wisdom['content']}\" — {wisdom['source']}]"
+            # Dynamic confidence adjustment based on wisdom relevance
+            if wisdom.get('relevance_score', 0) > 0.8:
+                confidence = min(0.98, confidence + 0.05)
         
         # Pull real data from context provided by waterfall service
         fundamentals = context.get('fundamentals', {}) if context else {}

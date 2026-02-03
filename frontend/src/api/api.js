@@ -4,7 +4,7 @@ const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && i
   ? import.meta.env.VITE_API_URL
   : 'https://yantrax-backend.onrender.com';
 
-const BASE_URL = `${API_BASE_URL}/api/v1`;
+const BASE_URL = API_BASE_URL;
 export { BASE_URL };
 
 const UPDATE_INTERVAL = 60000; // 60 seconds (1 minute updates)
@@ -131,7 +131,7 @@ export const runRLCycle = async (config = {}) => {
 
 export const getAiFirmStatus = async () => {
   try {
-    return fetchWithRetry(`${BASE_URL}/ai-firm/status`);
+    const r = await fetch(`${BASE_URL}/api/ai-firm/status`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return await r.json();
   } catch (e) {
@@ -408,6 +408,17 @@ export const api = {
   getValidationStats,
   getVerifiedPrice,
   getVerificationStats,
+
+  // Manual trigger for Knowledge Ingestion
+  triggerKnowledgeIngest: async () => {
+    try {
+      const resp = await fetch(`${BASE_URL}/api/knowledge/ingest`, { method: 'POST' });
+      return await resp.json();
+    } catch (e) {
+      console.error('Ingestion trigger failed:', e);
+      return { success: false, error: e.message };
+    }
+  },
   // New Institutional Phase Ω
   getInstitutionalReport: (symbol = 'AAPL') => fetchWithRetry(`${BASE_URL}/report/institutional?symbol=${symbol}`),
   getSystemStatus: () => fetchWithRetry(`${BASE_URL}/health`),
@@ -452,6 +463,92 @@ export const api = {
 
   getActiveContest: async () => {
     return fetchWithRetry(`${BASE_URL}/api/contests/active`);
+  },
+
+  // ==================== PERPLEXITY INTELLIGENCE API ====================
+
+  // Get AI-powered sentiment analysis for a ticker
+  getMarketSentiment: async (ticker = 'AAPL', includeNews = true) => {
+    try {
+      const resp = await fetchWithRetry(
+        `${BASE_URL}/api/intelligence/sentiment?ticker=${encodeURIComponent(ticker)}&include_news=${includeNews}`
+      );
+      return resp;
+    } catch (e) {
+      console.error('Sentiment fetch failed:', e);
+      return { ticker, mood: 'neutral', confidence: 0, error: e.message };
+    }
+  },
+
+  // Get trending sector analysis
+  getTrendingAnalysis: async (sector = 'technology', focus = 'opportunities') => {
+    try {
+      return await fetchWithRetry(
+        `${BASE_URL}/api/intelligence/trending?sector=${encodeURIComponent(sector)}&focus=${encodeURIComponent(focus)}`
+      );
+    } catch (e) {
+      console.error('Trending fetch failed:', e);
+      return { sector, opportunities: [], risks: [], error: e.message };
+    }
+  },
+
+  // Get AI market commentary from different personas
+  getAICommentary: async (tickers = ['AAPL'], persona = null) => {
+    try {
+      const tickerStr = Array.isArray(tickers) ? tickers.join(',') : tickers;
+      let url = `${BASE_URL}/api/intelligence/commentary?tickers=${encodeURIComponent(tickerStr)}`;
+      if (persona) url += `&persona=${encodeURIComponent(persona)}`;
+      return await fetchWithRetry(url);
+    } catch (e) {
+      console.error('Commentary fetch failed:', e);
+      return { tickers, headline: 'Unavailable', error: e.message };
+    }
+  },
+
+  // Get real-time market context for debates
+  getDebateContext: async (topic, tickers = []) => {
+    try {
+      const tickerStr = tickers.join(',');
+      return await fetchWithRetry(
+        `${BASE_URL}/api/intelligence/debate-context?topic=${encodeURIComponent(topic)}&tickers=${encodeURIComponent(tickerStr)}`
+      );
+    } catch (e) {
+      console.error('Debate context fetch failed:', e);
+      return { topic, error: e.message };
+    }
+  },
+
+  // Search financial news from trusted sources
+  searchFinancialNews: async (query, maxResults = 5, trustedOnly = true) => {
+    try {
+      return await fetchWithRetry(
+        `${BASE_URL}/api/intelligence/search?query=${encodeURIComponent(query)}&max_results=${maxResults}&trusted_sources=${trustedOnly}`
+      );
+    } catch (e) {
+      console.error('News search failed:', e);
+      return { query, results: [], error: e.message };
+    }
+  },
+
+  // Get ticker-specific news (earnings, analyst, sec filings)
+  getTickerNews: async (ticker = 'AAPL', type = 'all') => {
+    try {
+      return await fetchWithRetry(
+        `${BASE_URL}/api/intelligence/ticker-news?ticker=${encodeURIComponent(ticker)}&type=${encodeURIComponent(type)}`
+      );
+    } catch (e) {
+      console.error('Ticker news fetch failed:', e);
+      return { ticker, results: [], error: e.message };
+    }
+  },
+
+  // Check intelligence service status
+  getIntelligenceStatus: async () => {
+    try {
+      return await fetchWithRetry(`${BASE_URL}/api/intelligence/status`);
+    } catch (e) {
+      return { configured: false, error: e.message };
+    }
   }
 };
 
@@ -473,7 +570,7 @@ export const searchMarket = (query, limit = 5) =>
 
 // AI Debate Engine
 export const triggerAIDebate = async (symbol, context = {}) => {
-  return fetchWithRetry(`${BASE_URL}/api/strategy/ai-debate`, {
+  return fetchWithRetry(`${BASE_URL}/api/strategy/ai-debate/trigger`, {
     method: 'POST',
     body: JSON.stringify({
       symbol: symbol.toUpperCase(),
@@ -481,6 +578,10 @@ export const triggerAIDebate = async (symbol, context = {}) => {
     })
   });
 };
+
+// Ingestion Trigger
+export const triggerKnowledgeIngest = () => fetchWithRetry(`${BASE_URL}/api/knowledge/ingest`, { method: 'POST' });
+
 
 // AI Firm Status
 export const getAIFirmStatus = () => fetchWithRetry(`${BASE_URL}/api/ai-firm/status`);

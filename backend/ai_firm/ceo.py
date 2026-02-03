@@ -49,13 +49,20 @@ class AutonomousCEO:
         self.ghost_layer = GhostLayer()
         from .philosophy import PhilosophyManager
         self.philosophy = PhilosophyManager()
-        
-    def make_strategic_decision(self, context: Dict[str, Any]) -> CEODecision:
+        self.perplexity_service = None
+
+    def set_perplexity_service(self, service):
+        """Inject Perplexity service for enhanced intelligence"""
+        self.perplexity_service = service
+        if self.debate_engine:
+            self.debate_engine.set_perplexity_service(service)
+
+    async def make_strategic_decision(self, context: Dict[str, Any]) -> CEODecision:
         """Make strategic decision based on context and memory"""
         
-        # 1. Conduct Multi-Agent Debate
+        # 1. Conduct Multi-Agent Debate (now async)
         ticker = context.get('ticker', 'UNKNOWN')
-        debate_result = self.debate_engine.conduct_debate(ticker, context)
+        debate_result = await self.debate_engine.conduct_debate(ticker, context)
         
         # 2. Analyze context with memory
         memory_insights = self.memory_system.recall_relevant_memories(context)
