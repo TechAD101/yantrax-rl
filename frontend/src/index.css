@@ -184,3 +184,31 @@ h6 {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border-active);
 }
+
+/* Premium Micro-Animations */
+@keyframes agent-pulse {
+  0% { box-shadow: 0 0 5px rgba(0, 255, 148, 0.1); }
+  50% { box-shadow: 0 0 15px rgba(0, 255, 148, 0.3); }
+  100% { box-shadow: 0 0 5px rgba(0, 255, 148, 0.1); }
+}
+
+.agent-cell-active {
+  animation: agent-pulse 3s ease-in-out infinite;
+}
+
+.neon-text-glow {
+  text-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+}
+
+.scanline-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 50%,
+    rgba(0, 255, 148, 0.02) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 10;
+}

@@ -44,24 +44,51 @@ class PersonaRegistry:
         except Exception as e:
             self.logger.error(f"Failed to register Cathie: {e}")
 
-        # TEMPORARILY DISABLED - causing backend crash
-        # try:
-        #     # Import and instantiate The Ghost
-        #     from ai_agents.personas.the_ghost import TheGhostAgent
-        #     ghost = TheGhostAgent()
-        #     self._personas[ghost.name.lower()] = ghost
-        #     self.logger.info(f"✓ Registered persona: {ghost.name} ({ghost.archetype.value})")
-        # except Exception as e:
-        #     self.logger.debug(f"TheGhost not found: {e}")
+        try:
+            # Import and instantiate The Ghost
+            from ai_agents.personas.the_ghost import TheGhostAgent
+            ghost = TheGhostAgent()
+            self._personas[ghost.name.lower()] = ghost
+            self.logger.info(f"✓ Registered persona: {ghost.name} ({ghost.archetype.value})")
+        except Exception as e:
+            self.logger.error(f"Failed to register TheGhost: {e}")
 
-        # try:
-        #     # Import and instantiate Macro Monk
-        #     from ai_agents.personas.macro_monk import MacroMonkAgent
-        #     monk = MacroMonkAgent()
-        #     self._personas[monk.name.lower()] = monk
-        #     self.logger.info(f"✓ Registered persona: {monk.name} ({monk.archetype.value})")
-        # except Exception as e:
-        #     self.logger.debug(f"MacroMonk not found: {e}")
+        try:
+            # Import and instantiate Macro Monk
+            from ai_agents.personas.macro_monk import MacroMonkAgent
+            monk = MacroMonkAgent()
+            self._personas[monk.name.lower()] = monk
+            self.logger.info(f"✓ Registered persona: {monk.name} ({monk.archetype.value})")
+        except Exception as e:
+            self.logger.error(f"Failed to register MacroMonk: {e}")
+
+        # Register placeholders for the rest of the 20+ agents
+        from ai_agents.base_agent import BaseAgent, AgentArchetype
+        placeholders = [
+            ("Quant", AgentArchetype.QUANTATATIVE),
+            ("DegenAuditor", AgentArchetype.SPECULATIVE),
+            ("DataWhisperer", AgentArchetype.QUANTATATIVE),
+            ("LiquidityHunter", AgentArchetype.SYSTEMATIC),
+            ("ArbitrageScout", AgentArchetype.SYSTEMATIC),
+            ("VaRGuardian", AgentArchetype.SYSTEMATIC),
+            ("CorrelationDetective", AgentArchetype.QUANTATATIVE),
+            ("BlackSwanSentinel", AgentArchetype.SPECULATIVE),
+            ("TradeExecutor", AgentArchetype.SYSTEMATIC),
+            ("PortfolioOptimizer", AgentArchetype.SYSTEMATIC),
+            ("SentimentSage", AgentArchetype.GROWTH),
+            ("ValueVulture", AgentArchetype.VALUE),
+            ("AlphaSeeker", AgentArchetype.GROWTH),
+            ("RiskMitigator", AgentArchetype.VALUE),
+            ("MarketOracle", AgentArchetype.SPECULATIVE),
+            ("HedgeWizard", AgentArchetype.VALUE)
+        ]
+
+        for name, archetype in placeholders:
+            if name.lower() not in self._personas:
+                # Create a simple dynamic persona if the specific class doesn't exist
+                placeholder_agent = BaseAgent(name=name, archetype=archetype)
+                self._personas[name.lower()] = placeholder_agent
+                self.logger.debug(f"Registered placeholder persona: {name}")
             
         self.logger.info(f"PersonaRegistry initialized with {len(self._personas)} personas")
     

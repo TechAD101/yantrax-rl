@@ -7,7 +7,7 @@ and decision-making authority over the 20+ agent AI firm.
 import json
 import uuid
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
 import hashlib

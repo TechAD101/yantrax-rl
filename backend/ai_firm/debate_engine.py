@@ -17,13 +17,9 @@ class DebateEngine:
         self.debate_cache = {} # ticker -> {'result': dict, 'expiry': datetime}
         self.cache_ttl_seconds = 30
         
-        # Initialize Personas
-        self.personas = [
-            Warren(),
-            Cathie(),
-            Quant(),
-            DegenAuditor()
-        ]
+        from ai_agents.persona_registry import get_persona_registry
+        self.persona_registry = get_persona_registry()
+        self.personas = self.persona_registry.get_all_personas()
         
         # Perplexity Service placeholder (set by main.py)
         self.perplexity_service = None

@@ -46,7 +46,7 @@ const IntelligencePanel = ({ ticker = 'AAPL', showNews = true }) => {
 
     useEffect(() => {
         fetchIntelligence();
-        const interval = setInterval(fetchIntelligence, 300000); // 5 min refresh
+        const interval = setInterval(fetchIntelligence, 60000); // 1 min refresh
         return () => clearInterval(interval);
     }, [fetchIntelligence]);
 

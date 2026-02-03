@@ -86,7 +86,7 @@ const AIFirmDashboard = () => {
           <NeuralSpine painLevel={painLevel} isPanic={isPanic} />
           <div className="mt-auto group cursor-pointer" onClick={() => navigate('/audit')}>
             <div className="text-[10px] font-mono text-[var(--text-muted)] vertical-text tracking-widest group-hover:text-white transition-colors">
-              SYSTEM.AUDIT.V5.23.STABLE
+              SYSTEM.AUDIT.V5.24.STABLE
             </div>
           </div>
         </div>
@@ -241,7 +241,7 @@ const AIFirmDashboard = () => {
 
                     <div className="grid grid-cols-6 md:grid-cols-12 gap-2 mb-4">
                       {firmStatus.ai_firm?.all_agents?.map((agent, i) => (
-                        <div key={agent.name} className="group/agent relative flex flex-col items-center justify-center p-2 border border-[var(--border-muted)] bg-[var(--bg-surface)] hover:border-[var(--color-info)] transition-colors cursor-help h-12">
+                        <div key={agent.name} className={`group/agent relative flex flex-col items-center justify-center p-2 border border-[var(--border-muted)] bg-[var(--bg-surface)] hover:border-[var(--color-info)] transition-colors cursor-help h-12 ${agent.confidence > 0.5 ? 'agent-cell-active' : ''}`}>
                           <div
                             className={`w-2 h-2 transition-all duration-0 ${agent.confidence > 0.8 ? 'bg-[var(--color-success)]' :
                               agent.confidence > 0.6 ? 'bg-[var(--color-info)]' :

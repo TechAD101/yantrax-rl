@@ -89,7 +89,7 @@ class PerplexityIntelligenceService:
     MODEL = "sonar-pro"  # Perplexity's most capable model
     
     # Cache TTL in seconds
-    SENTIMENT_CACHE_TTL = 300  # 5 minutes
+    SENTIMENT_CACHE_TTL = 60  # 1 minute
     TRENDING_CACHE_TTL = 600  # 10 minutes
     
     def __init__(self, api_key: Optional[str] = None):
