@@ -844,27 +844,36 @@ def massive_quote():
 @app.route('/health', methods=['GET'])
 @handle_errors  
 def detailed_health():
-    return jsonify({
-        'status': 'healthy',
-        'services': {
-            'api': 'operational',
-            'market_data': 'v2' if MARKET_SERVICE_READY else 'fallback',
-            'ai_firm': 'operational' if AI_FIRM_READY else 'fallback',
-            'rl_core': 'operational' if RL_ENV_READY else 'not_loaded'
-        },
-        'ai_firm': {
-            'enabled': AI_FIRM_READY,
-            'agents': 24 if AI_FIRM_READY else 4,
-            'ceo': AI_FIRM_READY,
-            'personas': {'warren': AI_FIRM_READY, 'cathie': AI_FIRM_READY}
-        },
-        'rl_core': {
-            'enabled': RL_ENV_READY,
-            'environment': 'MarketSimEnv' if RL_ENV_READY else None
-        },
-        'performance': error_counts,
-        'timestamp': datetime.now().isoformat()
-    })
+    try:
+        return jsonify({
+            'status': 'healthy',
+            'services': {
+                'api': 'operational',
+                'market_data': 'v2' if MARKET_SERVICE_READY else 'fallback',
+                'ai_firm': 'operational' if AI_FIRM_READY else 'fallback',
+                'rl_core': 'operational' if RL_ENV_READY else 'not_loaded'
+            },
+            'ai_firm': {
+                'enabled': AI_FIRM_READY,
+                'agents': 24 if AI_FIRM_READY else 4,
+                'ceo': AI_FIRM_READY,
+                'personas': {'warren': AI_FIRM_READY, 'cathie': AI_FIRM_READY}
+            },
+            'rl_core': {
+                'enabled': RL_ENV_READY,
+                'environment': 'MarketSimEnv' if RL_ENV_READY else None
+            },
+            'performance': error_counts,
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Health endpoint failed: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'services': {'api': 'error'},
+            'timestamp': datetime.now().isoformat()
+        }), 500
 
 @app.route('/run-cycle', methods=['POST'])
 def run_cycle():
