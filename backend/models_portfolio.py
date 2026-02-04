@@ -29,7 +29,7 @@ class Portfolio(Base):
             'initial_capital': self.initial_capital,
             'current_value': self.current_value,
             'strategy_profile_id': self.strategy_profile_id,
-            'metadata': self.portfolio_metadata,
+            'portfolio_metadata': self.portfolio_metadata,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'positions': [p.to_dict() for p in self.positions]
         }
