@@ -46,7 +46,9 @@ from ai_agents.persona_registry import get_persona_registry
 PERSONA_REGISTRY = get_persona_registry()
 
 # Database helpers
-from db import init_db
+from db import init_db, get_session
+from models import Strategy
+from models_portfolio import Portfolio, PortfolioPosition
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -92,16 +94,26 @@ TRADE_VALIDATOR = registry.get_service('trade_validator')
 # Initialize Market Data
 MARKET_SERVICE_READY = False
 market_data = None
+market_provider = None
 try:
     from services.market_data_service_v2 import MarketDataService, MarketDataConfig
     config_data = Config.get_market_config()
     market_config = MarketDataConfig(**config_data)
     market_data = MarketDataService(market_config)
+    market_provider = market_data  # Fix: Create the market_provider reference
     registry.register_service('market_data', market_data)
     MARKET_SERVICE_READY = True
     logger.info("✅ MarketDataService initialized successfully")
 except Exception as e:
     logger.error(f"❌ MarketDataService initialization failed: {e}")
+    # Fallback to prevent crashes
+    class DummyMarketProvider:
+        def get_price(self, symbol): return {'price': 0, 'error': 'Market data unavailable'}
+        def get_fundamentals(self, symbol): return {}
+        def get_verification_stats(self): return {}
+        def get_price_verified(self, symbol): return {'verified': False, 'price': 0}
+        def get_recent_audit_logs(self, limit): return []
+    market_provider = DummyMarketProvider()
 
 # Initialize AI Firm
 AI_FIRM_READY = False
@@ -147,6 +159,14 @@ metrics_registry = {
     'yantrax_agent_latency_seconds_sum': 0.0,
     'successful_requests': 0,
     'api_call_errors': 0
+}
+
+# Define error_counts to fix undefined variable
+error_counts = {
+    'market_data_errors': 0,
+    'ai_firm_errors': 0,
+    'portfolio_errors': 0,
+    'total_errors': 0
 }
 
 @app.before_request
@@ -210,6 +230,7 @@ def unified_get_market_price(symbol: str) -> Dict[str, Any]:
     massive_key = os.getenv('MASSIVE_API_KEY') or os.getenv('POLYGON_API_KEY') or os.getenv('POLYGON_KEY')
     if massive_key:
         try:
+            from services.market_data_service_massive import MassiveMarketDataService
             msvc = MassiveMarketDataService(api_key=massive_key, base_url=os.getenv('MASSIVE_BASE_URL'))
             data = msvc.fetch_quote(symbol)
             if data and data.get('price'):
@@ -807,6 +828,11 @@ def massive_quote():
             logger.error('MASSIVE/POLYGON API key not configured')
             return jsonify({'status': 'error', 'message': 'MASSIVE/POLYGON API key not configured'}), 400
 
+        try:
+            from services.market_data_service_massive import MassiveMarketDataService
+        except ImportError:
+            return jsonify({'status': 'error', 'message': 'MassiveMarketDataService not available'}), 500
+        
         logger.info(f"Using Massive provider key (first 8 chars): {massive_key[:8]}")
         msvc = MassiveMarketDataService(api_key=massive_key, base_url=base_url)
         data = msvc.fetch_quote(symbol)
@@ -874,18 +900,18 @@ def metrics():
 
 
 @app.route('/god-cycle', methods=['GET'])
-async def god_cycle():
+def god_cycle():
     """Execute 24-agent voting cycle with REAL DATA & Debate Engine"""
     symbol = request.args.get('symbol', 'AAPL').upper()
     
     # 1. Fetch Real Data
     # Use provider shims safely in case market_provider is not fully configured in tests
     try:
-        price_data = market_provider.get_price(symbol)
+        price_data = market_provider.get_price(symbol) if market_provider else {'price': 0, 'source': 'simulated'}
     except Exception:
         price_data = {'price': 0, 'source': 'simulated'}
     try:
-        fundamentals = market_provider.get_fundamentals(symbol)
+        fundamentals = market_provider.get_fundamentals(symbol) if market_provider else {}
     except Exception:
         fundamentals = {}
     
@@ -903,35 +929,54 @@ async def god_cycle():
     }
     
     if AI_FIRM_READY:
-        # 3. CEO Strategic Decision (Triggers Debate & Ghost inside)
-        ceo_decision = await ceo.make_strategic_decision(context)
-        
-        return jsonify({
-            'status': 'success',
-            'symbol': symbol,
-            'signal': ceo_decision.decision_type,
-            'market_data': price_data,
-            'fundamentals': fundamentals,
-            'ceo_decision': {
-                'confidence': ceo_decision.confidence,
-                'reasoning': ceo_decision.reasoning,
-                'id': ceo_decision.id
-            },
-            'timestamp': datetime.now().isoformat()
-        }), 200
-    else:
-        # If AI firm not initialized, return a graceful simulated response (200)
-        logger.warning('AI Firm not initialized; returning simulated god-cycle response')
-        simulated_signal = {'decision_type': 'simulated_hold', 'confidence': 0, 'reasoning': 'simulated', 'id': 'sim_0'}
-        return jsonify({
-            'status': 'simulated',
-            'symbol': symbol,
-            'signal': simulated_signal['decision_type'],
-            'market_data': price_data,
-            'fundamentals': fundamentals,
-            'ceo_decision': simulated_signal,
-            'timestamp': datetime.now().isoformat()
-        }), 200
+        try:
+            # 3. CEO Strategic Decision (Triggers Debate & Ghost inside)
+            # Handle both sync and async CEO decision methods
+            import asyncio
+            try:
+                # Try async first
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                ceo_decision = loop.run_until_complete(ceo.make_strategic_decision(context))
+                loop.close()
+            except (RuntimeError, AttributeError):
+                # Fallback to sync if no event loop available
+                ceo_decision = ceo.make_strategic_decision(context)
+            
+            # Safely extract CEO decision attributes
+            ceo_data = {
+                'confidence': getattr(ceo_decision, 'confidence', 0),
+                'reasoning': getattr(ceo_decision, 'reasoning', 'AI Firm decision'),
+                'id': getattr(ceo_decision, 'id', 'ceo_0'),
+                'decision_type': getattr(ceo_decision, 'decision_type', 'HOLD')
+            }
+            
+            return jsonify({
+                'status': 'success',
+                'symbol': symbol,
+                'signal': ceo_data['decision_type'],
+                'market_data': price_data,
+                'fundamentals': fundamentals,
+                'ceo_decision': ceo_data,
+                'timestamp': datetime.now().isoformat()
+            }), 200
+        except Exception as e:
+            logger.error(f"CEO decision failed: {e}")
+            # Fallback to simulated
+            pass
+    
+    # If AI firm not initialized or CEO decision failed, return graceful simulated response
+    logger.warning('AI Firm not initialized or failed; returning simulated god-cycle response')
+    simulated_signal = {'decision_type': 'simulated_hold', 'confidence': 0, 'reasoning': 'simulated', 'id': 'sim_0'}
+    return jsonify({
+        'status': 'simulated',
+        'symbol': symbol,
+        'signal': simulated_signal['decision_type'],
+        'market_data': price_data,
+        'fundamentals': fundamentals,
+        'ceo_decision': simulated_signal,
+        'timestamp': datetime.now().isoformat()
+    }), 200
 
 @app.route('/api/ai-firm/status', methods=['GET'])
 def ai_firm_status():

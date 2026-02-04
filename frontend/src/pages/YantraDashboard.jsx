@@ -116,9 +116,18 @@ const YantraDashboard = () => {
     setLoading(true);
     try {
       const [cycleData, journalData, commentaryData] = await Promise.allSettled([
-        runRLCycle(),
-        getJournal(),
-        getCommentary()
+        runRLCycle().catch(err => {
+          console.error('RL Cycle failed:', err);
+          return { status: 'error', fallback: true, strategy: 'HOLD', signal: 'WAIT', final_balance: 10000, rl_metrics: { reward: 0 } };
+        }),
+        getJournal().catch(err => {
+          console.error('Journal failed:', err);
+          return [];
+        }),
+        getCommentary().catch(err => {
+          console.error('Commentary failed:', err);
+          return [];
+        })
       ]);
 
       // Process RL Cycle Data
@@ -152,13 +161,14 @@ const YantraDashboard = () => {
 
       // Process Trading Signals
       setTradingSignals(prev => {
+        const cycleValue = cycleData.status === 'fulfilled' ? cycleData.value : (cycleData.fallback ? cycleData : {});
         const newSignal = {
           id: Date.now(),
           timestamp: new Date().toISOString(),
-          signal: cycleData.value?.signal || "WAIT",
+          signal: cycleValue?.signal || "WAIT",
           confidence: Math.random() * 0.3 + 0.7,
           asset: selectedAssets[0],
-          reasoning: "Multi-agent consensus with high conviction"
+          reasoning: cycleData.status === 'rejected' ? "Using fallback data due to backend errors" : "Multi-agent consensus with high conviction"
         };
         return [newSignal, ...prev.slice(0, 9)]; // Keep last 10 signals
       });
