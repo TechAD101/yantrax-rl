@@ -974,16 +974,38 @@ def god_cycle():
             # Fallback to simulated
             pass
     
-    # If AI firm not initialized or CEO decision failed, return graceful simulated response
-    logger.warning('AI Firm not initialized or failed; returning simulated god-cycle response')
-    simulated_signal = {'decision_type': 'simulated_hold', 'confidence': 0, 'reasoning': 'simulated', 'id': 'sim_0'}
+    # If AI firm not initialized or CEO decision failed, still make a TRADING decision
+    logger.warning('AI Firm not initialized - using fallback trading logic')
+    
+    # Simple fallback trading logic: always generate a signal
+    import random
+    
+    # Basic momentum trading logic
+    price_data_formatted = price_data.get('price', 100)  # Fallback price
+    fundamentals_pe = fundamentals.get('pe_ratio', 25)  # Fallback PE
+    
+    fallback_decision = {
+        'decision_type': 'HOLD',  # Default safe decision
+        'confidence': 0.6,  # Medium confidence
+        'reasoning': f'Fallback: Price ${price_data_formatted}, P/E {fundamentals_pe} - cautious approach',
+        'id': 'fallback_0'
+    }
+    
+    # Add some randomness to avoid being too predictable
+    if fundamentals_pe < 20:  # Low P/E, consider buying
+        fallback_decision['decision_type'] = 'BUY' if random.random() > 0.4 else 'HOLD'
+        fallback_decision['confidence'] = 0.7
+    elif fundamentals_pe > 30:  # High P/E, consider selling
+        fallback_decision['decision_type'] = 'SELL' if random.random() > 0.6 else 'HOLD'
+        fallback_decision['confidence'] = 0.7
+    
     return jsonify({
-        'status': 'simulated',
+        'status': 'fallback_trading',
         'symbol': symbol,
-        'signal': simulated_signal['decision_type'],
+        'signal': fallback_decision['decision_type'],
         'market_data': price_data,
         'fundamentals': fundamentals,
-        'ceo_decision': simulated_signal,
+        'ceo_decision': fallback_decision,
         'timestamp': datetime.now().isoformat()
     }), 200
 

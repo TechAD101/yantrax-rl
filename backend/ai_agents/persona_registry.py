@@ -63,24 +63,13 @@ class PersonaRegistry:
             self.logger.error(f"Failed to register MacroMonk: {e}")
 
         # Register placeholders for the rest of the 20+ agents
+        # Money-focused approach: Only keep profitable personas
+        # ELIMINATE: Complex personas that don't drive actual trades
         from ai_agents.base_agent import BaseAgent, AgentArchetype
-        placeholders = [
-            ("Quant", AgentArchetype.QUANTATATIVE),
-            ("DegenAuditor", AgentArchetype.SPECULATIVE),
-            ("DataWhisperer", AgentArchetype.QUANTATATIVE),
-            ("LiquidityHunter", AgentArchetype.SYSTEMATIC),
-            ("ArbitrageScout", AgentArchetype.SYSTEMATIC),
-            ("VaRGuardian", AgentArchetype.SYSTEMATIC),
-            ("CorrelationDetective", AgentArchetype.QUANTATATIVE),
-            ("BlackSwanSentinel", AgentArchetype.SPECULATIVE),
-            ("TradeExecutor", AgentArchetype.SYSTEMATIC),
-            ("PortfolioOptimizer", AgentArchetype.SYSTEMATIC),
-            ("SentimentSage", AgentArchetype.GROWTH),
-            ("ValueVulture", AgentArchetype.VALUE),
-            ("AlphaSeeker", AgentArchetype.GROWTH),
-            ("RiskMitigator", AgentArchetype.VALUE),
-            ("MarketOracle", AgentArchetype.SPECULATIVE),
-            ("HedgeWizard", AgentArchetype.VALUE)
+        profitable_personas = [
+            ("Quant", AgentArchetype.QUANTATATIVE),  # Data-driven trading
+            ("DegenAuditor", AgentArchetype.SPECULATIVE),  # Risk management
+            ("TradeExecutor", AgentArchetype.SYSTEMATIC),  # Execution
         ]
 
         for name, archetype in placeholders:

@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/api';
 import PainMeter from './PainMeter';
-import MarketMoodDial from './MarketMoodDial';
 import InstitutionalReport from './InstitutionalReport';
 import StrategyMarketplace from './StrategyMarketplace';
 import IntelligencePanel from './IntelligencePanel';
-import WisdomPulse from './WisdomPulse';
-import NeuralSpine from './NeuralSpine';
+
+
 
 const AIFirmDashboard = () => {
   const [firmStatus, setFirmStatus] = useState(null);
@@ -21,7 +20,7 @@ const AIFirmDashboard = () => {
 
   useEffect(() => {
     fetchAIFirmData();
-    const interval = setInterval(fetchAIFirmData, 60000); // Update every 1 minute (Global Sync)
+    const interval = setInterval(fetchAIFirmData, 600000); // Update every 10 minutes - reduce API costs
     return () => clearInterval(interval);
   }, []);
 
@@ -83,7 +82,7 @@ const AIFirmDashboard = () => {
       <div className="flex h-screen overflow-hidden">
         {/* Left Sidebar - AI Spine */}
         <div className="w-24 border-r border-[var(--border-muted)] bg-[var(--bg-panel)] flex flex-col items-center py-8 relative">
-          <NeuralSpine painLevel={painLevel} isPanic={isPanic} />
+          {/* ELIMINATED: Neural spine - visual fluff, no trading value */}
           <div className="mt-auto group cursor-pointer" onClick={() => navigate('/audit')}>
             <div className="text-[10px] font-mono text-[var(--text-muted)] vertical-text tracking-widest group-hover:text-white transition-colors">
               SYSTEM.AUDIT.V5.24.STABLE
@@ -187,7 +186,7 @@ const AIFirmDashboard = () => {
                         <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">Market Sentiment Engine</h4>
                         <div className="text-[10px] font-mono text-[var(--color-info)]">MODULE: SENTIMENT</div>
                       </div>
-                      <MarketMoodDial mood={firmStatus.system_performance?.market_mood || 'neutral'} />
+                      {/* ELIMINATED: Market mood dial - doesn't make money */}
                     </div>
                     <div className="neon-card p-6 bg-[var(--bg-surface)]">
                       <div className="border-b border-[var(--border-muted)] mb-4 pb-2 flex justify-between items-center">
@@ -277,7 +276,7 @@ const AIFirmDashboard = () => {
                           — {wisdom.metadata?.source || "YantraX Core DNA"}
                         </div>
                       </div>
-                      <WisdomPulse />
+                      {/* ELIMINATED: Wisdom pulse - no trading value */}
                     </div>
                   )}
 
