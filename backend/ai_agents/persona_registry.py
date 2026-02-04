@@ -113,20 +113,43 @@ class PersonaRegistry:
         if not persona:
             return None
         
-        return {
+        # Check if persona has PersonaAgent attributes
+        has_persona_attrs = hasattr(persona, 'voting_weight')
+        
+        summary = {
             'name': persona.name.lower(),
             'display_name': persona.name,
             'archetype': persona.archetype.value,
-            'voting_weight': persona.voting_weight,
-            'preferred_strategies': persona.preferred_strategies,
-            'department': persona.department,
-            'specialty': persona.specialty,
-            'role': persona.role,
-            'mandate': persona.mandate,
-            'confidence': persona.get_performance_summary().get('confidence', 0.8),
-            'performance': persona.get_performance_summary(),
-            'recent_reasoning': persona.get_recent_reasoning(limit=3)
         }
+        
+        if has_persona_attrs:
+            # Full PersonaAgent summary
+            summary.update({
+                'voting_weight': persona.voting_weight,
+                'preferred_strategies': persona.preferred_strategies,
+                'department': persona.department,
+                'specialty': persona.specialty,
+                'role': persona.role,
+                'mandate': persona.mandate,
+                'confidence': persona.get_performance_summary().get('confidence', 0.8),
+                'performance': persona.get_performance_summary(),
+                'recent_reasoning': persona.get_recent_reasoning(limit=3)
+            })
+        else:
+            # BaseAgent summary
+            summary.update({
+                'voting_weight': 1.0,  # Default weight
+                'preferred_strategies': [],
+                'department': 'placeholder',
+                'specialty': 'general',
+                'role': 'analyst',
+                'mandate': 'Placeholder agent',
+                'confidence': persona.confidence,
+                'performance': {'total_votes': 0, 'confidence': persona.confidence},
+                'recent_reasoning': []
+            })
+        
+        return summary
     
     def get_all_summaries(self) -> List[Dict[str, Any]]:
         """Get summaries of all personas"""

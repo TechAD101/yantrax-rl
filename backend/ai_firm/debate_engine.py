@@ -2,7 +2,6 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
-from .personas import Warren, Cathie, Quant, DegenAuditor
 
 class DebateEngine:
     """
@@ -58,19 +57,28 @@ class DebateEngine:
         
         # 1. Round 1: Initial Analysis
         for persona in self.personas:
-            analysis = persona.analyze(enriched_context, enriched_context)
+            analysis = persona.analyze(enriched_context)
+            
+            # Convert PersonaAnalysis to dict if needed
+            if hasattr(analysis, 'to_dict'):
+                analysis_dict = analysis.to_dict()
+            else:
+                analysis_dict = analysis
             
             # Only include if confidence meets threshold
-            if analysis['confidence'] >= persona.confidence_threshold:
+            confidence = analysis_dict.get('confidence', 0.5)
+            threshold = getattr(persona, 'confidence_threshold', 0.6)
+            
+            if confidence >= threshold:
                 arguments.append({
                     'agent': persona.name,
-                    'role': persona.role,
-                    'signal': analysis['signal'],
-                    'reasoning': analysis['reasoning'],
-                    'concerns': analysis['concerns'],
-                    'weight': persona.vote_weight * analysis['confidence'],
-                    'confidence': analysis['confidence'],
-                    'quote': persona.get_philosophy_quote(),
+                    'role': getattr(persona, 'role', 'analyst'),
+                    'signal': analysis_dict.get('signal', 'HOLD'),
+                    'reasoning': analysis_dict.get('reasoning', ''),
+                    'concerns': analysis_dict.get('concerns', []),
+                    'weight': getattr(persona, 'voting_weight', 1.0) * confidence,
+                    'confidence': confidence,
+                    'quote': getattr(persona, 'get_philosophy_quote', lambda: 'Market wisdom')(),
                     'rebuttals': []
                 })
         
