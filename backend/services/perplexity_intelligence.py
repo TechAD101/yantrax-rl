@@ -89,12 +89,14 @@ class PerplexityIntelligenceService:
     MODEL = "sonar-pro"  # Perplexity's most capable model
     
     # Cache TTL in seconds
-    SENTIMENT_CACHE_TTL = 60  # 1 minute
-    TRENDING_CACHE_TTL = 600  # 10 minutes
+    SENTIMENT_CACHE_TTL = 3600  # 1 hour
+    TRENDING_CACHE_TTL = 3600  # 1 hour
+    COMPREHENSIVE_CACHE_TTL = 3600  # 1 hour
+    RATE_LIMIT_COOLDOWN = 3600  # 1 hour between API calls
     
     def __init__(self, api_key: Optional[str] = None):
         """
-        Initialize the Perplexity Intelligence Service.
+        Initialize Perplexity Intelligence Service.
         
         Args:
             api_key: Perplexity API key. If not provided, will try environment.
@@ -102,6 +104,7 @@ class PerplexityIntelligenceService:
         self.api_key = api_key or os.getenv("PERPLEXITY_API_KEY")
         self._cache: Dict[str, Any] = {}
         self._cache_timestamps: Dict[str, datetime] = {}
+        self._last_api_call: Optional[datetime] = None
         
         if not self.api_key:
             logger.warning(
@@ -119,6 +122,19 @@ class PerplexityIntelligenceService:
             return False
         age = (datetime.now() - self._cache_timestamps[key]).total_seconds()
         return age < ttl
+    
+    def _can_make_api_call(self) -> bool:
+        """Check if we can make an API call based on rate limiting."""
+        if not self._last_api_call:
+            return True
+        
+        time_since_last = (datetime.now() - self._last_api_call).total_seconds()
+        return time_since_last >= self.RATE_LIMIT_COOLDOWN
+    
+    def _update_api_call_timestamp(self):
+        """Update the timestamp of the last API call."""
+        self._last_api_call = datetime.now()
+        logger.info("🕐 Perplexity API call timestamp updated. Next call allowed in 1 hour.")
     
     async def _call_perplexity(
         self, 
@@ -208,29 +224,53 @@ class PerplexityIntelligenceService:
     
     async def get_market_sentiment(
         self, 
-        ticker: str,
+        ticker: str, 
         include_news: bool = True
     ) -> MarketSentiment:
         """
-        Get real-time market sentiment for a ticker.
-        
-        Args:
-            ticker: Stock ticker symbol (e.g., "AAPL")
-            include_news: Whether to include recent news analysis
-            
-        Returns:
-            MarketSentiment object with analysis
+        Get market sentiment using comprehensive data to minimize API calls.
         """
         cache_key = f"sentiment_{ticker}"
         
-        # Check cache
+        # Check cache first
         if self._is_cache_valid(cache_key, self.SENTIMENT_CACHE_TTL):
             logger.debug(f"Returning cached sentiment for {ticker}")
             return self._cache[cache_key]
         
-        system_prompt = """You are a senior financial analyst at a major investment firm.
-Analyze market sentiment with precision. Always respond in valid JSON format.
-Focus on: recent news, price action, analyst opinions, social sentiment, and macro factors."""
+        # Use comprehensive data approach
+        try:
+            comprehensive_data = await self.get_comprehensive_market_data([ticker], include_news=include_news)
+            comp_data = comprehensive_data.get('comprehensive_data', {})
+            
+            # Extract sentiment from comprehensive data
+            sentiment = MarketSentiment(
+                ticker=ticker,
+                mood=comp_data.get('market_sentiment', 'neutral'),
+                confidence=comp_data.get('confidence', 0.7),
+                summary=f"Based on comprehensive analysis: {comp_data.get('market_sentiment', 'neutral')} sentiment with key factors: {', '.join(comp_data.get('risk_factors', ['Market conditions'])[:2])}",
+                key_factors=comp_data.get('risk_factors', ['Limited data available']),
+                sources=['Perplexity AI'],
+                timestamp=datetime.now().isoformat()
+            )
+            
+        except Exception as e:
+            logger.warning(f"Failed to get comprehensive sentiment for {ticker}: {e}")
+            # Fallback
+            sentiment = MarketSentiment(
+                ticker=ticker,
+                mood='neutral',
+                confidence=0.5,
+                summary='Limited data available due to rate limiting',
+                key_factors=['Rate limit active'],
+                sources=['Fallback'],
+                timestamp=datetime.now().isoformat()
+            )
+        
+        # Cache for 1 hour
+        self._cache[cache_key] = sentiment
+        self._cache_timestamps[cache_key] = datetime.now()
+        
+        return sentiment
         
         prompt = f"""Analyze the current market sentiment for {ticker} stock.
 
@@ -461,72 +501,144 @@ Be specific with price levels, catalysts, and actionable insights."""
             timestamp=datetime.now().isoformat()
         )
     
+    async def get_comprehensive_market_data(self, tickers: List[str], sectors: Optional[List[str]] = None, include_news: bool = True) -> Dict[str, Any]:
+        """
+        Get ALL market data in ONE API call to minimize Perplexity usage.
+        
+        Args:
+            tickers: List of tickers to analyze
+            sectors: Optional list of sectors to analyze
+            include_news: Whether to include news analysis
+            
+        Returns:
+            Comprehensive market data covering all use cases
+        """
+        if not self._can_make_api_call():
+            logger.warning("Perplexity API rate limit reached. Using cached/fallback data.")
+            return self._get_fallback_market_data(tickers)
+        
+        ticker_str = ', '.join(tickers)
+        sector_str = ', '.join(sectors or [])
+        
+        # Build comprehensive prompt to get everything in one call
+        prompt = f"""Generate comprehensive market analysis for following:
+        
+        TICKERS: {ticker_str}
+        SECTORS: {sector_str or 'General market'}
+        
+        Provide structured analysis covering:
+        1. Overall market sentiment (bullish/bearish/neutral)
+        2. Key risk factors and catalysts
+        3. Recent market trends affecting these assets
+        4. Trading opportunities and concerns
+        5. Sector rotation insights (if sectors provided)
+        6. {include_news and 'Key recent news/events' or ''}
+        
+        Format response as structured JSON with these exact keys:
+        {{"market_sentiment": "...", "risk_factors": [...], "trends": [...], "opportunities": [...], "sector_insights": {...}, "news_summary": "...", "technical_context": "...", "confidence": 0.0-1.0}}
+        """
+        
+        response = await self._call_perplexity(
+            prompt=prompt,
+            system_prompt="You are a market intelligence expert. Provide structured, factual analysis suitable for investment decisions. Include confidence levels."
+        )
+        
+        # Parse response (try to extract structured data)
+        try:
+            if response and response.startswith('{'):
+                parsed = json.loads(response)
+                result = {
+                    'comprehensive_data': parsed,
+                    'market_context': response,
+                    'tickers': tickers,
+                    'timestamp': datetime.now().isoformat(),
+                    'confidence': parsed.get('confidence', 0.8)
+                }
+            else:
+                # Fallback if not JSON
+                result = {
+                    'comprehensive_data': {
+                        'market_sentiment': 'neutral',
+                        'risk_factors': ['High volatility detected'],
+                        'trends': ['Mixed signals'],
+                        'confidence': 0.7
+                    },
+                    'market_context': response,
+                    'tickers': tickers,
+                    'timestamp': datetime.now().isoformat()
+                }
+        except Exception as e:
+            logger.warning(f"Failed to parse Perplexity response: {e}")
+            result = self._get_fallback_market_data(tickers)
+        
+        # Update rate limiting
+        self._update_api_call_timestamp()
+        
+        # Cache for 1 hour
+        cache_key = f"comprehensive_{','.join(sorted(tickers))}_{include_news}"
+        self._cache[cache_key] = result
+        self._cache_timestamps[cache_key] = datetime.now()
+        
+        return result
+
+    def _get_fallback_market_data(self, tickers: List[str]) -> Dict[str, Any]:
+        """Generate fallback data when API is rate limited."""
+        return {
+            'comprehensive_data': {
+                'market_sentiment': 'neutral',
+                'risk_factors': ['Rate limit active - using caution'],
+                'trends': ['Limited data available'],
+                'confidence': 0.5
+            },
+            'market_context': 'Limited by rate limit - using fallback analysis',
+            'tickers': tickers,
+            'timestamp': datetime.now().isoformat(),
+            'rate_limited': True
+        }
+
     async def get_debate_context(
         self,
         topic: str,
         tickers: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
-        Get market context for the AI Firm debate engine.
-        
-        This method provides real-time intelligence that can be used
-        by the debate engine to inform persona discussions.
-        
-        Args:
-            topic: The debate topic (e.g., "Should we buy AAPL?")
-            tickers: Optional list of relevant tickers
-            
-        Returns:
-            Dict with market context for debate
+        Get market context for AI Firm debate engine.
+        Uses comprehensive data to avoid additional API calls.
         """
+        # Use comprehensive data instead of multiple API calls
+        if not tickers:
+            tickers = []
+            
+        comprehensive_data = await self.get_comprehensive_market_data(tickers, [topic], include_news=True)
+        
+        # Extract individual sentiments from comprehensive data
+        sentiments = []
+        if not comprehensive_data.get('rate_limited'):
+            # Generate sentiment for each ticker from comprehensive data
+            base_sentiment = comprehensive_data['comprehensive_data'].get('market_sentiment', 'neutral')
+            for ticker in tickers[:3]:  # Limit to 3 as before
+                sentiments.append({
+                    'ticker': ticker,
+                    'mood': base_sentiment,
+                    'confidence': comprehensive_data['comprehensive_data'].get('confidence', 0.7),
+                    'summary': f"Based on comprehensive market analysis: {base_sentiment} sentiment",
+                    'key_factors': comprehensive_data['comprehensive_data'].get('risk_factors', ['Limited data']),
+                    'sources': ['Perplexity AI'],
+                    'timestamp': datetime.now().isoformat()
+                })
+        
         context = {
             "timestamp": datetime.now().isoformat(),
             "topic": topic,
-            "tickers": tickers or [],
-            "sentiments": [],
-            "market_condition": "unknown",
-            "key_insights": [],
+            "tickers": tickers,
+            "sentiments": sentiments,
+            "market_condition": comprehensive_data['comprehensive_data'].get('market_sentiment', 'unknown'),
+            "key_insights": comprehensive_data['comprehensive_data'].get('trends', ['Limited data']),
+            "market_context": comprehensive_data.get('market_context', 'Market data unavailable'),
+            "volatility": "medium",  # Default
+            "recommendation_bias": "hold",  # Default
+            "rate_limited": comprehensive_data.get('rate_limited', False)
         }
-        
-        # Gather sentiment for each ticker
-        if tickers:
-            for ticker in tickers[:3]:  # Limit to 3 to avoid rate limits
-                try:
-                    sentiment = await self.get_market_sentiment(ticker)
-                    context["sentiments"].append(sentiment.to_dict())
-                except Exception as e:
-                    logger.warning(f"Failed to get sentiment for {ticker}: {e}")
-        
-        # Generate overall market insight
-        system_prompt = """You are a market intelligence system providing context for AI trading decisions.
-Be concise, factual, and focus on actionable information."""
-        
-        prompt = f"""Provide market context for this trading decision:
-Topic: {topic}
-Tickers: {', '.join(tickers) if tickers else 'General market'}
-
-Respond with a JSON object:
-{{
-    "market_condition": "bullish|bearish|choppy|trending",
-    "volatility": "low|medium|high",
-    "key_insights": ["insight 1", "insight 2", "insight 3"],
-    "recommendation_bias": "buy|sell|hold|wait"
-}}"""
-        
-        response = await self._call_perplexity(prompt, system_prompt)
-        
-        if response:
-            try:
-                json_str = response
-                if "```json" in response:
-                    json_str = response.split("```json")[1].split("```")[0]
-                elif "```" in response:
-                    json_str = response.split("```")[1].split("```")[0]
-                
-                data = json.loads(json_str.strip())
-                context.update(data)
-            except json.JSONDecodeError:
-                pass
         
         return context
     
