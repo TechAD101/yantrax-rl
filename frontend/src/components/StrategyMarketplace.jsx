@@ -14,10 +14,22 @@ const StrategyMarketplace = () => {
                     api.getTopStrategies(5),
                     api.getActiveContest()
                 ]);
-                setStrategies(stratData || []);
+                // Handle different response formats
+                let strategiesArray = [];
+                if (stratData) {
+                    if (Array.isArray(stratData)) {
+                        strategiesArray = stratData;
+                    } else if (stratData.strategies && Array.isArray(stratData.strategies)) {
+                        strategiesArray = stratData.strategies;
+                    } else {
+                        console.warn('Unexpected strategies data format:', stratData);
+                    }
+                }
+                setStrategies(strategiesArray);
                 setContest(contestData);
             } catch (err) {
                 console.error("Marketplace load error", err);
+                setStrategies([]); // Ensure strategies is always an array
             } finally {
                 setLoading(false);
             }

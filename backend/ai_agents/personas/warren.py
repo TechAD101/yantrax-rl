@@ -235,8 +235,11 @@ class WarrenAgent(PersonaAgent):
         symbol = context.get('symbol', 'UNKNOWN')
         
         # Run Warren's existing analysis pipeline
-        fundamental_score = self._analyze_fundamentals(context)
-        valuation = self._assess_valuation(context)
+        fundamentals_data = context.get('fundamentals', {})
+        market_data = context.get('market_data', {})
+        
+        fundamental_score = self._calculate_fundamental_score(fundamentals_data)
+        valuation = self._assess_valuation(fundamentals_data, market_data)
         moat = self._evaluate_economic_moat(context)
         recommendation = self._generate_recommendation(fundamental_score, valuation, moat)
         risk_assessment = self._assess_warren_risk(context.get('fundamentals', {}))
