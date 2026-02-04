@@ -1,5 +1,6 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, JSON
+from typing import Optional, Dict, Any
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, JSON, Boolean, Index
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -14,13 +15,18 @@ class User(Base):
     email = Column(String(128), nullable=False, unique=True)
     password_hash = Column(String(256), nullable=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    
+    __table_args__ = (
+        Index('idx_user_username', 'username'),
+        Index('idx_user_email', 'email'),
+    )
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return {
             'id': self.id,
             'username': self.username,
             'email': self.email,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': self.created_at.isoformat() if self.created_at is not None else None
         }
 
 
@@ -28,17 +34,22 @@ class JournalEntry(Base):
     __tablename__ = 'journal_entries'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True)  # Link to user
+    portfolio_id = Column(Integer, ForeignKey('portfolios.id'), nullable=True)  # Link to portfolio
     timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)
     action = Column(String(32), nullable=False)
     reward = Column(Float, nullable=True)
     balance = Column(Float, nullable=True)
     notes = Column(Text, nullable=True)
     confidence = Column(Float, nullable=True)
+    
+    user = relationship('User', backref='journal_entries')
+    portfolio = relationship('Portfolio', backref='journal_entries')
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return {
             'id': self.id,
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'timestamp': self.timestamp.isoformat() if self.timestamp is not None else None,
             'action': self.action,
             'reward': self.reward,
             'balance': self.balance,
@@ -57,13 +68,13 @@ class StrategyProfile(Base):
     params = Column(JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return {
             'id': self.id,
             'name': self.name,
             'archetype': self.archetype,
             'params': self.params,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': self.created_at.isoformat() if self.created_at is not None else None
         }
 
 
@@ -79,7 +90,7 @@ class Strategy(Base):
     metrics = Column(JSON, nullable=True)  # {win_rate, sharpe, aum}
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return {
             'id': self.id,
             'name': self.name,
@@ -88,7 +99,7 @@ class Strategy(Base):
             'params': self.params,
             'published': bool(self.published),
             'metrics': self.metrics or {},
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': self.created_at.isoformat() if self.created_at is not None else None
         }
 
 
@@ -108,7 +119,7 @@ class Portfolio(Base):
     positions = relationship('PortfolioPosition', back_populates='portfolio', cascade='all, delete-orphan')
     strategy_profile = relationship('StrategyProfile')
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return {
             'id': self.id,
             'name': self.name,
@@ -118,7 +129,7 @@ class Portfolio(Base):
             'current_value': self.current_value,
             'strategy_profile_id': self.strategy_profile_id,
             'meta': self.meta,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at is not None else None,
             'positions': [p.to_dict() for p in self.positions]
         }
 
@@ -132,14 +143,17 @@ class Memecoin(Base):
     score = Column(Float, nullable=False, default=0.0)
     meta = Column(JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    
+    # Relationships
+    positions = relationship('PortfolioPosition', backref='memecoin')
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return {
             'id': self.id,
             'symbol': self.symbol,
             'score': self.score,
-            'metadata': self.meta or {},
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'meta': self.meta or {},
+            'created_at': self.created_at.isoformat() if self.created_at is not None else None
         }
 
 
@@ -154,15 +168,20 @@ class PortfolioPosition(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     portfolio = relationship('Portfolio', back_populates='positions')
+    
+    __table_args__ = (
+        Index('idx_position_portfolio', 'portfolio_id'),
+        Index('idx_position_symbol', 'symbol'),
+    )
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return {
             'id': self.id,
             'portfolio_id': self.portfolio_id,
             'symbol': self.symbol,
             'quantity': self.quantity,
             'avg_price': self.avg_price,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': self.created_at.isoformat() if self.created_at is not None else None
         }
 
 
@@ -171,6 +190,7 @@ class Order(Base):
     __tablename__ = 'orders'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    portfolio_id = Column(Integer, ForeignKey('portfolios.id'), nullable=False)  # Link to portfolio
     symbol = Column(String(32), nullable=False)
     usd = Column(Float, nullable=False)
     quantity = Column(Float, nullable=False, default=0.0)
@@ -179,8 +199,17 @@ class Order(Base):
     meta = Column(JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     executed_at = Column(DateTime, nullable=True)
+    
+    portfolio = relationship('Portfolio', backref='orders')
+    
+    __table_args__ = (
+        Index('idx_order_portfolio', 'portfolio_id'),
+        Index('idx_order_symbol', 'symbol'),
+        Index('idx_order_status', 'status'),
+        Index('idx_order_created', 'created_at'),
+    )
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return {
             'id': self.id,
             'symbol': self.symbol,
@@ -189,6 +218,6 @@ class Order(Base):
             'price': self.price,
             'status': self.status,
             'meta': self.meta or {},
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'executed_at': self.executed_at.isoformat() if self.executed_at else None
+            'created_at': self.created_at.isoformat() if self.created_at is not None else None,
+            'executed_at': self.executed_at.isoformat() if self.executed_at is not None else None
         }
