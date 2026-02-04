@@ -14,7 +14,7 @@ class Portfolio(Base):
     initial_capital = Column(Float, nullable=False, default=100000.0)
     current_value = Column(Float, nullable=True)
     strategy_profile_id = Column(Integer, ForeignKey('strategy_profiles.id'), nullable=True)
-    metadata = Column(JSON, nullable=True)
+    portfolio_metadata = Column(JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     positions = relationship('PortfolioPosition', back_populates='portfolio', cascade='all, delete-orphan')
@@ -29,7 +29,7 @@ class Portfolio(Base):
             'initial_capital': self.initial_capital,
             'current_value': self.current_value,
             'strategy_profile_id': self.strategy_profile_id,
-            'metadata': self.metadata,
+            'metadata': self.portfolio_metadata,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'positions': [p.to_dict() for p in self.positions]
         }
