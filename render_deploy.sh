@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # render_deploy.sh - Production Deploy Script for Yantra X
-# Force redeploy: 2026-02-04T01:05:00Z
+# Force redeploy: 2026-02-06T00:00:00Z
 set -e
 
 echo "🌊 Starting Yantra X Institutional Deployment..."
@@ -10,7 +10,14 @@ echo "🐍 Environment Statistics:"
 python --version
 pip --version
 
-# 2. Run the application
+# 2. Verify gunicorn installation
+echo "🔍 Checking Gunicorn installation..."
+if ! python -c "import gunicorn; print('Gunicorn version:', gunicorn.__version__)"; then
+    echo "❌ Gunicorn not found, installing..."
+    pip install gunicorn==22.0.0
+fi
+
+# 3. Run the application
 echo "🏢 Starting Institutional Gunicorn server..."
 # Standardizing on Render's dynamic port
 export PORT=${PORT:-10000}
@@ -18,4 +25,4 @@ cd backend
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 echo "🚀 Deployment Port: $PORT"
 echo "✅ System Version: 5.23-STABLE"
-python -m gunicorn wsgi:app --bind 0.0.0.0:$PORT --log-level info --timeout 120 --workers 2
+exec python -m gunicorn wsgi:app --bind 0.0.0.0:$PORT --log-level info --timeout 120 --workers 2

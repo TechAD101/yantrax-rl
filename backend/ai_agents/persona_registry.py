@@ -72,12 +72,12 @@ class PersonaRegistry:
             ("TradeExecutor", AgentArchetype.SYSTEMATIC),  # Execution
         ]
 
-        for name, archetype in placeholders:
+        for name, archetype in profitable_personas:
             if name.lower() not in self._personas:
                 # Create a simple dynamic persona if the specific class doesn't exist
                 placeholder_agent = BaseAgent(name=name, archetype=archetype)
                 self._personas[name.lower()] = placeholder_agent
-                self.logger.debug(f"Registered placeholder persona: {name}")
+                self.logger.debug(f"Registered MONEY-FOCUSED persona: {name}")
             
         self.logger.info(f"PersonaRegistry initialized with {len(self._personas)} personas")
     
