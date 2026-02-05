@@ -14,8 +14,6 @@ from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
 import requests
 import json
-import asyncio
-import aiohttp
 
 class MarketSentimentService:
     """Advanced sentiment analysis for institutional trading decisions"""

@@ -34,6 +34,7 @@ import asyncio
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from sqlalchemy import func, Float
+import numpy as np
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -92,14 +93,26 @@ PERPLEXITY_READY = bool(PERPLEXITY_SERVICE and PERPLEXITY_SERVICE.is_configured(
 TRADE_VALIDATOR = registry.get_service('trade_validator')
 
 # Initialize Advanced Market Sentiment Service
-from services.market_sentiment_service import get_sentiment_service
-SENTIMENT_SERVICE = get_sentiment_service()
-SENTIMENT_READY = bool(SENTIMENT_SERVICE)
+try:
+    from services.market_sentiment_service import get_sentiment_service
+    SENTIMENT_SERVICE = get_sentiment_service()
+    SENTIMENT_READY = bool(SENTIMENT_SERVICE)
+    logger.info("✅ Market Sentiment Service initialized")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize Market Sentiment Service: {e}")
+    SENTIMENT_SERVICE = None
+    SENTIMENT_READY = False
 
 # Initialize Institutional Strategy Engine
-from services.institutional_strategy_engine import get_strategy_engine
-STRATEGY_ENGINE = get_strategy_engine()
-STRATEGY_ENGINE_READY = bool(STRATEGY_ENGINE)
+try:
+    from services.institutional_strategy_engine import get_strategy_engine
+    STRATEGY_ENGINE = get_strategy_engine()
+    STRATEGY_ENGINE_READY = bool(STRATEGY_ENGINE)
+    logger.info("✅ Institutional Strategy Engine initialized")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize Institutional Strategy Engine: {e}")
+    STRATEGY_ENGINE = None
+    STRATEGY_ENGINE_READY = False
 
 # Initialize Market Data
 MARKET_SERVICE_READY = False
@@ -1348,14 +1361,24 @@ def institutional_strategy():
         current_price = price_data.get('price', 100)
         
         # Generate synthetic price history for technical analysis
-        price_history = [current_price * (1 + np.sin(i/10) * 0.02 + np.random.normal(0, 0.01)) for i in range(50)]
+        try:
+            price_history = [current_price * (1 + np.sin(i/10) * 0.02 + np.random.normal(0, 0.01)) for i in range(50)]
+            volatility = float(np.std(np.diff(price_history)))
+            volume = int(np.random.randint(100000, 5000000))
+            trend = 'bullish' if np.random.random() > 0.5 else 'bearish'
+        except Exception as e:
+            logger.error(f"Error generating market data: {e}")
+            price_history = [current_price] * 50
+            volatility = 0.02
+            volume = 1000000
+            trend = 'neutral'
         
         enhanced_market_data = {
             'price': current_price,
             'price_history': price_history,
-            'volatility': np.std(np.diff(price_history)),
-            'volume': np.random.randint(100000, 5000000),
-            'trend': 'bullish' if np.random.random() > 0.5 else 'bearish',
+            'volatility': volatility,
+            'volume': volume,
+            'trend': trend,
             'volume_trend': np.random.choice(['increasing', 'decreasing', 'stable'])
         }
         
