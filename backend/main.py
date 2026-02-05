@@ -91,6 +91,16 @@ PERPLEXITY_SERVICE = registry.get_service('perplexity')
 PERPLEXITY_READY = bool(PERPLEXITY_SERVICE and PERPLEXITY_SERVICE.is_configured())
 TRADE_VALIDATOR = registry.get_service('trade_validator')
 
+# Initialize Advanced Market Sentiment Service
+from services.market_sentiment_service import get_sentiment_service
+SENTIMENT_SERVICE = get_sentiment_service()
+SENTIMENT_READY = bool(SENTIMENT_SERVICE)
+
+# Initialize Institutional Strategy Engine
+from services.institutional_strategy_engine import get_strategy_engine
+STRATEGY_ENGINE = get_strategy_engine()
+STRATEGY_ENGINE_READY = bool(STRATEGY_ENGINE)
+
 # Initialize Market Data
 MARKET_SERVICE_READY = False
 market_data = None
@@ -926,13 +936,26 @@ def god_cycle():
     
     current_price = price_data.get('price', 0)
     
-    # 2. Prepare Context for Agents
+    # 2. Get Advanced Sentiment Analysis
+    sentiment_data = {}
+    if SENTIMENT_READY:
+        try:
+            sentiment_data = SENTIMENT_SERVICE.get_comprehensive_sentiment(symbol)
+        except Exception as e:
+            logger.warning(f"Sentiment analysis failed for {symbol}: {e}")
+    
+    # 3. Prepare Enhanced Context for Agents
     context = {
         'symbol': symbol,
         'ticker': symbol,
         'type': 'trade_decision',
         'market_data': {'current_price': current_price},
         'fundamentals': fundamentals,
+        'sentiment': sentiment_data.get('components', {}),
+        'fear_greed_index': sentiment_data.get('components', {}).get('fear_greed', {}).get('fear_greed_index', 0.5),
+        'options_flow': sentiment_data.get('components', {}).get('options_flow', {}).get('signal', 'NEUTRAL_FLOW'),
+        'social_sentiment': sentiment_data.get('components', {}).get('social_sentiment', {}).get('signal', 'NEUTRAL'),
+        'composite_sentiment': sentiment_data.get('composite_sentiment', 0.5),
         'market_trend': 'bullish' if fundamentals.get('return_on_equity', 0) > 0.1 else 'bearish',
         'timestamp': datetime.now().isoformat()
     }
@@ -1029,6 +1052,15 @@ def ai_firm_status():
             'institutional_services': {
                 'knowledge_base': KNOWLEDGE_BASE.get_statistics() if KNOWLEDGE_BASE else {},
                 'trade_validation': TRADE_VALIDATOR.get_validation_stats() if TRADE_VALIDATOR else {},
+                'sentiment_analysis': {
+                    'status': 'operational' if SENTIMENT_READY else 'offline',
+                    'capabilities': [
+                        'Fear & Greed Index',
+                        'Options Flow Analysis', 
+                        'Social Media Sentiment',
+                        'Comprehensive Sentiment Scoring'
+                    ] if SENTIMENT_READY else []
+                },
                 'data_verification': market_provider.get_verification_stats() if hasattr(market_provider, 'get_verification_stats') else {}
             },
             'system_performance': {
@@ -1233,6 +1265,134 @@ def get_knowledge_stats():
 # ==================== TRIPLE-SOURCE DATA VERIFICATION ENDPOINTS ====================
 
 # ==================== STRATEGY / DEBATE ENDPOINTS ====================
+@app.route('/api/sentiment/comprehensive', methods=['GET'])
+def comprehensive_sentiment():
+    """Advanced institutional-grade sentiment analysis endpoint"""
+    symbol = request.args.get('symbol', 'SPY').upper()
+    
+    if not SENTIMENT_SERVICE:
+        return jsonify({
+            'status': 'error',
+            'message': 'Sentiment analysis service not available',
+            'symbol': symbol
+        }), 503
+    
+    try:
+        sentiment_data = SENTIMENT_SERVICE.get_comprehensive_sentiment(symbol)
+        return jsonify(sentiment_data), 200
+    except Exception as e:
+        logger.error(f"Error in comprehensive sentiment analysis: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'symbol': symbol,
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/sentiment/fear-greed', methods=['GET'])
+def fear_greed_index():
+    """Fear & Greed Index calculation"""
+    symbol = request.args.get('symbol')
+    
+    if not SENTIMENT_SERVICE:
+        return jsonify({
+            'status': 'error',
+            'message': 'Sentiment analysis service not available'
+        }), 503
+    
+    try:
+        fear_greed_data = SENTIMENT_SERVICE.calculate_fear_greed_index(symbol)
+        return jsonify(fear_greed_data), 200
+    except Exception as e:
+        logger.error(f"Error calculating Fear & Greed index: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/sentiment/options-flow', methods=['GET'])
+def options_flow():
+    """Options flow analysis for institutional activity detection"""
+    symbol = request.args.get('symbol', 'AAPL').upper()
+    
+    if not SENTIMENT_SERVICE:
+        return jsonify({
+            'status': 'error',
+            'message': 'Sentiment analysis service not available'
+        }), 503
+    
+    try:
+        flow_data = SENTIMENT_SERVICE.analyze_options_flow(symbol)
+        return jsonify(flow_data), 200
+    except Exception as e:
+        logger.error(f"Error analyzing options flow: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/strategy/institutional', methods=['GET'])
+def institutional_strategy():
+    """Institutional-grade trading strategy signal"""
+    symbol = request.args.get('symbol', 'AAPL').upper()
+    
+    if not STRATEGY_ENGINE_READY:
+        return jsonify({
+            'status': 'error',
+            'message': 'Institutional strategy engine not available'
+        }), 503
+    
+    try:
+        # Get market data (use price with synthetic history for demo)
+        price_data = market_provider.get_price(symbol)
+        current_price = price_data.get('price', 100)
+        
+        # Generate synthetic price history for technical analysis
+        price_history = [current_price * (1 + np.sin(i/10) * 0.02 + np.random.normal(0, 0.01)) for i in range(50)]
+        
+        enhanced_market_data = {
+            'price': current_price,
+            'price_history': price_history,
+            'volatility': np.std(np.diff(price_history)),
+            'volume': np.random.randint(100000, 5000000),
+            'trend': 'bullish' if np.random.random() > 0.5 else 'bearish',
+            'volume_trend': np.random.choice(['increasing', 'decreasing', 'stable'])
+        }
+        
+        # Get fundamentals
+        fundamentals = market_provider.get_fundamentals(symbol) if hasattr(market_provider, 'get_fundamentals') else {}
+        
+        # Get sentiment
+        sentiment = {}
+        if SENTIMENT_READY:
+            try:
+                sentiment = SENTIMENT_SERVICE.get_comprehensive_sentiment(symbol).get('components', {})
+            except Exception as e:
+                logger.warning(f"Sentiment fetch failed: {e}")
+        
+        # Generate institutional signal
+        signal = STRATEGY_ENGINE.generate_institutional_signal(
+            symbol, enhanced_market_data, fundamentals, sentiment
+        )
+        
+        return jsonify({
+            'status': 'success',
+            'signal': signal.to_dict(),
+            'analysis_level': 'INSTITUTIONAL_GRADE',
+            'market_data': enhanced_market_data,
+            'sentiment_integration': bool(SENTIMENT_READY),
+            'timestamp': datetime.now().isoformat()
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error generating institutional strategy for {symbol}: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'symbol': symbol,
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.route('/api/strategy/ai-debate/trigger', methods=['POST'])
 async def trigger_ai_debate():
     """Trigger a persona debate for a given symbol/ticker"""

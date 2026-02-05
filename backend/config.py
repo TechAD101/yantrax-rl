@@ -13,8 +13,10 @@ class Config:
     DEBUG = os.getenv('DEBUG', 'true').lower() == 'true'
     PORT = int(os.getenv('PORT', 5000))
     
-    # API Keys
-    FMP_API_KEY = os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY') or os.getenv('FMP') or '14uTc09TMyUVJEuFKriHayCTnLcyGhyy'
+# API Keys - Environment variables required for production
+    FMP_API_KEY = os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY')
+    if not FMP_API_KEY:
+        logger.warning("FMP_API_KEY not found in environment. Market data may be limited.")
     ALPACA_API_KEY = os.getenv('ALPACA_API_KEY', '')
     ALPACA_SECRET_KEY = os.getenv('ALPACA_SECRET_KEY', '')
     PERPLEXITY_API_KEY = os.getenv('PERPLEXITY_API_KEY', '')
