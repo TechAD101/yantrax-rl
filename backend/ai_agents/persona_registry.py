@@ -70,8 +70,9 @@ class PersonaRegistry:
             ("Quant", AgentArchetype.QUANTATATIVE),  # Data-driven trading
             ("DegenAuditor", AgentArchetype.SPECULATIVE),  # Risk management
             ("TradeExecutor", AgentArchetype.SYSTEMATIC),  # Execution
-        ]
+]
 
+        # Fixed: Use profitable_personas (not placeholders) - 2026-02-06
         for name, archetype in profitable_personas:
             if name.lower() not in self._personas:
                 # Create a simple dynamic persona if the specific class doesn't exist
