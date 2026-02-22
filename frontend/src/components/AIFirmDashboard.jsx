@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/api';
 import PainMeter from './PainMeter';
+import MarketMoodDial from './MarketMoodDial';
 import InstitutionalReport from './InstitutionalReport';
 import StrategyMarketplace from './StrategyMarketplace';
 import IntelligencePanel from './IntelligencePanel';
@@ -186,7 +187,7 @@ const AIFirmDashboard = () => {
                         <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">Market Sentiment Engine</h4>
                         <div className="text-[10px] font-mono text-[var(--color-info)]">MODULE: SENTIMENT</div>
                       </div>
-                      {/* ELIMINATED: Market mood dial - doesn't make money */}
+                      <MarketMoodDial />
                     </div>
                     <div className="neon-card p-6 bg-[var(--bg-surface)]">
                       <div className="border-b border-[var(--border-muted)] mb-4 pb-2 flex justify-between items-center">
