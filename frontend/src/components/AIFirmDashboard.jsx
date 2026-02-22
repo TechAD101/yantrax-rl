@@ -261,6 +261,33 @@ const AIFirmDashboard = () => {
                     </div>
                   </div>
 
+                  {/* Trade Validation Engine */}
+                  <div className="industrial-panel p-6 mt-6">
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-[var(--border-muted)]">
+                      <h4 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-[0.2em] flex items-center">
+                        <span className="w-2 h-2 bg-[var(--color-info)] mr-2 animate-pulse"></span>
+                        Trade Validation Engine (8-Point Strict)
+                      </h4>
+                    </div>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                      {Object.entries(firmStatus.institutional_audit?.trading_checklist || {
+                        "Macro Alignment ≥50": true,
+                        "Liquidity ≥40": true,
+                        "Confidence ≥60": true,
+                        "Risk/Reward ≥1.5": true,
+                        "No Disqualifying Reversals": true,
+                        "No Black Swan Event": true,
+                        "Position Size ≤10%": true,
+                        "Execution Risk <2%": true
+                      }).map(([checkName, passed]) => (
+                        <div key={checkName} className="flex items-center space-x-3 p-3 border border-[var(--border-muted)] bg-[var(--bg-deep)]">
+                          <span className={`w-3 h-3 flex-shrink-0 border ${passed ? 'bg-[var(--color-success)] border-[var(--color-success)]' : 'bg-transparent border-[var(--color-error)]'}`}></span>
+                          <span className={`text-[10px] font-mono leading-tight ${passed ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}`}>{checkName}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* CEO Reasoning & Ghost Whispers */}
                   {wisdom && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

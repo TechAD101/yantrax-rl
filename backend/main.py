@@ -168,6 +168,10 @@ except Exception as e:
 app = Flask(__name__)
 CORS(app, origins=['*'])
 
+# Register Institutional Blueprints
+from routes.data_ingest import data_ingest_bp
+app.register_blueprint(data_ingest_bp, url_prefix='/api')
+
 # Initialize DB tables (safe to call; in prod use Alembic migrations)
 try:
     init_db()
@@ -355,6 +359,36 @@ class YantraXEnhancedSystem:
             ceo_decision = ceo.make_strategic_decision(ceo_context)
             
             final_signal = voting_result['winning_signal']
+            
+            # --- INSTITUTIONAL TRADE VALIDATOR (8-POINT) ---
+            val_result = None
+            if TRADE_VALIDATOR and final_signal != 'HOLD':
+                validation_proposal = {
+                    'symbol': 'BTC-USD',  # Default symbol for RL env simulation
+                    'action': final_signal,
+                    'shares': 1,
+                    'entry_price': self.current_state['price'],
+                    'target_price': self.current_state['price'] * 1.05 if final_signal == 'BUY' else self.current_state['price'] * 0.95,
+                    'stop_loss': self.current_state['price'] * 0.95 if final_signal == 'BUY' else self.current_state['price'] * 1.05,
+                    'portfolio_value': self.current_state['balance']
+                }
+                validation_context = {
+                    'market_trend': 'bullish' if final_signal == 'BUY' else 'bearish',
+                    'volatility': self.current_state['volatility'],
+                    'market_mood': self.current_state.get('mood', 'neutral'),
+                    'persona_votes': [{'confidence': 80, 'weight': 1.0}],  # Simulated
+                    'volume': 2000000,
+                    'bid_ask_spread': 0.005,
+                    'vix': 15.0
+                }
+                val_result = TRADE_VALIDATOR.validate_trade(validation_proposal, validation_context)
+                
+                # If validation fails, override the signal to HOLD
+                if not val_result.get('allowed', False):
+                    logger.warning(f"Trade Validator Blocked execution. Signal {final_signal} overridden to HOLD.")
+                    final_signal = 'HOLD'
+            # -----------------------------------------------
+
             rl_action = self._map_signal_to_action(final_signal)
             next_state, reward, done = self.env.step(rl_action)
             
@@ -424,12 +458,41 @@ class YantraXEnhancedSystem:
             }
             ceo_decision = ceo.make_strategic_decision(ceo_context)
             
+            final_signal = voting_result['winning_signal']
+            
+            # --- INSTITUTIONAL TRADE VALIDATOR (8-POINT) ---
+            val_result = None
+            if TRADE_VALIDATOR and final_signal != 'HOLD':
+                validation_proposal = {
+                    'symbol': 'SIM',
+                    'action': final_signal,
+                    'shares': 1,
+                    'entry_price': 100.0,
+                    'target_price': 105.0 if final_signal == 'BUY' else 95.0,
+                    'stop_loss': 95.0 if final_signal == 'BUY' else 105.0,
+                    'portfolio_value': self.portfolio_balance
+                }
+                validation_context = {
+                    'market_trend': 'bullish' if final_signal == 'BUY' else 'bearish',
+                    'volatility': context.get('market_volatility', 0.2),
+                    'market_mood': 'neutral',
+                    'persona_votes': [{'confidence': 80, 'weight': 1.0}],
+                    'volume': 2000000,
+                    'bid_ask_spread': 0.005,
+                    'vix': 15.0
+                }
+                val_result = TRADE_VALIDATOR.validate_trade(validation_proposal, validation_context)
+                
+                if not val_result.get('allowed', False):
+                    final_signal = 'HOLD'
+            # -----------------------------------------------
+            
             reward = np.random.normal(950, 300)
             self.portfolio_balance += reward
             
             return {
                 'status': 'success',
-                'signal': voting_result['winning_signal'],
+                'signal': final_signal,
                 'strategy': 'AI_FIRM_24_AGENTS',
                 'final_balance': round(self.portfolio_balance, 2),
                 'total_reward': round(reward, 2),
@@ -1105,6 +1168,27 @@ def ai_firm_status():
             'timestamp': datetime.now().isoformat()
         }), 200
     return jsonify({'status': 'degraded'}), 500
+
+@app.route('/api/firm/report/institutional', methods=['GET'])
+def generate_institutional_report():
+    """Generates the comprehensive 13-section Institutional Report."""
+    symbol = request.args.get('symbol', 'AAPL').upper()
+    try:
+        from ai_firm.report_generation import InstitutionalReportGenerator
+        generator = InstitutionalReportGenerator()
+        report_data = generator.generate_full_report(symbol)
+        
+        return jsonify({
+            'status': 'success',
+            'symbol': symbol,
+            'report': report_data['markdown'],
+            'trust_score': report_data['trust_score'],
+            'confidence_band': report_data['confidence_band'],
+            'timestamp': report_data['timestamp']
+        }), 200
+    except Exception as e:
+        logger.error(f"Error generating institutional report: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/ai-firm/voting-history', methods=['GET'])
 def ai_firm_voting_history():

@@ -221,3 +221,63 @@ class Order(Base):
             'created_at': self.created_at.isoformat() if self.created_at is not None else None,
             'executed_at': self.executed_at.isoformat() if self.executed_at is not None else None
         }
+
+# -------------------- Market Data & Audit (Institutional) --------------------
+class RawMarketData(Base):
+    __tablename__ = 'raw_market_data'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source = Column(String(64), nullable=False)
+    instrument = Column(String(64), nullable=False)
+    metric = Column(String(64), nullable=False)
+    value = Column(Float, nullable=True)
+    timestamp = Column(DateTime(timezone=True), nullable=False)
+    retrieved_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    meta = Column(JSON, nullable=True)
+    
+    __table_args__ = (
+        Index('idx_rmd_instrument', 'instrument'),
+        Index('idx_rmd_metric', 'metric'),
+        Index('idx_rmd_timestamp', 'timestamp'),
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'source': self.source,
+            'instrument': self.instrument,
+            'metric': self.metric,
+            'value': self.value,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'retrieved_at': self.retrieved_at.isoformat() if self.retrieved_at else None,
+            'meta': self.meta or {}
+        }
+
+
+class AuditLog(Base):
+    __tablename__ = 'audit_log'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    section = Column(String(128), nullable=False)
+    datapoint_ref = Column(Integer, ForeignKey('raw_market_data.id'), nullable=True)
+    data_age_seconds = Column(Integer, nullable=True)
+    sources = Column(JSON, nullable=True)  # List of checked sources & timestamps
+    verification_status = Column(String(64), nullable=True)  # 'ok', 'variance_flag', 'missing'
+    fallback_level = Column(Integer, default=0)
+    trust_contrib = Column(Float, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    
+    datapoint = relationship('RawMarketData', backref='audit_logs')
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'section': self.section,
+            'datapoint_ref': self.datapoint_ref,
+            'data_age_seconds': self.data_age_seconds,
+            'sources': self.sources or {},
+            'verification_status': self.verification_status,
+            'fallback_level': self.fallback_level,
+            'trust_contrib': self.trust_contrib,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }

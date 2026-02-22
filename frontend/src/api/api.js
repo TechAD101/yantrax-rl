@@ -421,7 +421,7 @@ export const api = {
     }
   },
   // New Institutional Phase Ω
-  getInstitutionalReport: (symbol = 'AAPL') => fetchWithRetry(`${BASE_URL}/report/institutional?symbol=${symbol}`),
+  getInstitutionalReport: (symbol = 'AAPL') => fetchWithRetry(`${BASE_URL}/api/firm/report/institutional?symbol=${symbol}`),
   getSystemStatus: () => fetchWithRetry(`${BASE_URL}/health`),
   // WORLD CLASS API (Vision Upgrade)
   getVisualMoodBoard: async () => {
