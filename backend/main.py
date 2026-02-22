@@ -864,6 +864,12 @@ def massive_quote():
         logger.error(f"❌ /massive-quote failed for {symbol}: {e}")
         return jsonify({'status': 'error', 'message': str(e), 'symbol': symbol, 'timestamp': datetime.now().isoformat()}), 500
 
+@app.route('/ping', methods=['GET'])
+def ping():
+    """Lightweight keep-alive endpoint. Ping every 14 min to prevent Render free-tier spin-down."""
+    return jsonify({"pong": True, "timestamp": datetime.now().isoformat()}), 200
+
+
 @app.route('/health', methods=['GET'])
 @handle_errors  
 def detailed_health():
