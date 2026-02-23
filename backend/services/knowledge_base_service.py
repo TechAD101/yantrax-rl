@@ -39,6 +39,8 @@ class KnowledgeBaseService:
         os.makedirs(persist_directory, exist_ok=True)
         
         # Initialize ChromaDB client with telemetry disabled
+        self.client = None
+        self.collections = {}
         try:
             from chromadb.config import Settings
             self.client = chromadb.PersistentClient(
@@ -46,15 +48,13 @@ class KnowledgeBaseService:
                 settings=Settings(anonymized_telemetry=False)
             )
             self.logger.info(f"✓ ChromaDB client initialized at {persist_directory} (Telemetry Disabled)")
+            self._initialize_collections()
         except Exception as e:
             self.logger.error(f"Failed to initialize ChromaDB: {e}")
-            raise
-        
-        self.collections = {}
-        self._initialize_collections()
+            # Do not raise, allow system to run with degraded KB
         
         # Seed if empty
-        if self.collections['investor_wisdom'].count() == 0:
+        if self.collections.get('investor_wisdom') and self.collections['investor_wisdom'].count() == 0:
             self._seed_wisdom()
     
     def _seed_wisdom(self):
@@ -191,6 +191,10 @@ class KnowledgeBaseService:
         Returns:
             Document ID
         """
+        if 'investor_wisdom' not in self.collections:
+            self.logger.warning("investor_wisdom collection not available")
+            return "wisdom_error"
+
         collection = self.collections['investor_wisdom']
         doc_id = f"wisdom_{collection.count() + 1:04d}"
         
@@ -229,6 +233,10 @@ class KnowledgeBaseService:
         Returns:
             Document ID
         """
+        if 'strategy_performance' not in self.collections:
+            self.logger.warning("strategy_performance collection not available")
+            return "strategy_error"
+
         collection = self.collections['strategy_performance']
         doc_id = f"strategy_{collection.count() + 1:04d}"
         
@@ -267,6 +275,10 @@ class KnowledgeBaseService:
         Returns:
             List of wisdom items with relevance scores
         """
+        if 'investor_wisdom' not in self.collections:
+            self.logger.warning("investor_wisdom collection not available")
+            return []
+
         collection = self.collections['investor_wisdom']
         
         if collection.count() == 0:
@@ -321,6 +333,10 @@ class KnowledgeBaseService:
         Returns:
             List of historical performance records
         """
+        if 'strategy_performance' not in self.collections:
+            self.logger.warning("strategy_performance collection not available")
+            return []
+
         collection = self.collections['strategy_performance']
         
         if collection.count() == 0:
@@ -443,16 +459,17 @@ class KnowledgeBaseService:
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get knowledge base statistics"""
-        return {
-            'investor_wisdom_count': self.collections['investor_wisdom'].count(),
-            'strategy_performance_count': self.collections['strategy_performance'].count(),
-            'market_insights_count': self.collections['market_insights'].count(),
-            'total_items': sum([
-                self.collections['investor_wisdom'].count(),
-                self.collections['strategy_performance'].count(),
-                self.collections['market_insights'].count()
-            ])
-        }
+        try:
+            return {
+                'investor_wisdom_count': self.collections['investor_wisdom'].count() if 'investor_wisdom' in self.collections else 0,
+                'strategy_performance_count': self.collections['strategy_performance'].count() if 'strategy_performance' in self.collections else 0,
+                'market_insights_count': self.collections['market_insights'].count() if 'market_insights' in self.collections else 0,
+                'total_items': sum([
+                    self.collections[c].count() for c in self.collections
+                ])
+            }
+        except Exception:
+            return {'total_items': 0, 'error': 'Knowledge base unavailable'}
     
     def reset_collection(self, collection_name: str):
         """Reset a specific collection (for testing/maintenance)"""

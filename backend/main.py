@@ -141,10 +141,13 @@ except Exception as e:
 # Initialize AI Firm
 AI_FIRM_READY = False
 RL_ENV_READY = False
+DEBATE_ENGINE = None
+
 try:
     from ai_firm.ceo import AutonomousCEO, CEOPersonality
     from ai_firm.agent_manager import AgentManager
     from rl_core.env_market_sim import MarketSimEnv
+    from ai_firm.debate_engine import DebateEngine
     
     agent_manager = AgentManager()
     ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
@@ -153,8 +156,6 @@ try:
     
     rl_env = MarketSimEnv()
     
-    # Debate Engine
-    from ai_firm.debate_engine import DebateEngine
     DEBATE_ENGINE = DebateEngine(agent_manager)
     if PERPLEXITY_READY:
         DEBATE_ENGINE.set_perplexity_service(PERPLEXITY_SERVICE)

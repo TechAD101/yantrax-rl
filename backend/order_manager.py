@@ -2,19 +2,37 @@ from datetime import datetime
 from typing import Dict, Any, List
 
 from db import get_session
-from models import Order
+from models import Order, Portfolio
 from memecoin_service import simulate_trade
 
 
 def create_order(symbol: str, usd: float) -> Dict[str, Any]:
     session = get_session()
     try:
+        # Paper trading requires a portfolio context. In prototype mode,
+        # we default to the most recent portfolio if one exists.
+        portfolio = session.query(Portfolio).order_by(Portfolio.created_at.desc()).first()
+        if not portfolio:
+            # Create a default system portfolio for orphans if missing
+            portfolio = Portfolio(name="Default System Portfolio", initial_capital=1000000.0, current_value=1000000.0)
+            session.add(portfolio)
+            session.flush()
+
         # simulate execution (paper)
         exec_res = simulate_trade(symbol, usd)
         price = exec_res.get('price')
         quantity = exec_res.get('quantity')
 
-        o = Order(symbol=symbol.upper(), usd=usd, quantity=quantity, price=price, status='filled', executed_at=datetime.utcnow(), meta={'simulated': True})
+        o = Order(
+            portfolio_id=portfolio.id,
+            symbol=symbol.upper(),
+            usd=usd,
+            quantity=quantity,
+            price=price,
+            status='filled',
+            executed_at=datetime.utcnow(),
+            meta={'simulated': True}
+        )
         session.add(o)
         session.commit()
         return o.to_dict()

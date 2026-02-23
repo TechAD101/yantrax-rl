@@ -148,7 +148,6 @@ class Memecoin(Base):
     positions = relationship(
         'PortfolioPosition',
         primaryjoin="Memecoin.symbol == foreign(PortfolioPosition.symbol)",
-        viewonly=True,
         backref='memecoin'
     )
 
