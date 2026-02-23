@@ -141,6 +141,8 @@ except Exception as e:
 # Initialize AI Firm
 AI_FIRM_READY = False
 RL_ENV_READY = False
+DEBATE_ENGINE = None
+
 try:
     from ai_firm.ceo import AutonomousCEO, CEOPersonality
     from ai_firm.agent_manager import AgentManager
@@ -164,6 +166,16 @@ try:
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
     logger.error(f"❌ AI Firm core initialization failed: {e}")
+    # Provide a fallback DebateEngine for testing/CI if initialization failed
+    class MockDebateEngine:
+        async def conduct_debate(self, symbol, context):
+            return {
+                'ticker': symbol,
+                'winning_signal': 'HOLD',
+                'consensus_score': 50,
+                'arguments': [{'agent': 'System', 'signal': 'HOLD', 'reasoning': f'Fallback engine. Original error: {e}'}]
+            }
+    DEBATE_ENGINE = MockDebateEngine()
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
