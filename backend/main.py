@@ -87,6 +87,7 @@ _load_dotenv_fallback(os.path.join(os.path.dirname(__file__), '.env'))
 logger.info(f"🔍 YANTRAX RL v{Config.VERSION} - ARCHITECT MODE")
 
 # Initialize Authored Services via Registry
+DEBATE_ENGINE = None
 KNOWLEDGE_BASE = registry.get_service('kb')
 PERPLEXITY_SERVICE = registry.get_service('perplexity')
 PERPLEXITY_READY = bool(PERPLEXITY_SERVICE and PERPLEXITY_SERVICE.is_configured())
