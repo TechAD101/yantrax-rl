@@ -488,5 +488,5 @@ def get_knowledge_base(persist_directory: str = "./chroma_db") -> KnowledgeBaseS
                 def get_statistics(self): return {'total_items': 0}
                 def store_wisdom(self, *args, **kwargs): return "dummy"
                 def store_strategy_result(self, *args, **kwargs): return "dummy"
-            return DummyKB()
+            _knowledge_base = DummyKB()
     return _knowledge_base

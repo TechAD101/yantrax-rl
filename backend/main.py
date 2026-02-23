@@ -138,35 +138,58 @@ except Exception as e:
         def get_recent_audit_logs(self, limit): return []
     market_provider = DummyMarketProvider()
 
-# Initialize AI Firm
+# Initialize AI Firm with enhanced granularity and resilience
 AI_FIRM_READY = False
 RL_ENV_READY = False
 agent_manager = None
 DEBATE_ENGINE = None
+ceo = None
+rl_env = None
 
+# 1. Agent Manager
+try:
+    from ai_firm.agent_manager import AgentManager
+    agent_manager = AgentManager()
+    logger.info("✅ Agent Manager initialized")
+except Exception as e:
+    logger.error(f"❌ Agent Manager initialization failed: {e}")
+    # Create a dummy agent manager to prevent downstream crashes
+    class DummyAgentManager:
+        def __init__(self): self.enhanced_agents = {}
+        def conduct_agent_voting(self, *args, **kwargs): return {'winning_signal': 'HOLD', 'consensus_strength': 0}
+        def get_agent_status(self): return {'total_agents': 0, 'departments': {}}
+        def coordinate_decision_making(self, *args, **kwargs): return {'winning_signal': 'HOLD'}
+    agent_manager = DummyAgentManager()
+
+# 2. Autonomous CEO
 try:
     from ai_firm.ceo import AutonomousCEO, CEOPersonality
-    from ai_firm.agent_manager import AgentManager
-    from rl_core.env_market_sim import MarketSimEnv
-    
-    agent_manager = AgentManager()
     ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
     if PERPLEXITY_READY:
         ceo.set_perplexity_service(PERPLEXITY_SERVICE)
-    
-    rl_env = MarketSimEnv()
-    
-    # Debate Engine
+    logger.info("✅ Autonomous CEO initialized")
+except Exception as e:
+    logger.error(f"❌ Autonomous CEO initialization failed: {e}")
+
+# 3. Debate Engine
+try:
     from ai_firm.debate_engine import DebateEngine
     DEBATE_ENGINE = DebateEngine(agent_manager)
     if PERPLEXITY_READY:
         DEBATE_ENGINE.set_perplexity_service(PERPLEXITY_SERVICE)
-        
     AI_FIRM_READY = True
-    RL_ENV_READY = True
-    logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
+    logger.info("✅ Debate Engine initialized")
 except Exception as e:
-    logger.error(f"❌ AI Firm core initialization failed: {e}")
+    logger.error(f"❌ Debate Engine initialization failed: {e}")
+
+# 4. RL Environment
+try:
+    from rl_core.env_market_sim import MarketSimEnv
+    rl_env = MarketSimEnv()
+    RL_ENV_READY = True
+    logger.info("✅ RL Environment initialized")
+except Exception as e:
+    logger.error(f"❌ RL Environment initialization failed: {e}")
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
