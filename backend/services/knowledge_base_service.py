@@ -267,10 +267,16 @@ class KnowledgeBaseService:
         Returns:
             List of wisdom items with relevance scores
         """
+        if 'investor_wisdom' not in self.collections:
+            return []
+
         collection = self.collections['investor_wisdom']
         
-        if collection.count() == 0:
-            self.logger.warning("investor_wisdom collection is empty")
+        try:
+            if collection.count() == 0:
+                self.logger.warning("investor_wisdom collection is empty")
+                return []
+        except Exception:
             return []
         
         try:
@@ -470,5 +476,17 @@ def get_knowledge_base(persist_directory: str = "./chroma_db") -> KnowledgeBaseS
     """Get or create the global KnowledgeBaseService singleton"""
     global _knowledge_base
     if _knowledge_base is None:
-        _knowledge_base = KnowledgeBaseService(persist_directory)
+        try:
+            _knowledge_base = KnowledgeBaseService(persist_directory)
+        except Exception as e:
+            logging.getLogger(__name__).error(f"Failed to initialize KnowledgeBaseService: {e}")
+            # Return a dummy service to prevent crashes
+            class DummyKB:
+                def query_wisdom(self, *args, **kwargs): return []
+                def query_strategy_performance(self, *args, **kwargs): return []
+                def get_persona_context(self, *args, **kwargs): return {'relevant_wisdom': [], 'context_enriched': False}
+                def get_statistics(self): return {'total_items': 0}
+                def store_wisdom(self, *args, **kwargs): return "dummy"
+                def store_strategy_result(self, *args, **kwargs): return "dummy"
+            return DummyKB()
     return _knowledge_base

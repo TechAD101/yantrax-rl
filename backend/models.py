@@ -193,7 +193,7 @@ class Order(Base):
     __tablename__ = 'orders'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    portfolio_id = Column(Integer, ForeignKey('portfolios.id'), nullable=False)  # Link to portfolio
+    portfolio_id = Column(Integer, ForeignKey('portfolios.id'), nullable=True)  # Link to portfolio
     symbol = Column(String(32), nullable=False)
     usd = Column(Float, nullable=False)
     quantity = Column(Float, nullable=False, default=0.0)
