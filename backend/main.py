@@ -165,17 +165,22 @@ try:
     RL_ENV_READY = True
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
-    logger.error(f"❌ AI Firm core initialization failed: {e}")
-    # Provide a fallback DebateEngine for testing/CI if initialization failed
-    class MockDebateEngine:
+    init_error = str(e)
+    logger.error(f"❌ AI Firm core initialization failed: {init_error}")
+    # Provide a fallback DebateEngine for testing/CI environments
+    class FallbackDebateEngine:
         async def conduct_debate(self, symbol, context):
             return {
                 'ticker': symbol,
                 'winning_signal': 'HOLD',
                 'consensus_score': 50,
-                'arguments': [{'agent': 'System', 'signal': 'HOLD', 'reasoning': f'Fallback engine. Original error: {e}'}]
+                'arguments': [{
+                    'agent': 'System',
+                    'signal': 'HOLD',
+                    'reasoning': f'System running in fallback mode. AI Core failed to load: {init_error}'
+                }]
             }
-    DEBATE_ENGINE = MockDebateEngine()
+    DEBATE_ENGINE = FallbackDebateEngine()
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
