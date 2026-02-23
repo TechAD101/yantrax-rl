@@ -12,11 +12,14 @@ def create_order(symbol: str, usd: float) -> Dict[str, Any]:
         # Paper trading requires a portfolio context. In prototype mode,
         # we default to the most recent portfolio if one exists.
         portfolio = session.query(Portfolio).order_by(Portfolio.created_at.desc()).first()
+
         if not portfolio:
             # Create a default system portfolio for orphans if missing
             portfolio = Portfolio(name="Default System Portfolio", initial_capital=1000000.0, current_value=1000000.0)
             session.add(portfolio)
-            session.flush()
+            session.commit()
+            # Ensure we have the latest persisted version with ID
+            portfolio = session.query(Portfolio).order_by(Portfolio.created_at.desc()).first()
 
         # simulate execution (paper)
         exec_res = simulate_trade(symbol, usd)

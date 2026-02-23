@@ -142,29 +142,43 @@ except Exception as e:
 AI_FIRM_READY = False
 RL_ENV_READY = False
 DEBATE_ENGINE = None
+agent_manager = None
+ceo = None
+rl_env = None
 
+# 1. Initialize Core Agent Manager & Debate Engine (Resilient)
 try:
-    from ai_firm.ceo import AutonomousCEO, CEOPersonality
     from ai_firm.agent_manager import AgentManager
-    from rl_core.env_market_sim import MarketSimEnv
     from ai_firm.debate_engine import DebateEngine
     
     agent_manager = AgentManager()
-    ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
-    if PERPLEXITY_READY:
-        ceo.set_perplexity_service(PERPLEXITY_SERVICE)
-    
-    rl_env = MarketSimEnv()
-    
     DEBATE_ENGINE = DebateEngine(agent_manager)
     if PERPLEXITY_READY:
         DEBATE_ENGINE.set_perplexity_service(PERPLEXITY_SERVICE)
-        
-    AI_FIRM_READY = True
-    RL_ENV_READY = True
-    logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
+    logger.info("✅ AI Firm Core (AgentManager & DebateEngine) operational")
 except Exception as e:
-    logger.error(f"❌ AI Firm core initialization failed: {e}")
+    logger.error(f"❌ AI Firm core components failed to initialize: {e}")
+
+# 2. Initialize Autonomous CEO (Optional layer)
+try:
+    from ai_firm.ceo import AutonomousCEO, CEOPersonality
+    if agent_manager:
+        ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
+        if PERPLEXITY_READY:
+            ceo.set_perplexity_service(PERPLEXITY_SERVICE)
+        AI_FIRM_READY = True
+        logger.info("✅ Autonomous CEO operational")
+except Exception as e:
+    logger.error(f"❌ Autonomous CEO initialization failed: {e}")
+
+# 3. Initialize RL Environment
+try:
+    from rl_core.env_market_sim import MarketSimEnv
+    rl_env = MarketSimEnv()
+    RL_ENV_READY = True
+    logger.info("✅ RL Core Environment operational")
+except Exception as e:
+    logger.error(f"❌ RL Core initialization failed: {e}")
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
