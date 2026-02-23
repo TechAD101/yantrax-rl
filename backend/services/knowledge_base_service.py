@@ -140,13 +140,20 @@ class KnowledgeBaseService:
             }
         ]
         
-        for item in wisdom:
-            self.store_wisdom(
-                content=item["content"],
-                source=item["source"],
-                tags=item["tags"],
-                archetype=item["archetype"]
-            )
+        collection = self.collections['investor_wisdom']
+        base_count = collection.count()
+
+        collection.add(
+            documents=[item["content"] for item in wisdom],
+            metadatas=[{
+                "source": item["source"],
+                "tags": ",".join(item["tags"]),
+                "archetype": ",".join(item["archetype"]),
+                "confidence": 0.9,
+                "created_at": datetime.now().isoformat()
+            } for item in wisdom],
+            ids=[f"wisdom_{base_count + i + 1:04d}" for i in range(len(wisdom))]
+        )
         self.logger.info(f"🌱 Seeded Knowledge Base with {len(wisdom)} core principles.")
 
     def _initialize_collections(self):

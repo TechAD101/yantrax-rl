@@ -70,13 +70,12 @@ class KnowledgeBase:
             }
         ]
         
-        for item in wisdom:
-            self.collection.add(
-                documents=[item["text"]],
-                metadatas=[item["metadata"]],
-                ids=[item["id"]]
-            )
-        logger.info("🌱 Seeded Institutional Knowledge Base with 8 core principles.")
+        self.collection.add(
+            documents=[item["text"] for item in wisdom],
+            metadatas=[item["metadata"] for item in wisdom],
+            ids=[item["id"] for item in wisdom]
+        )
+        logger.info(f"🌱 Seeded Institutional Knowledge Base with {len(wisdom)} core principles.")
 
     def query_wisdom(self, query: str, n_results: int = 2) -> List[Dict[str, Any]]:
         """Find relevant wisdom for a given market scenario"""
