@@ -112,9 +112,7 @@ class PerplexityIntelligenceService:
                 "Service will return fallback data."
             )
         else:
-            # Mask key for logging
-            masked = f"{self.api_key[:8]}...{self.api_key[-4:]}" if len(self.api_key) > 12 else "***"
-            logger.info(f"✅ Perplexity Intelligence Service initialized with key: {masked}")
+            logger.info("✅ Perplexity Intelligence Service initialized with API key")
     
     def _is_cache_valid(self, key: str, ttl: int) -> bool:
         """Check if cached data is still valid."""
