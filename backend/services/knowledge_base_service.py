@@ -47,8 +47,28 @@ class KnowledgeBaseService:
             )
             self.logger.info(f"✓ ChromaDB client initialized at {persist_directory} (Telemetry Disabled)")
         except Exception as e:
-            self.logger.error(f"Failed to initialize ChromaDB: {e}")
-            raise
+            self.logger.warning(f"Failed to initialize Persistent ChromaDB: {e}. Falling back to Ephemeral.")
+            try:
+                from chromadb.config import Settings
+                self.client = chromadb.EphemeralClient(
+                    settings=Settings(anonymized_telemetry=False)
+                )
+                self.logger.info("✓ ChromaDB Ephemeral client initialized")
+            except Exception as e2:
+                self.logger.error(f"Failed to initialize Ephemeral ChromaDB: {e2}")
+                # If everything fails, create a dummy client to avoid crashing the Firm
+                class DummyCollection:
+                    def count(self): return 0
+                    def add(self, *args, **kwargs): pass
+                    def query(self, *args, **kwargs): return {'documents': [[]], 'metadatas': [[]], 'distances': [[]], 'ids': [[]]}
+                    def get_or_create_collection(self, *args, **kwargs): return DummyCollection()
+
+                class DummyClient:
+                    def get_or_create_collection(self, *args, **kwargs): return DummyCollection()
+                    def delete_collection(self, *args, **kwargs): pass
+
+                self.client = DummyClient()
+                self.logger.warning("⚠️ Using Dummy ChromaDB Client (Limited Functionality)")
         
         self.collections = {}
         self._initialize_collections()

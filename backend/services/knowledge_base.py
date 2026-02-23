@@ -16,7 +16,12 @@ class KnowledgeBase:
     
     def __init__(self, persist_dir: str = "chroma_db"):
         self.persist_dir = persist_dir
-        self.client = chromadb.PersistentClient(path=self.persist_dir)
+        try:
+            self.client = chromadb.PersistentClient(path=self.persist_dir)
+        except Exception as e:
+            logger.warning(f"Failed to initialize Persistent ChromaDB in knowledge_base.py: {e}. Falling back to Ephemeral.")
+            self.client = chromadb.EphemeralClient()
+
         self.collection = self.client.get_or_create_collection(name="institutional_wisdom")
         
         # Seed if empty

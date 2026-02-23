@@ -155,16 +155,20 @@ try:
     rl_env = MarketSimEnv()
     
     # Debate Engine
-    from ai_firm.debate_engine import DebateEngine
-    DEBATE_ENGINE = DebateEngine(agent_manager)
-    if PERPLEXITY_READY:
-        DEBATE_ENGINE.set_perplexity_service(PERPLEXITY_SERVICE)
+    try:
+        from ai_firm.debate_engine import DebateEngine
+        DEBATE_ENGINE = DebateEngine(agent_manager)
+        if PERPLEXITY_READY:
+            DEBATE_ENGINE.set_perplexity_service(PERPLEXITY_SERVICE)
+        logger.info("✅ Debate Engine initialized")
+    except Exception as de_error:
+        logger.error(f"❌ Debate Engine initialization failed: {de_error}")
         
     AI_FIRM_READY = True
     RL_ENV_READY = True
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
-    logger.error(f"❌ AI Firm core initialization failed: {e}")
+    logger.exception(f"❌ AI Firm core initialization failed: {e}")
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
