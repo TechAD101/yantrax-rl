@@ -20,6 +20,7 @@ class Config:
     ALPACA_API_KEY = os.getenv('ALPACA_API_KEY', '')
     ALPACA_SECRET_KEY = os.getenv('ALPACA_SECRET_KEY', '')
     PERPLEXITY_API_KEY = os.getenv('PERPLEXITY_API_KEY', '')
+    DATA_INGEST_API_KEY = os.getenv('DATA_INGEST_API_KEY')
     
     # DB Config
     PERSIST_DIR = "chroma_db"

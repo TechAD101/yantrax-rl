@@ -5,6 +5,8 @@ import numpy as np
 from sqlalchemy.orm import Session
 from models import RawMarketData, AuditLog
 from db import get_session
+from config import Config
+import hmac
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,16 @@ def ingest_data():
         "timestamp": "2023-10-27T10:00:00Z"
     }
     """
+    # Authentication Check
+    auth_header = request.headers.get('X-API-Key')
+    if not Config.DATA_INGEST_API_KEY:
+        logger.error("DATA_INGEST_API_KEY not configured. Denying access.")
+        return jsonify({'error': 'configuration_error', 'message': 'Service misconfigured'}), 503
+
+    if not auth_header or not hmac.compare_digest(auth_header, Config.DATA_INGEST_API_KEY):
+        logger.warning(f"Unauthorized ingest attempt from {request.remote_addr}")
+        return jsonify({'error': 'unauthorized', 'message': 'Invalid or missing API key'}), 401
+
     data = request.json
     instrument = data.get('instrument')
     metric = data.get('metric')
