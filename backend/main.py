@@ -164,7 +164,6 @@ try:
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
     logger.error(f"❌ AI Firm core initialization failed: {e}")
-except Exception:
 try:
     if 'DEBATE_ENGINE' not in globals() or DEBATE_ENGINE is None:
         # Mock DebateEngine for tests if not initialized
