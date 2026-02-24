@@ -2,6 +2,7 @@ import os
 import sys
 import pytest
 from unittest.mock import MagicMock
+import asyncio
 
 # Use in-memory DB for safe tests
 os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
@@ -18,7 +19,12 @@ def setup_db():
 def client():
     # Mock DEBATE_ENGINE before importing main
     mock_engine = MagicMock()
-    mock_engine.conduct_debate = MagicMock(side_effect=lambda s, c: {'ticker': s, 'winning_signal': 'BUY', 'arguments': []})
+
+    # Create an async mock
+    async def mock_conduct_debate(symbol, context):
+        return {'ticker': symbol, 'winning_signal': 'BUY', 'arguments': []}
+
+    mock_engine.conduct_debate = MagicMock(side_effect=mock_conduct_debate)
 
     # We need to inject this mock into backend.main
     # Since main imports modules that might be hard to mock perfectly from here,
