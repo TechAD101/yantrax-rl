@@ -26,8 +26,12 @@ def client():
 def test_trigger_debate(client):
     payload = {'symbol': 'AAPL'}
     resp = client.post('/api/strategy/ai-debate/trigger', json=payload)
-    assert resp.status_code in [200, 503] # Allow 503 for CI where Debate Engine dependencies might be missing
+assert resp.status_code in [200, 503] # Allow 503 for CI where Debate Engine dependencies might be missing
     data = resp.get_json()
-    assert 'ticker' in data and data['ticker'] == 'AAPL'
-    assert 'winning_signal' in data
-    assert 'arguments' in data and isinstance(data['arguments'], list)
+
+    if resp.status_code == 200:
+        assert 'ticker' in data and data['ticker'] == 'AAPL'
+        assert 'winning_signal' in data
+        assert 'arguments' in data and isinstance(data['arguments'], list)
+    else:
+        assert 'error' in data
