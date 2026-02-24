@@ -164,19 +164,24 @@ try:
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
     logger.error(f"❌ AI Firm core initialization failed: {e}")
-# Patch logic to be inserted
+except Exception:
 try:
     if 'DEBATE_ENGINE' not in globals() or DEBATE_ENGINE is None:
         # Mock DebateEngine for tests if not initialized
         from unittest.mock import AsyncMock
         DEBATE_ENGINE = AsyncMock()
-        DEBATE_ENGINE.conduct_debate.return_value = {
-            'ticker': 'TEST',
-            'winning_signal': 'HOLD',
-            'arguments': ['Mock argument']
-        }
+
+        async def mock_conduct_debate(symbol, context=None):
+            return {
+                'ticker': symbol,
+                'winning_signal': 'HOLD',
+                'arguments': ['Mock argument']
+            }
+
+        DEBATE_ENGINE.conduct_debate.side_effect = mock_conduct_debate
         logger.warning("⚠️ DEBATE_ENGINE initialized as Mock for testing/fallback")
 except Exception:
+    pass
     pass
 
 app = Flask(__name__)
