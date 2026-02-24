@@ -1,9 +1,9 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 
 const TradingPerformanceChart = ({ portfolioData, aiData, loading = false }) => {
   // Generate simple deterministic chart data from real portfolio balance when available.
   // Avoid using randomized mock data.
-  const generateChartData = () => {
+  const chartData = useMemo(() => {
     const balance = portfolioData?.totalValue ? 
       parseFloat(String(portfolioData.totalValue).replace(/[$,]/g, '')) : null
 
@@ -23,12 +23,13 @@ const TradingPerformanceChart = ({ portfolioData, aiData, loading = false }) => 
       })
     }
     return points
-  }
+  }, [portfolioData?.totalValue])
 
-  const chartData = generateChartData()
-  const pathData = chartData.map((point, i) => 
+  const pathData = useMemo(() => chartData.map((point, i) =>
     `${i === 0 ? 'M' : 'L'} ${point.x} ${point.y}`
-  ).join(' ')
+  ).join(' '), [chartData])
+
+  const filteredPoints = useMemo(() => chartData.filter((_, i) => i % 5 === 0), [chartData])
 
   if (loading) {
     return (
@@ -60,7 +61,7 @@ const TradingPerformanceChart = ({ portfolioData, aiData, loading = false }) => 
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-gray-900/50 rounded-lg p-3 text-center">
           <div className="text-lg font-bold text-green-300">
-            {portfolioData?.totalValue || '$125,000'}
+            {portfolioData?.totalValue || '25,000'}
           </div>
           <div className="text-xs text-gray-400">Portfolio Value</div>
         </div>
@@ -68,7 +69,7 @@ const TradingPerformanceChart = ({ portfolioData, aiData, loading = false }) => 
           <div className={`text-lg font-bold ${
             portfolioData?.plToday?.startsWith('+') ? 'text-green-300' : 'text-red-300'
           }`}>
-            {portfolioData?.plToday || '+$492'}
+            {portfolioData?.plToday || '+92'}
           </div>
           <div className="text-xs text-gray-400">Today's P&L</div>
         </div>
@@ -135,7 +136,7 @@ const TradingPerformanceChart = ({ portfolioData, aiData, loading = false }) => 
           />
           
           {/* Data points */}
-          {chartData.filter((_, i) => i % 5 === 0).map((point, i) => (
+          {filteredPoints.map((point, i) => (
             <circle
               key={i}
               cx={point.x}
