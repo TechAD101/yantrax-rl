@@ -10,7 +10,7 @@ class Config:
     # System Info
     VERSION = "5.23-STABLE"
     ENVIRONMENT = os.getenv('FLASK_ENV', 'development')
-    DEBUG = os.getenv('DEBUG', 'true').lower() == 'true'
+    DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
     PORT = int(os.getenv('PORT', 5000))
     
 # API Keys - Environment variables required for production
