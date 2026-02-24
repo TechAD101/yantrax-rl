@@ -4,6 +4,7 @@ from flask import Blueprint, request, jsonify
 import numpy as np
 from sqlalchemy.orm import Session
 from models import RawMarketData, AuditLog
+from utils.security import require_api_key
 from db import get_session
 
 logger = logging.getLogger(__name__)
@@ -115,6 +116,7 @@ def ingest_data():
         db.close()
 
 @data_ingest_bp.route('/audit/fallback-status', methods=['GET'])
+@require_api_key
 def get_fallback_status():
     db = get_session()
     try:
