@@ -15,6 +15,7 @@ def create_order(symbol: str, usd: float) -> Dict[str, Any]:
             portfolio = Portfolio(name='Default Paper Portfolio', owner_id=1, risk_profile='moderate', initial_capital=100000.0)
             session.add(portfolio)
             session.commit()
+            session.refresh(portfolio)  # Ensure ID is available
 
         # simulate execution (paper)
         exec_res = simulate_trade(symbol, usd)

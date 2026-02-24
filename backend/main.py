@@ -164,6 +164,8 @@ try:
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
     logger.error(f"❌ AI Firm core initialization failed: {e}")
+    from mock_debate_engine import MockDebateEngine
+    DEBATE_ENGINE = MockDebateEngine()
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
