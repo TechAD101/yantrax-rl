@@ -1,10 +1,11 @@
 # Backend Dependencies
-flask==3.0.0
+flask[async]==3.0.0
 flask-cors==4.0.0
 gunicorn==22.0.0
 uvicorn[standard]==0.27.1
 sqlalchemy==2.0.27
 alembic==1.13.1
+asgiref==3.8.1
 
 # Security
 passlib[bcrypt]==1.7.4
@@ -15,7 +16,7 @@ bcrypt==4.1.2
 # Database
 psycopg2-binary==2.9.9
 redis==5.0.1
-pysqlite3-binary==0.5.2
+pysqlite3-binary>=0.5.2
 
 # Agent & AI
 langchain==0.1.9
