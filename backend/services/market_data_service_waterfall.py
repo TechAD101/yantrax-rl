@@ -353,14 +353,52 @@ class WaterfallMarketDataService:
     def _create_audit_entry(self, symbol, metric, sources, raw_vals, median, var, status, level):
         import uuid
         aid = f"audit_{uuid.uuid4().hex[:8]}"
-        self.audit_log.append({'audit_id': aid, 'symbol': symbol, 'metric': metric,
-                              'sources_used': sources, 'raw_values': raw_vals,
-                              'median_value': median, 'variance': var,
-                              'verification_status': status, 'fallback_level': level,
-                              'timestamp': datetime.now().isoformat()})
-        if len(self.audit_log) > 100: self.audit_log = self.audit_log[-100:]
-        return aid
 
+        # 1. In-memory log
+        entry = {"audit_id": aid, "symbol": symbol, "metric": metric,
+                 "sources_used": sources, "raw_values": raw_vals,
+                 "median_value": median, "variance": var,
+                 "verification_status": status, "fallback_level": level,
+                 "timestamp": datetime.now().isoformat()}
+        self.audit_log.append(entry)
+        if len(self.audit_log) > 100: self.audit_log = self.audit_log[-100:]
+
+        # 2. DB Persistence
+        try:
+            from db import get_session
+            from models import AuditLog, RawMarketData
+
+            session = get_session()
+
+            rmd = RawMarketData(
+                source="consensus/waterfall",
+                instrument=symbol,
+                metric=metric,
+                value=median,
+                timestamp=datetime.utcnow(),
+                meta={"sources": sources, "raw_values": raw_vals}
+            )
+            session.add(rmd)
+            session.flush()
+
+            trust = 0.95 if status == "verified" else 0.8 if status == "partial" else 0.5
+
+            audit = AuditLog(
+                section="waterfall_verification",
+                datapoint_ref=rmd.id,
+                data_age_seconds=0,
+                sources={"sources": sources, "values": raw_vals},
+                verification_status=status,
+                fallback_level=level,
+                trust_contrib=trust
+            )
+            session.add(audit)
+            session.commit()
+            session.close()
+        except Exception as e:
+            logger.error(f"Failed to persist audit log to DB: {e}")
+
+        return aid
     def get_recent_audit_logs(self, limit=10):
         return self.audit_log[-limit:]
 
