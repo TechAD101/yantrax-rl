@@ -1,7 +1,7 @@
 # app.py - Simplified deployment entry point for YantraX AI Firm
 # This ensures Render can easily find and deploy the enhanced version
 
-from main_enhanced import app
+from main import app
 
 if __name__ == '__main__':
     import os
