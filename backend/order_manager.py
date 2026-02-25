@@ -14,7 +14,7 @@ def create_order(symbol: str, usd: float) -> Dict[str, Any]:
         price = exec_res.get('price')
         quantity = exec_res.get('quantity')
 
-        o = Order(symbol=symbol.upper(), usd=usd, quantity=quantity, price=price, status='filled', executed_at=datetime.utcnow(), meta={'simulated': True})
+        o = Order(symbol=symbol.upper(), usd=usd, quantity=quantity, price=price, status='filled', executed_at=datetime.utcnow(), meta={'simulated': True}, portfolio_id=1)
         session.add(o)
         session.commit()
         return o.to_dict()
