@@ -231,6 +231,17 @@ class MarketDataService:
                     }
             except Exception as e:
                 logger.error(f"❌ FMP batch request failed for {symbols_csv}: {e}")
+                # Return empty error structure instead of crashing or random data
+                for s in chunk:
+                    results[s] = {
+                        'symbol': s,
+                        'price': 0,
+                        'change': 0,
+                        'changePercent': 0,
+                        'timestamp': datetime.now().isoformat(),
+                        'source': 'error',
+                        'error': str(e)
+                    }
                 continue
 
         return results
