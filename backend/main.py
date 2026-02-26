@@ -48,7 +48,7 @@ PERSONA_REGISTRY = get_persona_registry()
 
 # Database helpers
 from db import init_db, get_session
-from models import Strategy
+from models import Strategy, StrategyProfile, JournalEntry
 from models import Portfolio, PortfolioPosition
 
 def _load_dotenv_fallback(filepath: str) -> None:
@@ -141,29 +141,44 @@ except Exception as e:
 # Initialize AI Firm
 AI_FIRM_READY = False
 RL_ENV_READY = False
+DEBATE_ENGINE = None
+agent_manager = None
+ceo = None
+rl_env = None
+
+# 1. Initialize Core Agent Manager & Debate Engine (Resilient)
 try:
-    from ai_firm.ceo import AutonomousCEO, CEOPersonality
     from ai_firm.agent_manager import AgentManager
-    from rl_core.env_market_sim import MarketSimEnv
+    from ai_firm.debate_engine import DebateEngine
     
     agent_manager = AgentManager()
-    ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
-    if PERPLEXITY_READY:
-        ceo.set_perplexity_service(PERPLEXITY_SERVICE)
-    
-    rl_env = MarketSimEnv()
-    
-    # Debate Engine
-    from ai_firm.debate_engine import DebateEngine
     DEBATE_ENGINE = DebateEngine(agent_manager)
     if PERPLEXITY_READY:
         DEBATE_ENGINE.set_perplexity_service(PERPLEXITY_SERVICE)
-        
-    AI_FIRM_READY = True
-    RL_ENV_READY = True
-    logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
+    logger.info("✅ AI Firm Core (AgentManager & DebateEngine) operational")
 except Exception as e:
-    logger.error(f"❌ AI Firm core initialization failed: {e}")
+    logger.error(f"❌ AI Firm core components failed to initialize: {e}")
+
+# 2. Initialize Autonomous CEO (Optional layer)
+try:
+    from ai_firm.ceo import AutonomousCEO, CEOPersonality
+    if agent_manager:
+        ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
+        if PERPLEXITY_READY:
+            ceo.set_perplexity_service(PERPLEXITY_SERVICE)
+        AI_FIRM_READY = True
+        logger.info("✅ Autonomous CEO operational")
+except Exception as e:
+    logger.error(f"❌ Autonomous CEO initialization failed: {e}")
+
+# 3. Initialize RL Environment
+try:
+    from rl_core.env_market_sim import MarketSimEnv
+    rl_env = MarketSimEnv()
+    RL_ENV_READY = True
+    logger.info("✅ RL Core Environment operational")
+except Exception as e:
+    logger.error(f"❌ RL Core initialization failed: {e}")
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
@@ -655,7 +670,7 @@ def test_alpaca():
     try:
         import requests  # type: ignore[import]
         
-        logger.info(f"  Alpaca Key (first 10): {alpaca_key[:10] if alpaca_key else 'NONE'}")
+        logger.info(f"  Alpaca Key configured: {bool(alpaca_key)}")
         logger.info("  Making request to Alpaca...")
         
         headers = {
@@ -709,7 +724,7 @@ def test_fmp():
     try:
         import requests  # type: ignore[import]
 
-        logger.info(f"  FMP Key (first 10): {fmp_key[:10] if fmp_key else 'NONE'}")
+        logger.info(f"  FMP Key configured: {bool(fmp_key)}")
         logger.info("  Making request to FMP (quote endpoint)...")
 
         params = {'apikey': fmp_key}
@@ -919,7 +934,7 @@ def massive_quote():
         except ImportError:
             return jsonify({'status': 'error', 'message': 'MassiveMarketDataService not available'}), 500
         
-        logger.info(f"Using Massive provider key (first 8 chars): {massive_key[:8]}")
+        logger.info(f"Using Massive provider key (configured: {bool(massive_key)})")
         msvc = MassiveMarketDataService(api_key=massive_key, base_url=base_url)
         data = msvc.fetch_quote(symbol)
         return jsonify({'status': 'success', 'symbol': symbol, 'data': data, 'timestamp': datetime.now().isoformat()})
