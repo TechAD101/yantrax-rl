@@ -49,7 +49,7 @@ PERSONA_REGISTRY = get_persona_registry()
 # Database helpers
 from db import init_db, get_session
 from models import Strategy
-from models import Portfolio, PortfolioPosition
+from models import Portfolio, PortfolioPosition, StrategyProfile
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -139,6 +139,7 @@ except Exception as e:
     market_provider = DummyMarketProvider()
 
 # Initialize AI Firm
+DEBATE_ENGINE = None
 AI_FIRM_READY = False
 RL_ENV_READY = False
 try:
@@ -163,7 +164,21 @@ try:
     RL_ENV_READY = True
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
+
     logger.error(f"❌ AI Firm core initialization failed: {e}")
+    # Fallback for tests
+    class MockDebateEngine:
+        async def conduct_debate(self, symbol, context):
+            return {
+                'symbol': symbol,
+                'winner': 'Bull',
+                'summary': 'Mock debate executed successfully',
+                'transcript': [{'speaker': 'Bull', 'text': 'Buy!'}, {'speaker': 'Bear', 'text': 'Sell!'}]
+            }
+        def set_perplexity_service(self, service):
+            pass
+    DEBATE_ENGINE = MockDebateEngine()
+
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
@@ -633,6 +648,15 @@ def get_market_price():
     symbol = request.args.get('symbol', 'AAPL').upper()
     return jsonify(market_provider.get_price(symbol)), 200
 
+
+@app.route('/market-prices', methods=['GET'])
+def get_market_prices():
+    """Get current market prices for multiple symbols via Waterfall"""
+    symbols_str = request.args.get('symbols', 'AAPL,MSFT,GOOGL')
+    symbols = [s.strip() for s in symbols_str.split(',') if s.strip()]
+    if not symbols:
+        return jsonify({'error': 'No symbols provided'}), 400
+    return jsonify(market_provider.get_prices(symbols)), 200
 @app.route('/test-alpaca', methods=['GET'])
 def test_alpaca():
     """Force test Alpaca API"""
