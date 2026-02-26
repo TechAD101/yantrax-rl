@@ -1,20 +1,13 @@
-"""Cathie Wood-Inspired AI Persona
-
-Growth-focused innovation scouting agent with disruptive technology focus
-and sector rotation capabilities for emerging market opportunities.
-"""
-
+import logging
+from typing import Dict, Any, List, Optional
 from datetime import datetime
-from typing import Dict, Any
-from dataclasses import dataclass
+from backend.ai_agents.base_persona import PersonaAgent, PersonaArchetype, PersonaVote, VoteType, PersonaAnalysis
 
-from ..base_persona import PersonaAgent, PersonaArchetype, VoteType, PersonaVote, PersonaAnalysis
+logger = logging.getLogger(__name__)
 
-@dataclass
 class CathiePersonality:
-    """Cathie's core personality traits and investment philosophy"""
-    innovation_focus: float = 0.95
-    growth_seeking: float = 0.90
+    """Personality profile for Cathie agent"""
+    name: str = "Cathie"
     risk_tolerance: float = 0.85
     disruption_radar: float = 0.92
     future_vision: float = 0.88
@@ -42,94 +35,76 @@ class CathieAgent(PersonaAgent):
         self.memory = CathieMemory()
         
     def _initialize_innovation_criteria(self) -> Dict[str, Any]:
-        """Initialize Cathie's innovation investment criteria"""
         return {
-            'min_revenue_growth': 0.20,  # Minimum 20% revenue growth
-            'rd_spending_threshold': 0.15,  # Minimum 15% R&D spending
-            'market_size_potential': 1000000000,  # $1B+ TAM
-            'adoption_curve_stage': 'early_growth',
-            'competitive_moat_innovation': True,
-            'management_vision_score': 0.8
+            'dna_sequencing': {'weight': 0.15, 'threshold': 0.7},
+            'robotics': {'weight': 0.15, 'threshold': 0.7},
+            'energy_storage': {'weight': 0.20, 'threshold': 0.75},
+            'ai_technology': {'weight': 0.30, 'threshold': 0.8},
+            'blockchain': {'weight': 0.20, 'threshold': 0.75}
         }
-    
+
     def _initialize_sector_weights(self) -> Dict[str, float]:
-        """Initialize Cathie's preferred sector allocations"""
         return {
-            'artificial_intelligence': 0.25,
-            'robotics_automation': 0.20,
-            'energy_storage': 0.18,
-            'space_exploration': 0.12,
-            'genomics': 0.15,
-            'fintech_blockchain': 0.10
+            'Technology': 0.45,
+            'Healthcare': 0.25,
+            'Consumer Cyclical': 0.15,
+            'Communication Services': 0.10,
+            'Financial Services': 0.05
         }
     
+    # ============ Innovation Analysis Logic ============
+
     def analyze_investment(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Perform Cathie-style innovation and growth analysis"""
-        
-        symbol = context.get('symbol', 'UNKNOWN')
+        """Core investment analysis logic"""
+        # Extract data
         company_data = context.get('company_data', {})
-        market_data = context.get('market_data', {})
         sector_data = context.get('sector_data', {})
+        market_data = context.get('market_data', {})
         
-        # Perform innovation analysis
+        # Run sub-analyses
         innovation_score = self._calculate_innovation_score(company_data, sector_data)
         growth_potential = self._assess_growth_potential(company_data, market_data)
         disruption_analysis = self._analyze_disruption_potential(context)
         sector_timing = self._evaluate_sector_timing(sector_data)
         
-        # Generate Cathie's recommendation
+        # Generate recommendation
         recommendation = self._generate_recommendation(
             innovation_score, growth_potential, disruption_analysis, sector_timing
         )
         
-        # Store in memory
-        self.memory.store_analysis(symbol, recommendation, context)
-        
         return {
-            'agent': self.name,
-            'symbol': symbol,
-            'recommendation': recommendation['action'],
-            'confidence': recommendation['confidence'],
-            'reasoning': recommendation['reasoning'],
+            'symbol': company_data.get('symbol'),
             'innovation_score': innovation_score,
-            'growth_potential': growth_potential['score'],
-            'disruption_score': disruption_analysis['score'],
-            'sector_timing': sector_timing['timing_score'],
-            'time_horizon': recommendation['time_horizon'],
-            'position_sizing': recommendation['position_sizing'],
-            'timestamp': datetime.now().isoformat()
+            'growth_potential': growth_potential,
+            'disruption_analysis': disruption_analysis,
+            'sector_timing': sector_timing,
+            'recommendation': recommendation
         }
     
     def _calculate_innovation_score(self, company_data: Dict[str, Any], sector_data: Dict[str, Any]) -> float:
-        """Calculate comprehensive innovation score"""
+        """Calculate score based on innovation criteria"""
+        base_score = 0.5
+
+        # RD intensity check
+        rd_spend = company_data.get('rd_expense_ratio', 0)
+        if rd_spend > 0.15:
+            base_score += 0.2
+        elif rd_spend > 0.10:
+            base_score += 0.1
+
+        # Tech sector bonus
+        if sector_data.get('sector') == 'Technology':
+            base_score += 0.1
+
+        return min(0.95, base_score)
         
-        score_components = []
-        
-        # R&D Investment
-        rd_spending_ratio = company_data.get('rd_spending_ratio', 0)
-        score_components.append(min(1.0, rd_spending_ratio / 0.3) if rd_spending_ratio >= 0.15 else 0.4)
-        
-        # Patent Portfolio
-        patent_strength = company_data.get('patent_portfolio_score', 0.5)
-        score_components.append(patent_strength)
-        
-        # Technology Leadership
-        tech_leadership = company_data.get('technology_leadership_score', 0.5)
-        score_components.append(tech_leadership)
-        
-        # Sector momentum
-        sector_momentum = sector_data.get('innovation_momentum', 0.5)
-        score_components.append(sector_momentum)
-        
-        return sum(score_components) / len(score_components)
-    
     def _assess_growth_potential(self, company_data: Dict[str, Any], market_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Assess long-term growth potential"""
+        """Assess revenue and market growth potential"""
         
-        revenue_growth = company_data.get('revenue_growth_3yr', 0)
-        tam_growth = company_data.get('projected_tam_5yr', 1000000000) / company_data.get('total_addressable_market', 1000000000)
+        revenue_growth = company_data.get('revenue_growth_yoy', 0)
+        tam_growth = market_data.get('market_cagr', 0.05)
         
-        growth_score = min(1.0, (revenue_growth / 0.5 + min(tam_growth, 3) / 3) / 2)
+        growth_score = min(0.9, (revenue_growth * 0.6 + tam_growth * 2.0 * 0.4))
         
         return {
             'score': growth_score,
@@ -232,14 +207,20 @@ class CathieAgent(PersonaAgent):
             PersonaAnalysis structured result
         """
         symbol = context.get('symbol', 'UNKNOWN')
+        company_data = context.get('company_data', {})
+        sector_data = context.get('sector_data', {})
+        market_data = context.get('market_data', {})
         
         # Run Cathie's existing analysis pipeline
-        innovation_score = self._analyze_innovation(context)
-        growth_score = self._assess_growth_potential(context)
-        disruption_score = self._evaluate_disruption(context)
-        sector_timing = self._evaluate_sector_timing(context)
-        recommendation = self._generate_innovation_recommendation(
-            innovation_score, growth_score, disruption_score, sector_timing
+        # Mapped to existing methods
+        innovation_score = self._calculate_innovation_score(company_data, sector_data)
+        growth_score = self._assess_growth_potential(company_data, market_data)
+        disruption_analysis = self._analyze_disruption_potential(context)
+        disruption_score = disruption_analysis.get('score', 0.5)
+        sector_timing = self._evaluate_sector_timing(sector_data)
+
+        recommendation = self._generate_recommendation(
+            innovation_score, growth_score, disruption_analysis, sector_timing
         )
         
         # Create structured PersonaAnalysis
@@ -252,9 +233,9 @@ class CathieAgent(PersonaAgent):
             reasoning=recommendation['reasoning'],
             scores={
                 'innovation': innovation_score,
-                'growth': growth_score,
+                'growth': growth_score.get('score', 0.5),
                 'disruption': disruption_score,
-                'sector_timing': sector_timing.get('score', 0.5),
+                'sector_timing': sector_timing.get('timing_score', 0.5),
                 'composite': recommendation.get('composite_score', 0)
             },
             risk_assessment={
@@ -295,7 +276,7 @@ class CathieAgent(PersonaAgent):
         
         # Map recommendation to VoteType
         vote_mapping = {
-            'STRONG_BUY': VoteType.STRONG_BUY,
+            'HIGH_CONVICTION_BUY': VoteType.STRONG_BUY,
             'BUY': VoteType.BUY,
             'RESEARCH': VoteType.HOLD,
             'HOLD': VoteType.HOLD,
@@ -306,7 +287,7 @@ class CathieAgent(PersonaAgent):
         
         # Check if proposal aligns with Cathie's analysis
         if proposed_action in ['BUY', 'STRONG_BUY']:
-            if analysis.recommendation in ['BUY', 'STRONG_BUY']:
+            if analysis.recommendation in ['BUY', 'HIGH_CONVICTION_BUY']:
                 reasoning = f"✓ Aligned: {analysis.reasoning}. Innovation metrics support aggressive growth play."
                 confidence = analysis.confidence
             else:

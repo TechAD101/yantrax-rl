@@ -1,34 +1,32 @@
 from datetime import datetime
-from typing import Optional, Dict, Any
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, JSON, Boolean, Index
-from sqlalchemy.orm import declarative_base, relationship
+from typing import Any, Dict, List, Optional
+from sqlalchemy import Column, Integer, String, Float, JSON, DateTime, Boolean, ForeignKey, Index, Text
+from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.orm import foreign, remote
 
 Base = declarative_base()
 
-
-# -------------------- User Model --------------------
 class User(Base):
     __tablename__ = 'users'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String(128), nullable=False, unique=True)
-    email = Column(String(128), nullable=False, unique=True)
-    password_hash = Column(String(256), nullable=False)
+    username = Column(String(64), nullable=False, unique=True)
+    email = Column(String(120), nullable=False, unique=True)
+    password_hash = Column(String(128), nullable=False)  # Store hashed passwords
+    role = Column(String(32), default='analyst')  # admin, analyst, trader
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    
-    __table_args__ = (
-        Index('idx_user_username', 'username'),
-        Index('idx_user_email', 'email'),
-    )
+
+    # Relationship to portfolios (one-to-many)
+    portfolios = relationship('Portfolio', backref='user', lazy=True)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             'id': self.id,
             'username': self.username,
             'email': self.email,
+            'role': self.role,
             'created_at': self.created_at.isoformat() if self.created_at is not None else None
         }
-
 
 class JournalEntry(Base):
     __tablename__ = 'journal_entries'
@@ -108,7 +106,8 @@ class Portfolio(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(128), nullable=False)
-    owner_id = Column(Integer, nullable=True)  # Link to user table when available
+    # Added ForeignKey to users.id to resolve relationship issue
+    owner_id = Column(Integer, ForeignKey('users.id'), nullable=True)  # Link to user table when available
     risk_profile = Column(String(32), nullable=False, default='moderate')
     initial_capital = Column(Float, nullable=False, default=100000.0)
     current_value = Column(Float, nullable=True)
@@ -145,7 +144,13 @@ class Memecoin(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     
     # Relationships
-    positions = relationship('PortfolioPosition', backref='memecoin')
+    # Using primaryjoin since there is no FK on PortfolioPosition.symbol pointing to Memecoin.symbol
+    positions = relationship(
+        'PortfolioPosition',
+        primaryjoin="Memecoin.symbol == foreign(PortfolioPosition.symbol)",
+        backref='memecoin',
+        viewonly=True
+    )
 
     def to_dict(self) -> Dict[str, Any]:
         return {

@@ -49,7 +49,7 @@ PERSONA_REGISTRY = get_persona_registry()
 # Database helpers
 from db import init_db, get_session
 from models import Strategy
-from models import Portfolio, PortfolioPosition
+from models import Portfolio, PortfolioPosition, StrategyProfile
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -145,6 +145,22 @@ try:
     from ai_firm.ceo import AutonomousCEO, CEOPersonality
     from ai_firm.agent_manager import AgentManager
     from rl_core.env_market_sim import MarketSimEnv
+
+class MockDebateEngine:
+    """Fallback debate engine when AI Firm Core fails to load"""
+    def __init__(self):
+        self.agent_manager = None
+
+    async def conduct_debate(self, symbol: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "symbol": symbol,
+            "decision": "HOLD",
+            "confidence": 0.5,
+            "transcript": [
+                {"speaker": "System", "message": "AI Core offline. Using fallback logic."}
+            ],
+            "votes": []
+        }
     
     agent_manager = AgentManager()
     ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
@@ -163,7 +179,7 @@ try:
     RL_ENV_READY = True
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
-    logger.error(f"❌ AI Firm core initialization failed: {e}")
+    logger.error(f"❌ AI Firm core initialization failed: {e}"); DEBATE_ENGINE = MockDebateEngine()
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
