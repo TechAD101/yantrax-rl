@@ -6,6 +6,7 @@ and decision-making authority over the 20+ agent AI firm.
 
 import json
 import uuid
+import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
@@ -38,6 +39,7 @@ class AutonomousCEO:
     """Autonomous CEO with memory and decision-making capabilities"""
     
     def __init__(self, personality: CEOPersonality = CEOPersonality.BALANCED):
+        self.logger = logging.getLogger(__name__)
         self.personality = personality
         self.memory_system = CEOMemorySystem()
         self.decision_history = []
