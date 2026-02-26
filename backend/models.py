@@ -145,7 +145,13 @@ class Memecoin(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     
     # Relationships
-    positions = relationship('PortfolioPosition', backref='memecoin')
+    positions = relationship(
+        'PortfolioPosition',
+        primaryjoin="Memecoin.symbol == PortfolioPosition.symbol",
+        foreign_keys="[PortfolioPosition.symbol]",
+        backref='memecoin',
+        viewonly=True
+    )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -190,7 +196,7 @@ class Order(Base):
     __tablename__ = 'orders'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    portfolio_id = Column(Integer, ForeignKey('portfolios.id'), nullable=False)  # Link to portfolio
+    portfolio_id = Column(Integer, ForeignKey('portfolios.id'), nullable=True)  # Link to portfolio
     symbol = Column(String(32), nullable=False)
     usd = Column(Float, nullable=False)
     quantity = Column(Float, nullable=False, default=0.0)
