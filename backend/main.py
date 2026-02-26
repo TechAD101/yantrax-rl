@@ -633,6 +633,15 @@ def get_market_price():
     symbol = request.args.get('symbol', 'AAPL').upper()
     return jsonify(market_provider.get_price(symbol)), 200
 
+
+@app.route('/market-prices', methods=['GET'])
+def get_market_prices():
+    """Get current market prices for multiple symbols via Waterfall"""
+    symbols_str = request.args.get('symbols', 'AAPL,MSFT,GOOGL')
+    symbols = [s.strip() for s in symbols_str.split(',') if s.strip()]
+    if not symbols:
+        return jsonify({'error': 'No symbols provided'}), 400
+    return jsonify(market_provider.get_prices(symbols)), 200
 @app.route('/test-alpaca', methods=['GET'])
 def test_alpaca():
     """Force test Alpaca API"""
