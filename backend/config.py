@@ -13,7 +13,11 @@ class Config:
     DEBUG = os.getenv('DEBUG', 'true').lower() == 'true'
     PORT = int(os.getenv('PORT', 5000))
     
-# API Keys - Environment variables required for production
+    # API Keys - Environment variables required for production
+    YANTRAX_ADMIN_KEY = os.getenv('YANTRAX_ADMIN_KEY', 'dev-admin-key-change-in-prod')
+    if YANTRAX_ADMIN_KEY == 'dev-admin-key-change-in-prod':
+        logger.warning("Using default YANTRAX_ADMIN_KEY. Set a secure key in production.")
+
     FMP_API_KEY = os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY')
     if not FMP_API_KEY:
         logger.warning("FMP_API_KEY not found in environment. Market data may be limited.")
