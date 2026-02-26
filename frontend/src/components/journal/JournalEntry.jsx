@@ -1,13 +1,15 @@
-// src/components/journal/JournalEntry.jsx
 import React, { useState, useEffect } from 'react';
 import MoodSelector from './MoodSelector';
 import JournalInsights from './JournalInsights';
+import { getJournalEntries } from '../../api/api';
 
 const JournalEntry = () => {
     const [mood, setMood] = useState('neutral');
     const [entry, setEntry] = useState('');
     const [prompt, setPrompt] = useState('');
     const [saved, setSaved] = useState(false);
+    const [recentEntries, setRecentEntries] = useState([]);
+    const [stats, setStats] = useState({ total: 0, winRate: 0, avgConfidence: 0 });
 
     const prompts = [
         "What was your emotional state before your last trade?",
@@ -19,6 +21,34 @@ const JournalEntry = () => {
     useEffect(() => {
         // Rotate prompt daily (mock random for now)
         setPrompt(prompts[Math.floor(Math.random() * prompts.length)]);
+
+        const fetchEntries = async () => {
+            try {
+                const data = await getJournalEntries(20); // Fetch recent entries for stats
+                const entries = Array.isArray(data) ? data : (data.entries || []);
+
+                if (entries.length > 0) {
+                    setRecentEntries(entries.slice(0, 5));
+
+                    const total = entries.length;
+                    const wins = entries.filter(e => (e.reward || 0) > 0).length;
+                    const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
+
+                    const totalConfidence = entries.reduce((acc, e) => acc + (e.confidence || 0), 0);
+                    let avgConf = total > 0 ? (totalConfidence / total) : 0;
+                    if (avgConf <= 1 && avgConf > 0) avgConf *= 100;
+
+                    setStats({
+                        total,
+                        winRate,
+                        avgConfidence: Math.round(avgConf)
+                    });
+                }
+            } catch (error) {
+                console.error("Failed to fetch journal entries:", error);
+            }
+        };
+        fetchEntries();
     }, []);
 
     const handleSubmit = () => {
@@ -31,10 +61,26 @@ const JournalEntry = () => {
             prompt
         });
 
+        // TODO: Implement backend persistence for journal entries
+
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
         // Reset entry if needed, or keep for edit
         setEntry(''); // clear for next
+    };
+
+    // Helper to format date
+    const formatDate = (dateString) => {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffTime = Math.abs(now - date);
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) return 'Today';
+        if (diffDays === 1) return 'Yesterday';
+        if (diffDays < 7) return `${diffDays} day(s) ago`;
+        return date.toLocaleDateString();
     };
 
     return (
@@ -99,22 +145,49 @@ const JournalEntry = () => {
                 <div className="space-y-6">
                     <JournalInsights />
 
-                    {/* Quick Stats or Previous Entries Preview could go here */}
+                    {/* Quick Stats & Previous Entries Preview */}
                     <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Recent Entries</h3>
-                        <div className="space-y-4">
-                            {[1, 2, 3].map((d) => (
-                                <div key={d} className="border-b border-gray-800 pb-3 last:border-0 last:pb-0">
-                                    <div className="flex justify-between text-xs text-gray-500 mb-1">
-                                        <span>{d} day(s) ago</span>
-                                        <span>😐 Neutral</span>
-                                    </div>
-                                    <p className="text-gray-300 text-sm truncate">
-                                        Market was choppy, stayed cash mostly...
-                                    </p>
-                                </div>
-                            ))}
+                        {/* Quick Stats Header */}
+                        <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-800">
+                           <div className="text-center">
+                                <p className="text-xs text-gray-500 uppercase">Entries</p>
+                                <p className="text-xl font-bold text-white">{stats.total}</p>
+                           </div>
+                           <div className="text-center">
+                                <p className="text-xs text-gray-500 uppercase">Win Rate</p>
+                                <p className="text-xl font-bold text-green-400">{stats.winRate}%</p>
+                           </div>
+                           <div className="text-center">
+                                <p className="text-xs text-gray-500 uppercase">Conf.</p>
+                                <p className="text-xl font-bold text-blue-400">{stats.avgConfidence}%</p>
+                           </div>
                         </div>
+
+                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Recent Entries</h3>
+
+                        {recentEntries.length === 0 ? (
+                            <div className="text-center py-4 text-gray-500 text-sm">
+                                No entries yet. Start writing!
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {recentEntries.map((e, i) => (
+                                    <div key={e.id || i} className="border-b border-gray-800 pb-3 last:border-0 last:pb-0">
+                                        <div className="flex justify-between text-xs text-gray-500 mb-1">
+                                            <span>{formatDate(e.timestamp)}</span>
+                                            {/* Action or Confidence as proxy for mood */}
+                                            <span className={e.action === 'BUY' ? 'text-green-400' : (e.action === 'SELL' ? 'text-red-400' : 'text-gray-400')}>
+                                                {e.action || 'ENTRY'} {(e.confidence || 0) > 0.8 ? '🔥' : ''}
+                                            </span>
+                                        </div>
+                                        <p className="text-gray-300 text-sm truncate">
+                                            {e.notes || (e.symbol ? `${e.symbol} Trade` : 'Journal Entry')}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
                         <button className="w-full mt-4 py-2 text-sm text-blue-400 hover:text-blue-300 border border-blue-900 hover:bg-blue-900/20 rounded-lg transition-colors">
                             View Archive
                         </button>
