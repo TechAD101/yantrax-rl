@@ -272,62 +272,6 @@ class PerplexityIntelligenceService:
         
         return sentiment
         
-        prompt = f"""Analyze the current market sentiment for {ticker} stock.
-
-Respond ONLY with a JSON object in this exact format:
-{{
-    "mood": "bullish|bearish|neutral|mixed",
-    "confidence": 0.0 to 1.0,
-    "summary": "2-3 sentence summary of current sentiment",
-    "key_factors": ["factor 1", "factor 2", "factor 3"],
-    "sources": ["source 1", "source 2"]
-}}
-
-{"Include recent news events in your analysis." if include_news else ""}
-Be specific about price levels, percentages, and concrete data points."""
-        
-        response = await self._call_perplexity(prompt, system_prompt)
-        
-        if response:
-            try:
-                # Extract JSON from response
-                json_str = response
-                if "```json" in response:
-                    json_str = response.split("```json")[1].split("```")[0]
-                elif "```" in response:
-                    json_str = response.split("```")[1].split("```")[0]
-                
-                data = json.loads(json_str.strip())
-                
-                sentiment = MarketSentiment(
-                    ticker=ticker,
-                    mood=data.get("mood", "neutral"),
-                    confidence=float(data.get("confidence", 0.5)),
-                    summary=data.get("summary", "Unable to analyze sentiment"),
-                    key_factors=data.get("key_factors", []),
-                    sources=data.get("sources", ["Perplexity AI"]),
-                    timestamp=datetime.now().isoformat()
-                )
-                
-                # Cache result
-                self._cache[cache_key] = sentiment
-                self._cache_timestamps[cache_key] = datetime.now()
-                
-                return sentiment
-                
-            except json.JSONDecodeError as e:
-                logger.warning(f"Failed to parse Perplexity response as JSON: {e}")
-        
-        # Return fallback sentiment
-        return MarketSentiment(
-            ticker=ticker,
-            mood="neutral",
-            confidence=0.3,
-            summary=f"Unable to fetch real-time sentiment for {ticker}. Perplexity API may be unavailable.",
-            key_factors=["API unavailable"],
-            sources=["Fallback"],
-            timestamp=datetime.now().isoformat()
-        )
     
     def get_market_sentiment_sync(self, ticker: str, include_news: bool = True) -> MarketSentiment:
         """Synchronous version of get_market_sentiment."""
