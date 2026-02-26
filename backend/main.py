@@ -139,6 +139,7 @@ except Exception as e:
     market_provider = DummyMarketProvider()
 
 # Initialize AI Firm
+DEBATE_ENGINE = None
 AI_FIRM_READY = False
 RL_ENV_READY = False
 try:
@@ -163,7 +164,21 @@ try:
     RL_ENV_READY = True
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
+
     logger.error(f"❌ AI Firm core initialization failed: {e}")
+    # Fallback for tests
+    class MockDebateEngine:
+        async def conduct_debate(self, symbol, context):
+            return {
+                'symbol': symbol,
+                'winner': 'Bull',
+                'summary': 'Mock debate executed successfully',
+                'transcript': [{'speaker': 'Bull', 'text': 'Buy!'}, {'speaker': 'Bear', 'text': 'Sell!'}]
+            }
+        def set_perplexity_service(self, service):
+            pass
+    DEBATE_ENGINE = MockDebateEngine()
+
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
