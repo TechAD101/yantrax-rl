@@ -234,11 +234,11 @@ class CathieAgent(PersonaAgent):
         symbol = context.get('symbol', 'UNKNOWN')
         
         # Run Cathie's existing analysis pipeline
-        innovation_score = self._analyze_innovation(context)
-        growth_score = self._assess_growth_potential(context)
-        disruption_score = self._evaluate_disruption(context)
-        sector_timing = self._evaluate_sector_timing(context)
-        recommendation = self._generate_innovation_recommendation(
+        innovation_score = self._calculate_innovation_score(context.get("company_data", {}), context.get("sector_data", {}))
+        growth_score = self._assess_growth_potential(context.get("company_data", {}), context.get("market_data", {}))
+        disruption_score = self._analyze_disruption_potential(context)
+        sector_timing = self._evaluate_sector_timing(context.get("sector_data", {}))
+        recommendation = self._generate_recommendation(
             innovation_score, growth_score, disruption_score, sector_timing
         )
         
