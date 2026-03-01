@@ -776,7 +776,7 @@ def test_fmp():
         }), 500
 
 @app.route('/market-price-stream', methods=['GET'])
-def market_price_stream():
+async def market_price_stream():
     """Server-Sent Events stream of market prices for a symbol.
 
     Query params:
@@ -800,14 +800,14 @@ def market_price_stream():
     if 'LAST_PRICES' not in globals():
         LAST_PRICES = {}
 
-    def event_generator():
+    async def event_generator():
         sent = 0
         failure_count = 0
         backoff = 1
         # Stream continuously; on provider errors, emit an error event or fallback data but do NOT stop the stream
         while True:
             try:
-                data = unified_get_market_price(symbol)
+                data = await asyncio.to_thread(unified_get_market_price, symbol)
 
                 # update fallback cache
                 try:
@@ -831,8 +831,7 @@ def market_price_stream():
 
                 # Sleep, but break if client disconnects (Flask will close generator)
                 try:
-                    import time
-                    time.sleep(interval)
+                    await asyncio.sleep(interval)
                 except GeneratorExit:
                     break
             except GeneratorExit:
@@ -886,8 +885,7 @@ def market_price_stream():
                 failure_count += 1
                 backoff = min(60, backoff * 2) if failure_count > 1 else 1
                 try:
-                    import time
-                    time.sleep(min(backoff, interval))
+                    await asyncio.sleep(min(backoff, interval))
                 except GeneratorExit:
                     break
                 # continue streaming instead of breaking so clients remain connected
