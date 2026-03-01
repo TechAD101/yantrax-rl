@@ -164,6 +164,14 @@ try:
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
     logger.error(f"❌ AI Firm core initialization failed: {e}")
+
+    class MockDebateEngine:
+        async def conduct_debate(self, ticker: str, context: dict = None):
+            return {
+                'ticker': ticker,
+                'winning_signal': 'BULLISH',
+                'arguments': [{'persona': 'Mock', 'argument': 'Always goes up'}]
+            }
     DEBATE_ENGINE = MockDebateEngine()
     AI_FIRM_READY = True
 
