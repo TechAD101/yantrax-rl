@@ -1,0 +1,15 @@
+<<<<<<< SEARCH
+    # Relationships
+    positions = relationship('PortfolioPosition', backref='memecoin')
+
+    def to_dict(self) -> Dict[str, Any]:
+=======
+    # Relationships
+    positions = relationship(
+        'PortfolioPosition',
+        backref='memecoin',
+        primaryjoin='Memecoin.symbol == foreign(PortfolioPosition.symbol)'
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+>>>>>>> REPLACE
