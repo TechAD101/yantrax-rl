@@ -148,10 +148,8 @@ class Memecoin(Base):
     positions = relationship(
         'PortfolioPosition',
         primaryjoin="Memecoin.symbol==PortfolioPosition.symbol",
-        foreign_keys=['PortfolioPosition.symbol'],
-        backref='memecoin',
-        uselist=True,
-        viewonly=True
+        foreign_keys="PortfolioPosition.symbol",
+        backref='memecoin'
     )
 
     def to_dict(self) -> Dict[str, Any]:
