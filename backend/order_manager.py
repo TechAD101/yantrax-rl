@@ -14,7 +14,15 @@ def create_order(symbol: str, usd: float) -> Dict[str, Any]:
         price = exec_res.get('price')
         quantity = exec_res.get('quantity')
 
-        o = Order(symbol=symbol.upper(), usd=usd, quantity=quantity, price=price, status='filled', executed_at=datetime.utcnow(), meta={'simulated': True})
+        # For MVP/Paper trading, ensure a default portfolio exists if none provided
+        from models import Portfolio
+        portfolio = session.query(Portfolio).first()
+        if not portfolio:
+            portfolio = Portfolio(name="Default Paper Portfolio", risk_profile="moderate", initial_capital=100000.0)
+            session.add(portfolio)
+            session.flush() # flush to get the ID
+
+        o = Order(portfolio_id=portfolio.id, symbol=symbol.upper(), usd=usd, quantity=quantity, price=price, status='filled', executed_at=datetime.utcnow(), meta={'simulated': True})
         session.add(o)
         session.commit()
         return o.to_dict()

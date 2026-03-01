@@ -48,7 +48,7 @@ PERSONA_REGISTRY = get_persona_registry()
 
 # Database helpers
 from db import init_db, get_session
-from models import Strategy
+from models import Strategy, StrategyProfile
 from models import Portfolio, PortfolioPosition
 
 def _load_dotenv_fallback(filepath: str) -> None:
@@ -156,14 +156,21 @@ try:
     # Debate Engine
     from ai_firm.debate_engine import DebateEngine
     DEBATE_ENGINE = DebateEngine(agent_manager)
-    if PERPLEXITY_READY:
+    if PERPLEXITY_READY and DEBATE_ENGINE:
         DEBATE_ENGINE.set_perplexity_service(PERPLEXITY_SERVICE)
         
     AI_FIRM_READY = True
     RL_ENV_READY = True
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
+except ImportError as ie:
+    # This might happen in minimal test environments where some modules are mocked or missing
+    logger.warning(f"⚠️ AI Firm modules incomplete (ImportError): {ie}")
+    AI_FIRM_READY = False
+    RL_ENV_READY = False
+    DEBATE_ENGINE = None
 except Exception as e:
     logger.error(f"❌ AI Firm core initialization failed: {e}")
+    DEBATE_ENGINE = None
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
