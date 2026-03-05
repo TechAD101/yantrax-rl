@@ -1,5 +1,11 @@
 import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
+
 from main import app
+
 
 
 def test_create_and_list_order():

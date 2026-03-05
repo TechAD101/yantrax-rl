@@ -15,10 +15,21 @@ def setup_db():
     yield
 
 
+from unittest.mock import AsyncMock
+
 @pytest.fixture
 def client():
     import main
     main.app.config['TESTING'] = True
+
+    # Mock the debate engine to prevent 503
+    main.DEBATE_ENGINE = AsyncMock()
+    main.DEBATE_ENGINE.conduct_debate.return_value = {
+        'ticker': 'AAPL',
+        'winning_signal': 'BUY',
+        'arguments': ['Argument 1', 'Argument 2']
+    }
+
     with main.app.test_client() as client:
         yield client
 
