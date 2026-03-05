@@ -19,6 +19,18 @@ def setup_db():
 def client():
     import main
     main.app.config['TESTING'] = True
+
+    # Mock DEBATE_ENGINE to prevent 503 error
+    class MockDebateEngine:
+        def start_debate(self, ticker, **kwargs):
+            return {
+                'ticker': ticker,
+                'winning_signal': 'BULLISH',
+                'confidence': 0.85,
+                'arguments': ['Mock argument 1', 'Mock argument 2']
+            }
+    main.DEBATE_ENGINE = MockDebateEngine()
+
     with main.app.test_client() as client:
         yield client
 
