@@ -140,6 +140,26 @@ class MarketDataService:
     def get_price(self, symbol: str) -> Dict[str, Any]:
         """Alias for get_stock_price for backwards compatibility."""
         return self.get_stock_price(symbol)
+
+    def get_fundamentals(self, symbol: str) -> Dict[str, Any]:
+        """Shim for fundamental data (v2 currently only supports price)."""
+        return {}
+
+    def get_verification_stats(self) -> Dict[str, Any]:
+        """Shim for verification statistics."""
+        return {}
+
+    def get_price_verified(self, symbol: str) -> Dict[str, Any]:
+        """Shim for triple-source verification (v2 currently is single-source)."""
+        return {
+            'verified': False,
+            'price': self.get_price(symbol).get('price', 0),
+            'source': 'fmp'
+        }
+
+    def get_recent_audit_logs(self, limit: int = 10) -> List[Any]:
+        """Shim for audit trail logs."""
+        return []
         
     def _fetch_fmp_batch(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:
         """Fetch a batch of symbols from FinancialModelingPrep in one HTTP call.
