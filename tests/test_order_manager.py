@@ -1,6 +1,13 @@
 import json
-from main import app
+import sys
+import os
+import pytest
+from unittest.mock import MagicMock, patch
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
+
+from main import app
+import order_manager
 
 def test_create_and_list_order():
     client = app.test_client()
@@ -20,3 +27,18 @@ def test_create_and_list_order():
     data2 = resp2.get_json()
     assert 'orders' in data2
     assert any(o['symbol'] == 'TEST' for o in data2['orders'])
+
+@patch('order_manager.get_session')
+@patch('order_manager.simulate_trade')
+def test_create_order_exception_rollback(mock_simulate_trade, mock_get_session):
+    session_mock = MagicMock()
+    mock_get_session.return_value = session_mock
+
+    mock_simulate_trade.side_effect = Exception("Simulated Failure")
+
+    with pytest.raises(Exception, match="Simulated Failure"):
+        order_manager.create_order("TEST", 100.0)
+
+    session_mock.rollback.assert_called_once()
+    session_mock.close.assert_called_once()
+    session_mock.commit.assert_not_called()
