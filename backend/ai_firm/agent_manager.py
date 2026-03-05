@@ -449,9 +449,9 @@ class AgentManager:
             payload['sample_agents'] = sample
 
             return payload
-        except Exception:
+        except (TypeError, ValueError, KeyError, AttributeError) as e:
             # If anything unexpected happens, log and return a safe minimal payload
-            self.logger.exception("agent_manager.get_agent_status unexpected error")
+            self.logger.exception("agent_manager.get_agent_status unexpected error: %s", e)
             return {
                 'total_agents': len(self.enhanced_agents),
                 'departments': {},
