@@ -43,3 +43,18 @@ def test_simulate_trade():
     res = ok.get_json()['result']
     assert res['symbol'] == 'TEST1'
     assert 'quantity' in res
+
+from unittest.mock import patch
+
+def test_scan_market_exception():
+    with patch('memecoin_service.get_session') as mock_get_session:
+        mock_session = mock_get_session.return_value
+        mock_session.commit.side_effect = Exception("DB Error")
+
+        from memecoin_service import scan_market
+        results = scan_market(['TEST_EX'])
+
+        mock_session.commit.assert_called_once()
+        mock_session.rollback.assert_called_once()
+        mock_session.close.assert_called_once()
+        assert len(results) == 1
