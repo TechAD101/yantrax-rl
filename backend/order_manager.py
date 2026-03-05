@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Dict, Any, List
 
 from db import get_session
-from models import Order
+from models import Order, Portfolio
 from memecoin_service import simulate_trade
 
 
@@ -14,7 +14,15 @@ def create_order(symbol: str, usd: float) -> Dict[str, Any]:
         price = exec_res.get('price')
         quantity = exec_res.get('quantity')
 
-        o = Order(symbol=symbol.upper(), usd=usd, quantity=quantity, price=price, status='filled', executed_at=datetime.utcnow(), meta={'simulated': True})
+        # Ensure default portfolio exists
+        portfolio = session.query(Portfolio).filter_by(name='Default Paper Portfolio').first()
+        if not portfolio:
+            portfolio = Portfolio(name='Default Paper Portfolio', owner_id=1, initial_capital=10000.0, current_balance=10000.0)
+            session.add(portfolio)
+            session.commit()
+            session.refresh(portfolio)
+
+        o = Order(portfolio_id=portfolio.id, symbol=symbol.upper(), usd=usd, quantity=quantity, price=price, status='filled', executed_at=datetime.utcnow(), meta={'simulated': True})
         session.add(o)
         session.commit()
         return o.to_dict()
