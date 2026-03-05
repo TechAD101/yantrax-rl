@@ -129,7 +129,9 @@ def _rsi_signals(prices: List[float], period: int = 14,
             else:
                 losses.append(abs(delta))
         avg_gain = sum(gains) / period if gains else 0
-        avg_loss = sum(losses) / period if losses else 1e-9
+        avg_loss = sum(losses) / period if losses else 0
+        if avg_loss == 0:
+            avg_loss = 1e-9
         rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
         if rsi < oversold:
