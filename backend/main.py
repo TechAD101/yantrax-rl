@@ -48,7 +48,7 @@ PERSONA_REGISTRY = get_persona_registry()
 
 # Database helpers
 from db import init_db, get_session
-from models import Strategy
+from models import Strategy, StrategyProfile
 from models import Portfolio, PortfolioPosition
 
 def _load_dotenv_fallback(filepath: str) -> None:
@@ -2471,4 +2471,4 @@ if __name__ == '__main__':
     ingest_thread.start()
     
     port = int(os.getenv('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=Config.DEBUG)
