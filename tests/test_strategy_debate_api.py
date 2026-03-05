@@ -18,7 +18,17 @@ def setup_db():
 @pytest.fixture
 def client():
     import main
+    from unittest.mock import Mock
     main.app.config['TESTING'] = True
+
+    # Mock DEBATE_ENGINE directly on main module
+    main.DEBATE_ENGINE = Mock()
+    main.DEBATE_ENGINE.debate.return_value = {
+        'ticker': 'AAPL',
+        'winning_signal': 'BUY',
+        'arguments': [{'persona': 'Warren', 'argument': 'Value is good'}]
+    }
+
     with main.app.test_client() as client:
         yield client
 
