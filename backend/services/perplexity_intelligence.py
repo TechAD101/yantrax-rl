@@ -736,7 +736,7 @@ Be specific with price levels, catalysts, and actionable insights."""
         try:
             from urllib.parse import urlparse
             return urlparse(url).netloc.replace("www.", "")
-        except:
+        except Exception:
             return url
     
     async def search_ticker_news(
