@@ -1587,14 +1587,14 @@ def list_strategies():
             try:
                 ms = float(min_sharpe)
                 query = query.filter(func.json_extract(Strategy.metrics, '$.sharpe').cast(Float) >= ms)
-            except Exception:
-                pass
+            except ValueError:
+                logger.warning(f"Invalid min_sharpe value: {min_sharpe}")
         if min_win_rate:
             try:
                 mw = float(min_win_rate)
                 query = query.filter(func.json_extract(Strategy.metrics, '$.win_rate').cast(Float) >= mw)
-            except Exception:
-                pass
+            except ValueError:
+                logger.warning(f"Invalid min_win_rate value: {min_win_rate}")
 
         total = query.count()
 
