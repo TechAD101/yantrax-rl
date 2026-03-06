@@ -6,15 +6,26 @@ from models import Order
 from memecoin_service import simulate_trade
 
 
-def create_order(symbol: str, usd: float) -> Dict[str, Any]:
+def create_order(symbol: str, usd: float, portfolio_id: int = None) -> Dict[str, Any]:
     session = get_session()
     try:
+        from models import Portfolio
+        if not portfolio_id:
+            # For testing/MVP purposes, fallback to a default portfolio if one exists, otherwise create one.
+            portfolio = session.query(Portfolio).first()
+            if not portfolio:
+                portfolio = Portfolio(name='Default Paper Portfolio', owner_id=1, risk_profile='aggressive', initial_capital=100000.0)
+                session.add(portfolio)
+                session.commit()
+                session.refresh(portfolio)
+            portfolio_id = portfolio.id
+
         # simulate execution (paper)
         exec_res = simulate_trade(symbol, usd)
         price = exec_res.get('price')
         quantity = exec_res.get('quantity')
 
-        o = Order(symbol=symbol.upper(), usd=usd, quantity=quantity, price=price, status='filled', executed_at=datetime.utcnow(), meta={'simulated': True})
+        o = Order(portfolio_id=portfolio_id, symbol=symbol.upper(), usd=usd, quantity=quantity, price=price, status='filled', executed_at=datetime.utcnow(), meta={'simulated': True})
         session.add(o)
         session.commit()
         return o.to_dict()

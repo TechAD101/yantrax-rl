@@ -7,7 +7,14 @@ import random
 import logging
 
 app = Flask(__name__)
-CORS(app)
+
+# Configure CORS securely
+cors_origins_str = os.environ.get(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:3000,http://127.0.0.1:3000'
+)
+allowed_origins = [origin.strip() for origin in cors_origins_str.split(',') if origin.strip()]
+CORS(app, resources={r"/*": {"origins": allowed_origins}})
 
 # Configuration
 TRADING_API = "http://localhost:5000"  # Your existing backend/main.py
