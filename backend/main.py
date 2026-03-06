@@ -49,7 +49,7 @@ PERSONA_REGISTRY = get_persona_registry()
 # Database helpers
 from db import init_db, get_session
 from models import Strategy
-from models import Portfolio, PortfolioPosition
+from models import Portfolio, PortfolioPosition, StrategyProfile
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -137,6 +137,21 @@ except Exception as e:
         def get_price_verified(self, symbol): return {'verified': False, 'price': 0}
         def get_recent_audit_logs(self, limit): return []
     market_provider = DummyMarketProvider()
+class MockDebateEngine:
+    def __init__(self, *args, **kwargs): pass
+    def set_perplexity_service(self, *args): pass
+    async def conduct_debate(self, ticker: str, context: dict) -> dict:
+        return {
+            "ticker": ticker,
+            "winning_signal": "HOLD",
+            "consensus_score": 0.5,
+            "arguments": [
+                {"agent": "Warren", "signal": "HOLD", "reasoning": "Mock debate engine active. No real analysis available.", "confidence": 0.5}
+            ],
+            "vote_distribution": {"HOLD": 1.0},
+            "participants": ["MockAgent"]
+        }
+
 
 # Initialize AI Firm
 AI_FIRM_READY = False
@@ -150,12 +165,7 @@ try:
     ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
     if PERPLEXITY_READY:
         ceo.set_perplexity_service(PERPLEXITY_SERVICE)
-    
     rl_env = MarketSimEnv()
-    
-    # Debate Engine
-    from ai_firm.debate_engine import DebateEngine
-    DEBATE_ENGINE = DebateEngine(agent_manager)
     if PERPLEXITY_READY:
         DEBATE_ENGINE.set_perplexity_service(PERPLEXITY_SERVICE)
         
@@ -163,6 +173,8 @@ try:
     RL_ENV_READY = True
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
+    logger.warning("Falling back to MockDebateEngine due to initialization failure")
+    DEBATE_ENGINE = MockDebateEngine()
     logger.error(f"❌ AI Firm core initialization failed: {e}")
 
 app = Flask(__name__)
