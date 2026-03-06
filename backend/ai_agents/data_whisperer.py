@@ -105,38 +105,46 @@ def analyze_data(symbol: str = "AAPL") -> Dict:
         print(f"[Data Whisperer] Real-time price for {symbol}: ${price}")
 
     # Enhanced market analysis
+    # Calculate indicators first
+    ma_20 = round(price * random.uniform(0.95, 1.05), 2)
+    ma_50 = round(price * random.uniform(0.90, 1.10), 2)
+    rsi = round(random.uniform(20, 80), 2)
+
+    trend = _analyze_trend(price, ma_50)
+    market_phase = _detect_market_phase(price, ma_50)
+
     market_data = {
         "symbol": symbol,
         "price": price,
         "volume": random.randint(100000, 10000000),  # Enhanced volume range
-        "trend": _analyze_trend(price),
+        "trend": trend,
         "volatility": _calculate_volatility(),
         "sentiment": _analyze_sentiment(symbol),
         "technical_indicators": {
-            "rsi": round(random.uniform(20, 80), 2),
+            "rsi": rsi,
             "macd_signal": random.choice(["bullish", "bearish", "neutral"]),
-            "moving_average_20": round(price * random.uniform(0.95, 1.05), 2),
-            "moving_average_50": round(price * random.uniform(0.90, 1.10), 2)
+            "moving_average_20": ma_20,
+            "moving_average_50": ma_50
         },
         "market_conditions": {
             "volatility_regime": _get_volatility_regime(),
-            "market_phase": _detect_market_phase(price)
+            "market_phase": market_phase
         }
     }
 
     print(f"[Data Whisperer] Analysis complete for {symbol}: {market_data['trend']} trend, {market_data['sentiment']} sentiment")
     return market_data
 
-def _analyze_trend(price: float) -> str:
+def _analyze_trend(price: float, ma_50: float) -> str:
     """Analyze price trend based on technical indicators"""
-    # Enhanced trend analysis logic
-    if price > 50000:
+    # Enhanced trend analysis logic based on MA50
+    if price > ma_50 * 1.05:
         return "strong_bullish"
-    elif price > 30000:
+    elif price > ma_50:
         return "bullish"  
-    elif price > 15000:
+    elif price > ma_50 * 0.95:
         return "sideways"
-    elif price > 8000:
+    elif price > ma_50 * 0.90:
         return "bearish"
     else:
         return "strong_bearish"
@@ -158,12 +166,12 @@ def _get_volatility_regime() -> str:
     """Detect current volatility regime"""
     return random.choice(["low_vol", "normal_vol", "high_vol", "crisis_vol"])
 
-def _detect_market_phase(price: float) -> str:
+def _detect_market_phase(price: float, ma_50: float) -> str:
     """Detect current market phase for strategy adaptation"""
-    # Simple market phase detection based on price levels
-    if price > 45000:
+    # Simple market phase detection relative to MA50
+    if price > ma_50 * 1.02:
         return "bull_market"
-    elif price < 15000:
+    elif price < ma_50 * 0.98:
         return "bear_market" 
     else:
         return "range_bound"
