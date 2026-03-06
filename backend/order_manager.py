@@ -17,7 +17,7 @@ def create_order(symbol: str, usd: float) -> Dict[str, Any]:
         # Ensure default portfolio exists
         portfolio = session.query(Portfolio).filter_by(name='Default Paper Portfolio').first()
         if not portfolio:
-            portfolio = Portfolio(name='Default Paper Portfolio', owner_id=1, initial_capital=10000.0, current_balance=10000.0)
+            portfolio = Portfolio(name='Default Paper Portfolio', owner_id=1, initial_capital=10000.0, current_value=10000.0)
             session.add(portfolio)
             session.commit()
             session.refresh(portfolio)

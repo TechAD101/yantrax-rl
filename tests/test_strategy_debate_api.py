@@ -22,7 +22,7 @@ def client():
 
     # Mock DEBATE_ENGINE to prevent 503 error
     class MockDebateEngine:
-        def conduct_debate(self, ticker, **kwargs):
+        async def conduct_debate(self, ticker, context=None, **kwargs):
             return {
                 'ticker': ticker,
                 'winning_signal': 'BULLISH',
