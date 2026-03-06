@@ -6,7 +6,7 @@ from models import Order
 from memecoin_service import simulate_trade
 
 
-def create_order(symbol: str, usd: float) -> Dict[str, Any]:
+def create_order(symbol: str, usd: float, portfolio_id: int = 1) -> Dict[str, Any]:
     session = get_session()
     try:
         # simulate execution (paper)
@@ -14,7 +14,7 @@ def create_order(symbol: str, usd: float) -> Dict[str, Any]:
         price = exec_res.get('price')
         quantity = exec_res.get('quantity')
 
-        o = Order(symbol=symbol.upper(), usd=usd, quantity=quantity, price=price, status='filled', executed_at=datetime.utcnow(), meta={'simulated': True})
+        o = Order(portfolio_id=portfolio_id, symbol=symbol.upper(), usd=usd, quantity=quantity, price=price, status='filled', executed_at=datetime.utcnow(), meta={'simulated': True})
         session.add(o)
         session.commit()
         return o.to_dict()
