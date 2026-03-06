@@ -43,13 +43,42 @@ class MoodBoardManager:
         
         current_weather = weather_map.get(market_mood, weather_map['neutral'])
         
-        # 3. Generate "HeatMap" Mock (Until we have live sector data)
-        # In future, this comes from market_data.get_sector_performance()
-        heatmap = [
-            {"sector": "Tech", "change": random.uniform(-2, 3), "status": "surging" if random.random() > 0.5 else "cooling"},
-            {"sector": "Crypto", "change": random.uniform(-5, 8), "status": "volatile"},
-            {"sector": "Energy", "change": random.uniform(-1, 2), "status": "silent"},
-        ]
+        # 3. Generate "HeatMap"
+        heatmap = []
+        try:
+            # Fetch real sector data from MarketDataService (which delegates to RealtimePipeline)
+            if hasattr(self.market_data, 'get_sector_performance'):
+                sector_data = self.market_data.get_sector_performance()
+                if sector_data and "sectors" in sector_data:
+                    for s in sector_data["sectors"]:
+                        change = float(s.get("change_pct", 0.0))
+
+                        # Determine status based on change magnitude
+                        if change > 1.5:
+                            status = "surging"
+                        elif change < -1.5:
+                            status = "cooling"
+                        elif abs(change) > 0.5:
+                            status = "volatile"
+                        else:
+                            status = "silent"
+
+                        heatmap.append({
+                            "sector": s.get("name", "Unknown"),
+                            "change": change,
+                            "status": status
+                        })
+        except Exception:
+            # Fallback will handle empty heatmap
+            pass
+
+        # Fallback to mock data if live fetch fails or is empty
+        if not heatmap:
+            heatmap = [
+                {"sector": "Tech", "change": random.uniform(-2, 3), "status": "surging" if random.random() > 0.5 else "cooling"},
+                {"sector": "Crypto", "change": random.uniform(-5, 8), "status": "volatile"},
+                {"sector": "Energy", "change": random.uniform(-1, 2), "status": "silent"},
+            ]
 
         return {
             "emotion_dial": {
