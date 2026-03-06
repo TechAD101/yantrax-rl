@@ -49,7 +49,7 @@ PERSONA_REGISTRY = get_persona_registry()
 # Database helpers
 from db import init_db, get_session
 from models import Strategy
-from models import Portfolio, PortfolioPosition
+from models import Portfolio, PortfolioPosition, StrategyProfile
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -1745,10 +1745,11 @@ def create_order_endpoint():
     data = request.get_json() or {}
     symbol = data.get('symbol')
     usd = float(data.get('usd', 100.0))
+    portfolio_id = data.get('portfolio_id')
     if not symbol:
         return jsonify({'error': 'symbol is required'}), 400
     try:
-        o = create_order(symbol, usd)
+        o = create_order(symbol, usd, portfolio_id)
         return jsonify({'order': o}), 201
     except Exception as e:
         logger.error(f"Error creating order: {e}")

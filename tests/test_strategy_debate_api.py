@@ -18,6 +18,18 @@ def setup_db():
 @pytest.fixture
 def client():
     import main
+
+    # Mock DEBATE_ENGINE
+    class MockDebateEngine:
+        async def conduct_debate(self, symbol, context):
+            return {
+                'ticker': symbol,
+                'winning_signal': 'buy',
+                'arguments': ['Arg 1', 'Arg 2']
+            }
+
+    main.DEBATE_ENGINE = MockDebateEngine()
+
     main.app.config['TESTING'] = True
     with main.app.test_client() as client:
         yield client
