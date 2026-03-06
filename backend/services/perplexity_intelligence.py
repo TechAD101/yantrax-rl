@@ -580,11 +580,7 @@ Be specific with price levels, catalysts, and actionable insights."""
         self._cache_timestamps[cache_key] = datetime.now()
         
         return result
-
-    def _get_fallback_market_data(self, tickers: List[str]) -> Dict[str, Any]:
         """Generate fallback data when API is rate limited."""
-        return {
-            'comprehensive_data': {
                 'market_sentiment': 'neutral',
                 'risk_factors': ['Rate limit active - using caution'],
                 'trends': ['Limited data available'],
@@ -783,17 +779,27 @@ Be specific with price levels, catalysts, and actionable insights."""
             Dict mapping ticker to search results
         """
         results = {}
-        for ticker in tickers[:5]:  # Limit to 5 tickers
-            try:
-                search_result = await self.search_financial_news(
-                    f"{ticker} {query_suffix}",
-                    max_results=3
-                )
-                results[ticker] = search_result.get("results", [])
-            except Exception as e:
-                logger.warning(f"Multi-search failed for {ticker}: {e}")
-                results[ticker] = []
+        processed_tickers = tickers[:5]  # Limit to 5 tickers
+
+        # Optimize: Create tasks for parallel execution
+        tasks = [
+            self.search_financial_news(
+                f"{ticker} {query_suffix}",
+                max_results=3
+            )
+            for ticker in processed_tickers
+        ]
+
+        # Execute in parallel
+        search_results = await asyncio.gather(*tasks, return_exceptions=True)
         
+        # Process results
+        for ticker, result in zip(processed_tickers, search_results):
+            if isinstance(result, Exception):
+                logger.warning(f"Multi-search failed for {ticker}: {result}")
+                results[ticker] = []
+            else:
+                results[ticker] = result.get("results", [])
         return {
             "tickers": tickers,
             "results": results,

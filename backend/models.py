@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, Dict, Any
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, JSON, Boolean, Index
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import declarative_base, relationship, foreign, remote, foreign, remote
 
 Base = declarative_base()
 
@@ -145,7 +145,7 @@ class Memecoin(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     
     # Relationships
-    positions = relationship('PortfolioPosition', backref='memecoin')
+    positions = relationship('PortfolioPosition', backref='memecoin', primaryjoin="foreign(PortfolioPosition.symbol) == remote(Memecoin.symbol)", viewonly=True)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
