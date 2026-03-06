@@ -197,6 +197,83 @@ class WaterfallMarketDataService:
                 'expiry': expiry
             }
 
+
+    def get_prices(self, symbols: list[str]) -> Dict[str, Any]:
+        """Get current prices for multiple symbols using bulk fetch"""
+        symbols = [s.upper() for s in symbols]
+        results = {}
+        missing = []
+        now = time.time()
+
+        # 1. Check Cache
+        for symbol in symbols:
+            if symbol in self.cache['price']:
+                cached = self.cache['price'][symbol]
+                if now < cached['expiry']:
+                    results[symbol] = self._success(cached['source'] + " (cached)", symbol, cached['price'])
+                else:
+                    missing.append(symbol)
+            else:
+                missing.append(symbol)
+
+        if not missing:
+            return results
+
+        # 2. Bulk Fetch YFinance
+        if self._can_use('yfinance'):
+            try:
+                self._use('yfinance')
+                import yfinance as yf
+                import math
+                import pandas as pd
+
+                # Use download for bulk
+                # interval='1d' is default, period='1d' gets last day
+                # group_by='ticker' makes it easier to process
+                # auto_adjust=True gives adjusted close
+                data = yf.download(tickers=missing, period='1d', interval='1d', progress=False, group_by='ticker')
+
+                if len(missing) == 1:
+                    symbol = missing[0]
+                    if not data.empty:
+                        # For single ticker, data is DataFrame with columns Open, High, Low, Close, etc.
+                        # Handle case where column might be 'Close' or 'Adj Close'
+                        price_col = 'Close' if 'Close' in data.columns else 'Adj Close'
+                        if price_col in data.columns:
+                            val = data[price_col].iloc[-1]
+                            if not math.isnan(val):
+                                res = self._success('yfinance', symbol, float(val))
+                                self._update_cache('price', symbol, res)
+                                results[symbol] = res
+                else:
+                    # For multiple tickers, columns are MultiIndex (Ticker, PriceType)
+                    for symbol in missing:
+                        try:
+                            # Accessing multi-index dataframe
+                            # data[symbol] returns DataFrame with OHLC columns for that symbol
+                            if symbol in data:
+                                symbol_data = data[symbol]
+                                if not symbol_data.empty:
+                                    price_col = 'Close' if 'Close' in symbol_data.columns else 'Adj Close'
+                                    if price_col in symbol_data.columns:
+                                        val = symbol_data[price_col].iloc[-1]
+                                        if not math.isnan(val):
+                                            res = self._success('yfinance', symbol, float(val))
+                                            self._update_cache('price', symbol, res)
+                                            results[symbol] = res
+                        except KeyError:
+                            pass # Symbol data not found
+            except Exception as e:
+                logger.warning(f"YFinance bulk fetch failed: {e}")
+
+        # 3. Fallback for remaining missing symbols (Iterative)
+        remaining = [s for s in symbols if s not in results]
+        if remaining:
+             for symbol in remaining:
+                 results[symbol] = self.get_price(symbol)
+
+        return results
+
     def get_fundamentals(self, symbol: str) -> Dict[str, Any]:
         """Get fundamental data with caching & circuit breaking"""
         symbol = symbol.upper()

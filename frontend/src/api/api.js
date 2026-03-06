@@ -69,11 +69,12 @@ export const subscribeToUpdates = (endpoint, callback, interval = UPDATE_INTERVA
 // Additional utilities
 export const getMultiAssetData = async (symbols = ["AAPL", "MSFT", "GOOGL", "TSLA"]) => {
   try {
-    const promises = symbols.map(symbol =>
-      fetch(`${BASE_URL}/market-price?symbol=${encodeURIComponent(symbol)}&analysis=true`).then(r => r.json()).catch(e => ({ symbol, error: e.message }))
-    );
-    const results = await Promise.all(promises);
-    return results.reduce((acc, res) => { if (!res.error && res.symbol) acc[res.symbol] = res; return acc }, {});
+    const symbolStr = symbols.join(',');
+    const response = await fetch();
+    if (!response.ok) {
+        throw new Error();
+    }
+    return await response.json();
   } catch (e) {
     console.error('Multi-asset data fetch failed:', e);
     return {};
