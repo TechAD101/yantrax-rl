@@ -145,7 +145,13 @@ class Memecoin(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     
     # Relationships
-    positions = relationship('PortfolioPosition', backref='memecoin')
+    # Fix for mapper failure: explicit primaryjoin because there is no foreign key
+    positions = relationship(
+        'PortfolioPosition',
+        primaryjoin='foreign(PortfolioPosition.symbol) == remote(Memecoin.symbol)',
+        backref='memecoin',
+        viewonly=True
+    )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
