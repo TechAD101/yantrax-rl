@@ -9,7 +9,11 @@ from db import get_session
 from models import User
 
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    if os.getenv('FLASK_ENV', 'development') == 'production':
+        raise ValueError("SECRET_KEY environment variable must be set in production")
+    SECRET_KEY = 'dev-secret-key-change-in-production'
 
 
 def hash_password(password: str) -> str:
