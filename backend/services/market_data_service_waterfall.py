@@ -122,64 +122,23 @@ class WaterfallMarketDataService:
         if symbol in self.cache['price']:
             cached = self.cache['price'][symbol]
             if now < cached['expiry']:
-                # logger.debug(f"🎯 Cache hit for {symbol}")
                 return self._success(cached['source'] + " (cached)", symbol, cached['price'])
 
-        errors = []
+        # Priority Order: YFinance -> FMP -> Alpaca -> Alpha Vantage
+        providers = ['yfinance', 'fmp', 'alpaca', 'alpha_vantage']
         
-        # Priority Order: Cheap/Free First
-        # 1. YFinance (Free but heavy)
-        if self._can_use('yfinance'):
+        for provider in providers:
             try:
-                self._use('yfinance')
-                import yfinance as yf
-                ticker = yf.Ticker(symbol)
-                # fast_info is faster than history
-                price = ticker.fast_info.last_price
+                fetch_func = getattr(self, f'_fetch_price_{provider}')
+                price = fetch_func(symbol)
                 if price:
-                    res = self._success('yfinance', symbol, price)
+                    res = self._success(provider, symbol, price)
                     self._update_cache('price', symbol, res)
                     return res
             except Exception as e:
-                errors.append(f"yfinance: {e}")
+                logger.warning(f"Error in {provider} waterfall step: {e}")
 
-        # 2. FMP (Lightweight JSON)
-        if self._can_use('fmp'):
-            try:
-                self._use('fmp')
-                import requests
-                url = f"https://financialmodelingprep.com/api/v3/quote/{symbol}?apikey={self.providers['fmp']['key']}"
-                resp = requests.get(url, timeout=5)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if data:
-                        res = self._success('fmp', symbol, data[0]['price'])
-                        self._update_cache('price', symbol, res)
-                        return res
-            except Exception as e:
-                errors.append(f"fmp: {e}")
-
-        # 3. Alpaca (Reliable Fallback)
-        if self._can_use('alpaca'):
-            try:
-                import requests
-                self._use('alpaca')
-                headers = {
-                    'APCA-API-KEY-ID': self.providers['alpaca']['key'],
-                    'APCA-API-SECRET-KEY': self.providers['alpaca']['secret']
-                }
-                url = f"https://data.alpaca.markets/v2/stocks/{symbol}/quotes/latest"
-                resp = requests.get(url, headers=headers, timeout=5)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    price = float(data['quote']['ap']) # Ask price as proxy
-                    res = self._success('alpaca', symbol, price)
-                    self._update_cache('price', symbol, res)
-                    return res
-            except Exception as e:
-                errors.append(f"alpaca: {e}")
-
-        logger.error(f"❌ All price providers failed for {symbol}: {errors}")
+        logger.error(f"❌ All price providers failed for {symbol}")
         return self._error(symbol, "All providers failed")
 
     def _update_cache(self, cache_type: str, symbol: str, result: Dict[str, Any]):
@@ -303,13 +262,13 @@ class WaterfallMarketDataService:
         
         for source in sources_to_try:
             try:
-                if source == 'yfinance': price = self._fetch_price_yfinance(symbol)
-                elif source == 'fmp': price = self._fetch_price_fmp(symbol)
-                elif source == 'alpha_vantage': price = self._fetch_price_alpha_vantage(symbol)
-                else: continue
+                fetch_func = getattr(self, f'_fetch_price_{source}')
+                price = fetch_func(symbol)
                 
                 if price and price > 0:
                     successful_fetches.append({'source': source, 'price': price})
+                else:
+                    failed_sources[source] = "Failed to fetch or rate limited"
             except Exception as e:
                 failed_sources[source] = str(e)
         
@@ -373,46 +332,79 @@ class WaterfallMarketDataService:
         stats['audit_log_size'] = len(self.audit_log)
         return stats
 
-    def _fetch_price_yfinance(self, symbol):
+    def _fetch_price_yfinance(self, symbol: str):
+        if not self._can_use('yfinance'):
+            return None
         try:
+            self._use('yfinance')
             import yfinance as yf
-            data = yf.Ticker(symbol).history(period='1d')
-            if data is None or data.empty:
-                return None
-            return float(data['Close'].iloc[-1])
+            ticker = yf.Ticker(symbol)
+            # Try fast_info (preferred)
+            try:
+                price = ticker.fast_info.last_price
+                if price:
+                    return float(price)
+            except Exception:
+                pass
+
+            # Fallback to history
+            data = ticker.history(period='1d')
+            if data is not None and not data.empty:
+                return float(data['Close'].iloc[-1])
+            return None
         except Exception as e:
             logger.warning(f"yfinance fetch failed for {symbol}: {e}")
             return None
 
-    def _fetch_price_fmp(self, symbol):
-        if not self.providers['fmp']['enabled']:
+    def _fetch_price_fmp(self, symbol: str):
+        if not self._can_use('fmp'):
             return None
         try:
-            self.providers['fmp']['limiter'].check()
+            self._use('fmp')
             import requests
-            r = requests.get(f"https://financialmodelingprep.com/api/v3/quote-short/{symbol}",
-                             params={'apikey': self.providers['fmp']['key']}, timeout=5)
-            data = r.json()
-            if data:
-                self.providers['fmp']['limiter'].increment()
-                return float(data[0]['price'])
+            url = f"https://financialmodelingprep.com/api/v3/quote/{symbol}?apikey={self.providers['fmp']['key']}"
+            resp = requests.get(url, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data:
+                    return float(data[0]['price'])
             return None
         except Exception as e:
             logger.warning(f"FMP fetch failed for {symbol}: {e}")
             return None
 
-    def _fetch_price_alpha_vantage(self, symbol):
-        if not self.providers['alpha_vantage']['enabled']:
+    def _fetch_price_alpaca(self, symbol: str):
+        if not self._can_use('alpaca'):
             return None
         try:
-            self.providers['alpha_vantage']['limiter'].check()
+            self._use('alpaca')
+            import requests
+            headers = {
+                'APCA-API-KEY-ID': self.providers['alpaca']['key'],
+                'APCA-API-SECRET-KEY': self.providers['alpaca']['secret']
+            }
+            url = f"https://data.alpaca.markets/v2/stocks/{symbol}/quotes/latest"
+            resp = requests.get(url, headers=headers, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                price = float(data['quote']['ap']) # Ask price as proxy
+                return price
+            return None
+        except Exception as e:
+            logger.warning(f"alpaca fetch failed for {symbol}: {e}")
+            return None
+
+    def _fetch_price_alpha_vantage(self, symbol: str):
+        if not self._can_use('alpha_vantage'):
+            return None
+        try:
+            self._use('alpha_vantage')
             import requests
             r = requests.get("https://www.alphavantage.co/query",
                              params={'function': 'GLOBAL_QUOTE', 'symbol': symbol,
                                      'apikey': self.providers['alpha_vantage']['key']}, timeout=5)
             price = r.json().get('Global Quote', {}).get('05. price')
             if price:
-                self.providers['alpha_vantage']['limiter'].increment()
                 return float(price)
             return None
         except Exception as e:
