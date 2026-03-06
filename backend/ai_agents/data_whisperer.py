@@ -2,7 +2,7 @@
 
 import random
 from typing import Dict
-from services.market_data_service import get_latest_price
+from services.market_data_service_waterfall import get_waterfall_service
 import threading
 import time
 
@@ -29,6 +29,18 @@ _cb_open = False
 _cb_last_attempt = 0
 _CB_FAILURE_THRESHOLD = 3
 _CB_RESET_TIMEOUT = 30  # seconds
+
+
+def get_latest_price(symbol: str) -> float:
+    """Helper to get price from waterfall service"""
+    try:
+        service = get_waterfall_service()
+        result = service.get_price(symbol)
+        if result and result.get('price') and result['price'] > 0:
+            return float(result['price'])
+        return None
+    except Exception:
+        return None
 
 def analyze_data(symbol: str = "AAPL") -> Dict:
     """
