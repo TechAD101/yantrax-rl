@@ -19,6 +19,14 @@ def setup_db():
 def client():
     import main
     main.app.config['TESTING'] = True
+
+    # Mock DEBATE_ENGINE for the test environment
+    class MockDebateEngine:
+        async def conduct_debate(self, symbol, context):
+            return {"ticker": symbol, "winning_signal": "BUY", "arguments": ["mock"]}
+
+    main.DEBATE_ENGINE = MockDebateEngine()
+
     with main.app.test_client() as client:
         yield client
 
