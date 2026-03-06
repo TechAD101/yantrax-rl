@@ -1,11 +1,11 @@
 import os
 import sys
 import pytest
+import uuid
 
-os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
-from db import init_db, get_session
+from db import init_db
 from auth_service import register_user, get_user
 
 @pytest.fixture(scope='module', autouse=True)
@@ -15,7 +15,8 @@ def setup_db():
 
 def test_get_user_success():
     """Test fetching an existing user by ID returns the correct user dictionary."""
-    registered = register_user('get_user_tester', 'getuser@example.com', 'securepass123')
+    unique_id = str(uuid.uuid4())[:8]
+    registered = register_user(f'tester_{unique_id}', f'test_{unique_id}@example.com', 'securepass123')
     user_id = registered.get('id')
 
     assert user_id is not None
@@ -24,8 +25,8 @@ def test_get_user_success():
 
     assert fetched_user is not None
     assert fetched_user['id'] == user_id
-    assert fetched_user['username'] == 'get_user_tester'
-    assert fetched_user['email'] == 'getuser@example.com'
+    assert fetched_user['username'] == f'tester_{unique_id}'
+    assert fetched_user['email'] == f'test_{unique_id}@example.com'
 
 def test_get_user_not_found():
     """Test fetching a non-existent user by ID returns None."""
