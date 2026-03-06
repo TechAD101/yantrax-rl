@@ -1,31 +1,27 @@
 from datetime import datetime
-from typing import Optional, Dict, Any
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, JSON, Boolean, Index
-from sqlalchemy.orm import declarative_base, relationship
+from typing import Dict, Any, List, Optional
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, JSON, Index, Boolean
+from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.ext.declarative import declared_attr
 
 Base = declarative_base()
 
-
-# -------------------- User Model --------------------
 class User(Base):
     __tablename__ = 'users'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String(128), nullable=False, unique=True)
-    email = Column(String(128), nullable=False, unique=True)
-    password_hash = Column(String(256), nullable=False)
+    username = Column(String(64), nullable=False, unique=True)
+    email = Column(String(120), nullable=False, unique=True)
+    password_hash = Column(String(128), nullable=False)
+    role = Column(String(32), default='user')
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    
-    __table_args__ = (
-        Index('idx_user_username', 'username'),
-        Index('idx_user_email', 'email'),
-    )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             'id': self.id,
             'username': self.username,
             'email': self.email,
+            'role': self.role,
             'created_at': self.created_at.isoformat() if self.created_at is not None else None
         }
 
@@ -145,7 +141,12 @@ class Memecoin(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     
     # Relationships
-    positions = relationship('PortfolioPosition', backref='memecoin')
+    positions = relationship(
+        'PortfolioPosition',
+        primaryjoin='foreign(PortfolioPosition.symbol) == Memecoin.symbol',
+        backref='memecoin',
+        viewonly=True
+    )
 
     def to_dict(self) -> Dict[str, Any]:
         return {

@@ -49,7 +49,7 @@ PERSONA_REGISTRY = get_persona_registry()
 # Database helpers
 from db import init_db, get_session
 from models import Strategy
-from models import Portfolio, PortfolioPosition
+from models import Portfolio, PortfolioPosition, StrategyProfile
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -164,6 +164,8 @@ try:
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
     logger.error(f"❌ AI Firm core initialization failed: {e}")
+    from mock_debate_engine import MockDebateEngine
+    DEBATE_ENGINE = MockDebateEngine()
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
@@ -655,7 +657,7 @@ def test_alpaca():
     try:
         import requests  # type: ignore[import]
         
-        logger.info(f"  Alpaca Key (first 10): {alpaca_key[:10] if alpaca_key else 'NONE'}")
+        logger.info(f"  Alpaca Key configured: {bool(alpaca_key)}")
         logger.info("  Making request to Alpaca...")
         
         headers = {
@@ -709,7 +711,7 @@ def test_fmp():
     try:
         import requests  # type: ignore[import]
 
-        logger.info(f"  FMP Key (first 10): {fmp_key[:10] if fmp_key else 'NONE'}")
+        logger.info(f"  FMP Key configured: {bool(fmp_key)}")
         logger.info("  Making request to FMP (quote endpoint)...")
 
         params = {'apikey': fmp_key}
@@ -919,7 +921,7 @@ def massive_quote():
         except ImportError:
             return jsonify({'status': 'error', 'message': 'MassiveMarketDataService not available'}), 500
         
-        logger.info(f"Using Massive provider key (first 8 chars): {massive_key[:8]}")
+        logger.info(f"Using Massive provider key configured: {bool(massive_key)}")
         msvc = MassiveMarketDataService(api_key=massive_key, base_url=base_url)
         data = msvc.fetch_quote(symbol)
         return jsonify({'status': 'success', 'symbol': symbol, 'data': data, 'timestamp': datetime.now().isoformat()})
