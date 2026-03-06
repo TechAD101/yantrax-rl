@@ -48,7 +48,7 @@ PERSONA_REGISTRY = get_persona_registry()
 
 # Database helpers
 from db import init_db, get_session
-from models import Strategy
+from models import Strategy, StrategyProfile
 from models import Portfolio, PortfolioPosition
 
 def _load_dotenv_fallback(filepath: str) -> None:
@@ -87,6 +87,7 @@ _load_dotenv_fallback(os.path.join(os.path.dirname(__file__), '.env'))
 logger.info(f"🔍 YANTRAX RL v{Config.VERSION} - ARCHITECT MODE")
 
 # Initialize Authored Services via Registry
+DEBATE_ENGINE = None
 KNOWLEDGE_BASE = registry.get_service('kb')
 PERPLEXITY_SERVICE = registry.get_service('perplexity')
 PERPLEXITY_READY = bool(PERPLEXITY_SERVICE and PERPLEXITY_SERVICE.is_configured())
@@ -154,16 +155,20 @@ try:
     rl_env = MarketSimEnv()
     
     # Debate Engine
-    from ai_firm.debate_engine import DebateEngine
-    DEBATE_ENGINE = DebateEngine(agent_manager)
-    if PERPLEXITY_READY:
-        DEBATE_ENGINE.set_perplexity_service(PERPLEXITY_SERVICE)
+    try:
+        from ai_firm.debate_engine import DebateEngine
+        DEBATE_ENGINE = DebateEngine(agent_manager)
+        if PERPLEXITY_READY:
+            DEBATE_ENGINE.set_perplexity_service(PERPLEXITY_SERVICE)
+        logger.info("✅ Debate Engine initialized")
+    except Exception as de_error:
+        logger.error(f"❌ Debate Engine initialization failed: {de_error}")
         
     AI_FIRM_READY = True
     RL_ENV_READY = True
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
-    logger.error(f"❌ AI Firm core initialization failed: {e}")
+    logger.exception(f"❌ AI Firm core initialization failed: {e}")
 
 app = Flask(__name__)
 CORS(app, origins=['*'])

@@ -16,7 +16,12 @@ class KnowledgeBase:
     
     def __init__(self, persist_dir: str = "chroma_db"):
         self.persist_dir = persist_dir
-        self.client = chromadb.PersistentClient(path=self.persist_dir)
+        try:
+            self.client = chromadb.PersistentClient(path=self.persist_dir)
+        except Exception as e:
+            logger.warning(f"Failed to initialize Persistent ChromaDB in knowledge_base.py: {e}. Falling back to Ephemeral.")
+            self.client = chromadb.EphemeralClient()
+
         self.collection = self.client.get_or_create_collection(name="institutional_wisdom")
         
         # Seed if empty
@@ -70,13 +75,12 @@ class KnowledgeBase:
             }
         ]
         
-        for item in wisdom:
-            self.collection.add(
-                documents=[item["text"]],
-                metadatas=[item["metadata"]],
-                ids=[item["id"]]
-            )
-        logger.info("🌱 Seeded Institutional Knowledge Base with 8 core principles.")
+        self.collection.add(
+            documents=[item["text"] for item in wisdom],
+            metadatas=[item["metadata"] for item in wisdom],
+            ids=[item["id"] for item in wisdom]
+        )
+        logger.info(f"🌱 Seeded Institutional Knowledge Base with {len(wisdom)} core principles.")
 
     def query_wisdom(self, query: str, n_results: int = 2) -> List[Dict[str, Any]]:
         """Find relevant wisdom for a given market scenario"""
