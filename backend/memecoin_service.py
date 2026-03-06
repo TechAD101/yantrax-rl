@@ -43,15 +43,29 @@ def scan_market(sample_symbols: List[str]) -> List[Dict[str, Any]]:
     # Persist top 3 to DB for quick access
     session = get_session()
     try:
-        for r in results[:3]:
-            # Upsert by symbol
-            m = session.query(Memecoin).filter_by(symbol=r['symbol']).first()
-            if not m:
-                m = Memecoin(symbol=r['symbol'], score=r['degen_score'], meta={'social': r['social'], 'mentions': r['mentions'], 'price': r['price'], 'momentum': r['momentum']})
-                session.add(m)
-            else:
+        # Optimization: Batch query existing records
+        top_candidates = results[:3]
+        symbols = [r['symbol'] for r in top_candidates]
+
+        existing_records = session.query(Memecoin).filter(Memecoin.symbol.in_(symbols)).all()
+        existing_map = {m.symbol: m for m in existing_records}
+
+        for r in top_candidates:
+            symbol = r['symbol']
+            meta_data = {
+                'social': r['social'],
+                'mentions': r['mentions'],
+                'price': r['price'],
+                'momentum': r['momentum']
+            }
+
+            if symbol in existing_map:
+                m = existing_map[symbol]
                 m.score = r['degen_score']
-                m.meta = {'social': r['social'], 'mentions': r['mentions'], 'price': r['price'], 'momentum': r['momentum']}
+                m.meta = meta_data
+            else:
+                m = Memecoin(symbol=symbol, score=r['degen_score'], meta=meta_data)
+                session.add(m)
         session.commit()
     except Exception:
         session.rollback()
