@@ -18,6 +18,23 @@ def setup_db():
 @pytest.fixture
 def client():
     import main
+    from unittest.mock import MagicMock, AsyncMock
+
+    # Mock DEBATE_ENGINE if not available
+    if not hasattr(main, 'DEBATE_ENGINE') or main.DEBATE_ENGINE is None:
+        main.DEBATE_ENGINE = MagicMock()
+        main.DEBATE_ENGINE.conduct_debate = AsyncMock(return_value={
+            'ticker': 'AAPL',
+            'winning_signal': 'BUY',
+            'arguments': ['Bull case', 'Bear case']
+        })
+    else:
+        main.DEBATE_ENGINE.conduct_debate = AsyncMock(return_value={
+            'ticker': 'AAPL',
+            'winning_signal': 'BUY',
+            'arguments': ['Bull case', 'Bear case']
+        })
+
     main.app.config['TESTING'] = True
     with main.app.test_client() as client:
         yield client

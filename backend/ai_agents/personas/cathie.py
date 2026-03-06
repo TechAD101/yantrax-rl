@@ -234,14 +234,22 @@ class CathieAgent(PersonaAgent):
         symbol = context.get('symbol', 'UNKNOWN')
         
         # Run Cathie's existing analysis pipeline
-        innovation_score = self._analyze_innovation(context)
-        growth_score = self._assess_growth_potential(context)
-        disruption_score = self._evaluate_disruption(context)
-        sector_timing = self._evaluate_sector_timing(context)
-        recommendation = self._generate_innovation_recommendation(
-            innovation_score, growth_score, disruption_score, sector_timing
+        company_data = context.get('company_data', {})
+        market_data = context.get('market_data', {})
+        sector_data = context.get('sector_data', {})
+
+        innovation_score = self._calculate_innovation_score(company_data, sector_data)
+        growth_potential = self._assess_growth_potential(company_data, market_data)
+        disruption_analysis = self._analyze_disruption_potential(context)
+        sector_timing = self._evaluate_sector_timing(sector_data)
+
+        recommendation = self._generate_recommendation(
+            innovation_score, growth_potential, disruption_analysis, sector_timing
         )
         
+        growth_score = growth_potential['score']
+        disruption_score = disruption_analysis['score']
+
         # Create structured PersonaAnalysis
         analysis = PersonaAnalysis(
             symbol=symbol,
