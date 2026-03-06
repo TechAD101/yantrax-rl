@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from flask import Blueprint, request, jsonify
 import numpy as np
-from sqlalchemy.orm import Session
+
 from models import RawMarketData, AuditLog
 from db import get_session
 
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 data_ingest_bp = Blueprint('data_ingest', __name__)
 
-def verify_triple_source(instrument: str, metric: str, sources_data: dict, db: Session):
+def verify_triple_source(instrument: str, metric: str, sources_data: dict, db):
     """
     sources_data: {'fmp': 150.5, 'alpaca': 150.6, 'yfinance': 150.4}
     Returns validation status, fallback level, and trust contribution

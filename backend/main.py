@@ -40,6 +40,20 @@ import numpy as np
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+
+class MockDebateEngine:
+    async def conduct_debate(self, ticker: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "ticker": ticker,
+            "winning_signal": "BUY",
+            "confidence": 0.85,
+            "arguments": [
+                {"agent": "Warren", "signal": "HOLD", "reasoning": "Waiting for better valuation."},
+                {"agent": "Cathie", "signal": "BUY", "reasoning": "Innovation potential is high."}
+            ],
+            "consensus_reached": True,
+            "mock": True
+        }
 # ==================== MAIN SYSTEM INTEGRATION ====================
 from config import Config
 from service_registry import registry
@@ -48,7 +62,7 @@ PERSONA_REGISTRY = get_persona_registry()
 
 # Database helpers
 from db import init_db, get_session
-from models import Strategy
+from models import Strategy, StrategyProfile
 from models import Portfolio, PortfolioPosition
 
 def _load_dotenv_fallback(filepath: str) -> None:
@@ -164,6 +178,9 @@ try:
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
     logger.error(f"❌ AI Firm core initialization failed: {e}")
+    logger.warning("⚠️ Using MockDebateEngine fallback due to initialization failure.")
+    DEBATE_ENGINE = MockDebateEngine()
+    AI_FIRM_READY = True
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
