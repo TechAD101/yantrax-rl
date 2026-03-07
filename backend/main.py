@@ -42,6 +42,7 @@ logger = logging.getLogger(__name__)
 
 # ==================== MAIN SYSTEM INTEGRATION ====================
 from config import Config
+from utils.security import require_api_key
 from service_registry import registry
 from ai_agents.persona_registry import get_persona_registry
 PERSONA_REGISTRY = get_persona_registry()
@@ -49,7 +50,7 @@ PERSONA_REGISTRY = get_persona_registry()
 # Database helpers
 from db import init_db, get_session
 from models import Strategy
-from models import Portfolio, PortfolioPosition
+from models import Portfolio, PortfolioPosition, StrategyProfile
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -1001,6 +1002,7 @@ def metrics():
 
 
 @app.route('/god-cycle', methods=['GET'])
+@require_api_key
 def god_cycle():
     """Execute 24-agent voting cycle with REAL DATA & Debate Engine"""
     symbol = request.args.get('symbol', 'AAPL').upper()

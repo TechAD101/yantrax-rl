@@ -21,6 +21,9 @@ class Config:
     ALPACA_SECRET_KEY = os.getenv('ALPACA_SECRET_KEY', '')
     PERPLEXITY_API_KEY = os.getenv('PERPLEXITY_API_KEY', '')
     
+    # Security Config
+    ADMIN_API_KEY = os.getenv('ADMIN_API_KEY')
+
     # DB Config
     PERSIST_DIR = "chroma_db"
     
