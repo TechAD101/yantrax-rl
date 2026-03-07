@@ -356,8 +356,21 @@ class YantraXEnhancedSystem:
                 'market_state': self.current_state,
                 'agent_participation': voting_result['participating_agents']
             }
-            ceo_decision = ceo.make_strategic_decision(ceo_context)
-            
+            # Fix: Run async CEO decision in sync context
+            import asyncio
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                ceo_decision = loop.run_until_complete(ceo.make_strategic_decision(ceo_context))
+                loop.close()
+            except Exception as e:
+                logger.error(f"CEO Decision failed in RL cycle: {e}")
+                class DummyDecision:
+                    confidence = 0
+                    reasoning = f"CEO Error: {e}"
+                    id = "error"
+                    decision_type = "HOLD"
+                ceo_decision = DummyDecision()
             final_signal = voting_result['winning_signal']
             
             # --- INSTITUTIONAL TRADE VALIDATOR (8-POINT) ---
@@ -456,7 +469,23 @@ class YantraXEnhancedSystem:
                 'consensus_strength': voting_result['consensus_strength'],
                 'agent_participation': voting_result['participating_agents']
             }
-            ceo_decision = ceo.make_strategic_decision(ceo_context)
+
+            # Fix: Run async CEO decision in sync context
+            import asyncio
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                ceo_decision = loop.run_until_complete(ceo.make_strategic_decision(ceo_context))
+                loop.close()
+            except Exception as e:
+                logger.error(f"CEO Decision failed in AI cycle: {e}")
+                # Create a dummy decision object so getattr does not fail
+                class DummyDecision:
+                    confidence = 0
+                    reasoning = f"CEO Unavailable: {e}"
+                    id = "error"
+                    decision_type = "HOLD"
+                ceo_decision = DummyDecision()
             
             final_signal = voting_result['winning_signal']
             
@@ -1045,17 +1074,22 @@ def god_cycle():
     if AI_FIRM_READY:
         try:
             # 3. CEO Strategic Decision (Triggers Debate & Ghost inside)
-            # Handle both sync and async CEO decision methods
+            # Fix: Run async CEO decision in sync context
             import asyncio
             try:
-                # Try async first
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 ceo_decision = loop.run_until_complete(ceo.make_strategic_decision(context))
                 loop.close()
-            except (RuntimeError, AttributeError):
-                # Fallback to sync if no event loop available
-                ceo_decision = ceo.make_strategic_decision(context)
+            except Exception as e:
+                logger.error(f"CEO Decision failed in God cycle: {e}")
+                # Create a dummy decision object so getattr does not fail
+                class DummyDecision:
+                    confidence = 0
+                    reasoning = f"CEO Unavailable: {e}"
+                    id = "error"
+                    decision_type = "HOLD"
+                ceo_decision = DummyDecision()
             
             # Safely extract CEO decision attributes
             ceo_data = {
