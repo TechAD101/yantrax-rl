@@ -1,3 +1,10 @@
+
+import sys
+from unittest.mock import MagicMock
+sys.modules['sqlalchemy'] = MagicMock()
+sys.modules['sqlalchemy.orm'] = MagicMock()
+sys.modules['requests'] = MagicMock()
+sys.modules['numpy'] = MagicMock()
 #!/usr/bin/env python3
 """
 YantraX RL Comprehensive Test Framework
