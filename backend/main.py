@@ -147,7 +147,7 @@ class MockDebateEngine:
     async def conduct_debate(self, symbol, context):
         return {
             "ticker": symbol,
-            "decision": "hold",
+            "winning_signal": "hold",
             "confidence": 0.5,
             "bull_case": "Mock bull case",
             "bear_case": "Mock bear case",

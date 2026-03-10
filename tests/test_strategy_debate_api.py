@@ -1,10 +1,3 @@
-
-import sys
-from unittest.mock import MagicMock
-sys.modules['sqlalchemy'] = MagicMock()
-sys.modules['sqlalchemy.orm'] = MagicMock()
-sys.modules['requests'] = MagicMock()
-sys.modules['numpy'] = MagicMock()
 import os
 import sys
 import pytest
