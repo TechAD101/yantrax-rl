@@ -1,8 +1,18 @@
 # ai_agents/data_whisperer.py - Enhanced Data Analysis Agent
 
 import random
-from typing import Dict
+from typing import Dict, Any
 from services.market_data_service import get_latest_price
+
+# ML/AI Service Imports
+try:
+    from services.perplexity_intelligence import get_perplexity_service, get_sentiment
+    from services.market_sentiment_service import get_sentiment_service
+except ImportError:
+    # Graceful degradation if services module structure is different or dependencies missing
+    get_perplexity_service = None
+    get_sentiment = None
+    get_sentiment_service = None
 import threading
 import time
 
@@ -105,13 +115,18 @@ def analyze_data(symbol: str = "AAPL") -> Dict:
         print(f"[Data Whisperer] Real-time price for {symbol}: ${price}")
 
     # Enhanced market analysis
+    ml_sentiment = _get_ml_sentiment(symbol)
+
     market_data = {
         "symbol": symbol,
         "price": price,
         "volume": random.randint(100000, 10000000),  # Enhanced volume range
         "trend": _analyze_trend(price),
         "volatility": _calculate_volatility(),
-        "sentiment": _analyze_sentiment(symbol),
+        "sentiment": ml_sentiment["sentiment"],
+        "sentiment_confidence": ml_sentiment["confidence"],
+        "sentiment_source": ml_sentiment["source"],
+        "sentiment_details": ml_sentiment["details"],
         "technical_indicators": {
             "rsi": round(random.uniform(20, 80), 2),
             "macd_signal": random.choice(["bullish", "bearish", "neutral"]),
@@ -148,11 +163,98 @@ def _calculate_volatility() -> float:
     volatility_multiplier = random.choice([0.8, 1.0, 1.2, 1.5])  # Different vol regimes
     return round(base_vol * volatility_multiplier, 4)
 
+
 def _analyze_sentiment(symbol: str) -> str:
-    """Analyze market sentiment (placeholder for future ML integration)"""
+    """Analyze market sentiment - wrapper for ML integration"""
+    # Use the ML helper but return only the string for backward compatibility
+    result = _get_ml_sentiment(symbol)
+    return result["sentiment"]
+
+def _get_ml_sentiment(symbol: str) -> Dict[str, Any]:
+    """
+    Get market sentiment using available ML/AI services.
+    Returns a dictionary with sentiment, confidence, source, and details.
+    """
+    # Default fallback
+    fallback_sentiment = _analyze_sentiment_fallback(symbol)
+    result = {
+        "sentiment": fallback_sentiment,
+        "confidence": 0.5,
+        "source": "heuristic_fallback",
+        "details": {}
+    }
+
+    # 1. Try Perplexity AI (True ML)
+    if get_perplexity_service and get_sentiment:
+        try:
+            pplx = get_perplexity_service()
+            if pplx.is_configured():
+                ml_data = get_sentiment(symbol)
+                # Handle potential key variations
+                raw_sentiment = ml_data.get('market_sentiment', ml_data.get('sentiment', 'neutral'))
+                if not isinstance(raw_sentiment, str):
+                    raw_sentiment = 'neutral'
+                mapped_sentiment = _map_sentiment(raw_sentiment)
+
+                result = {
+                    "sentiment": mapped_sentiment,
+                    "confidence": ml_data.get('confidence', 0.8),
+                    "source": "perplexity_ai",
+                    "details": ml_data
+                }
+                return result
+        except Exception as e:
+            print(f"[Data Whisperer] Perplexity sentiment analysis failed: {e}")
+
+    # 2. Try MarketSentimentService (Statistical/Heuristic)
+    if get_sentiment_service:
+        try:
+            mss = get_sentiment_service()
+            # get_comprehensive_sentiment returns dict with 'recommendation' like STRONG_BUY
+            comp = mss.get_comprehensive_sentiment(symbol)
+            rec = comp.get('recommendation', 'HOLD')
+            mapped_sentiment = _map_recommendation(rec)
+
+            result = {
+                "sentiment": mapped_sentiment,
+                "confidence": comp.get('confidence', 0.6),
+                "source": "market_sentiment_service",
+                "details": comp
+            }
+            return result
+        except Exception as e:
+            print(f"[Data Whisperer] MarketSentimentService analysis failed: {e}")
+
+    return result
+
+def _map_sentiment(raw_sentiment: str) -> str:
+    """Map arbitrary sentiment strings to standard set"""
+    s = raw_sentiment.lower()
+    if 'very' in s and 'bull' in s: return 'very_bullish'
+    if 'very' in s and 'bear' in s: return 'very_bearish'
+    if 'strong' in s and 'bull' in s: return 'very_bullish'
+    if 'strong' in s and 'bear' in s: return 'very_bearish'
+    if 'bull' in s: return 'bullish'
+    if 'bear' in s: return 'bearish'
+    return 'neutral'
+
+def _map_recommendation(rec: str) -> str:
+    """Map recommendation strings to standard sentiment set"""
+    mapping = {
+        'STRONG_BUY': 'very_bullish',
+        'BUY': 'bullish',
+        'HOLD': 'neutral',
+        'SELL': 'bearish',
+        'STRONG_SELL': 'very_bearish'
+    }
+    return mapping.get(rec, 'neutral')
+
+def _analyze_sentiment_fallback(symbol: str) -> str:
+    """Original random fallback for sentiment"""
     sentiments = ["very_bullish", "bullish", "neutral", "bearish", "very_bearish"]
     weights = [0.15, 0.25, 0.30, 0.20, 0.10]  # Slightly optimistic bias
     return random.choices(sentiments, weights=weights)[0]
+
 
 def _get_volatility_regime() -> str:
     """Detect current volatility regime"""
