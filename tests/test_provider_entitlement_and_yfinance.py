@@ -4,6 +4,10 @@ from unittest.mock import Mock, patch
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
+import sys
+from unittest.mock import MagicMock
+if 'requests' not in sys.modules:
+    sys.modules['requests'] = MagicMock()
 from services.market_data_service_massive import MassiveMarketDataService
 
 
