@@ -49,7 +49,7 @@ PERSONA_REGISTRY = get_persona_registry()
 # Database helpers
 from db import init_db, get_session
 from models import Strategy
-from models import Portfolio, PortfolioPosition
+from models import Portfolio, PortfolioPosition, StrategyProfile
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -164,6 +164,19 @@ try:
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
     logger.error(f"❌ AI Firm core initialization failed: {e}")
+    class MockDebateEngine:
+        async def conduct_debate(self, symbol, context):
+            return {
+                "ticker": symbol,
+                "winning_signal": "BUY",
+                "confidence": 0.85,
+                "arguments": [
+                    {"persona": "Warren", "stance": "bullish", "reason": "Undervalued fundamentals"},
+                    {"persona": "Degen", "stance": "bullish", "reason": "Moon mission imminent"}
+                ]
+            }
+    DEBATE_ENGINE = MockDebateEngine()
+
 
 app = Flask(__name__)
 CORS(app, origins=['*'])

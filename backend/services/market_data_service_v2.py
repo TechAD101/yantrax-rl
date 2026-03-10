@@ -294,3 +294,12 @@ class MarketDataService:
                 for provider, limiter in self.rate_limiters.items()
             }
         }
+    def get_sector_performance(self) -> Dict[str, Any]:
+        """Delegate sector performance to RealtimeMarketPipeline"""
+        try:
+            from services.realtime_pipeline import get_realtime_pipeline
+            pipeline = get_realtime_pipeline()
+            return pipeline.get_sector_performance()
+        except Exception as e:
+            logger.error(f"Failed to fetch sector performance: {e}")
+            return {}
