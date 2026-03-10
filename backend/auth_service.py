@@ -1,5 +1,7 @@
 """Simple authentication service using bcrypt"""
 import os
+import secrets
+import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import hashlib
@@ -8,8 +10,15 @@ import hmac
 from db import get_session
 from models import User
 
+logger = logging.getLogger(__name__)
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    if os.getenv('FLASK_ENV') == 'production':
+        raise ValueError("FATAL: SECRET_KEY environment variable is required in production.")
+
+    logger.warning("SECRET_KEY not found. Generating a secure random key for development.")
+    SECRET_KEY = secrets.token_hex(32)
 
 
 def hash_password(password: str) -> str:
