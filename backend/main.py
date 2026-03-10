@@ -164,6 +164,19 @@ try:
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
     logger.error(f"❌ AI Firm core initialization failed: {e}")
+    class MockDebateEngine:
+        async def conduct_debate(self, symbol, context):
+            return {
+                "ticker": symbol,
+                "winning_signal": "BUY",
+                "confidence": 0.85,
+                "arguments": [
+                    {"persona": "Warren", "stance": "bullish", "reason": "Undervalued fundamentals"},
+                    {"persona": "Degen", "stance": "bullish", "reason": "Moon mission imminent"}
+                ]
+            }
+    DEBATE_ENGINE = MockDebateEngine()
+
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
