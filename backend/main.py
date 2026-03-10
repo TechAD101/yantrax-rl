@@ -48,7 +48,7 @@ PERSONA_REGISTRY = get_persona_registry()
 
 # Database helpers
 from db import init_db, get_session
-from models import Strategy
+from models import Strategy, StrategyProfile
 from models import Portfolio, PortfolioPosition
 
 def _load_dotenv_fallback(filepath: str) -> None:
@@ -141,6 +141,19 @@ except Exception as e:
 # Initialize AI Firm
 AI_FIRM_READY = False
 RL_ENV_READY = False
+
+
+class MockDebateEngine:
+    async def conduct_debate(self, symbol, context):
+        return {
+            "ticker": symbol,
+            "winning_signal": "hold",
+            "confidence": 0.5,
+            "bull_case": "Mock bull case",
+            "bear_case": "Mock bear case",
+            "summary": "Mock debate result due to missing dependencies"
+        }
+
 try:
     from ai_firm.ceo import AutonomousCEO, CEOPersonality
     from ai_firm.agent_manager import AgentManager
@@ -164,6 +177,8 @@ try:
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
     logger.error(f"❌ AI Firm core initialization failed: {e}")
+    DEBATE_ENGINE = MockDebateEngine()
+
 
 app = Flask(__name__)
 CORS(app, origins=['*'])
