@@ -7,7 +7,6 @@ import os
 sys.path.append(os.path.join(os.getcwd(), 'backend'))
 
 # Mock dependencies
-sys.modules['services'] = MagicMock()
 sys.modules['services.market_data_service'] = MagicMock()
 sys.modules['services.perplexity_intelligence'] = MagicMock()
 sys.modules['services.market_sentiment_service'] = MagicMock()
