@@ -11,6 +11,7 @@ Created: August 28, 2025
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 from decimal import Decimal
+from dataclasses import dataclass, field
 import uuid
 import logging
 
@@ -30,6 +31,19 @@ class SubscriptionError(PaymentError):
     pass
 
 
+@dataclass
+class ReceiptRequest:
+    """
+    Data object for receipt generation requests.
+    """
+    transaction_id: str
+    customer_id: str
+    amount: Decimal
+    description: str = ""
+    currency: str = "USD"
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
 class Receipt:
     """
     Represents a payment receipt with transaction details.
@@ -45,17 +59,15 @@ class Receipt:
         metadata (Dict[str, Any]): Additional receipt metadata
     """
     
-    def __init__(self, transaction_id: str, amount: Decimal, customer_id: str,
-                 description: str = "", currency: str = "USD",
-                 metadata: Optional[Dict[str, Any]] = None):
+    def __init__(self, request: ReceiptRequest):
         self.receipt_id = str(uuid.uuid4())
-        self.transaction_id = transaction_id
-        self.amount = amount
-        self.currency = currency
+        self.transaction_id = request.transaction_id
+        self.amount = request.amount
+        self.currency = request.currency
         self.timestamp = datetime.utcnow()
-        self.customer_id = customer_id
-        self.description = description
-        self.metadata = metadata or {}
+        self.customer_id = request.customer_id
+        self.description = request.description
+        self.metadata = request.metadata or {}
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert receipt to dictionary format."""
@@ -233,16 +245,19 @@ class PaymentSystem:
             if not success:
                 raise InsufficientFundsError("Payment declined - insufficient funds")
             
-            # Generate receipt
-            receipt = self.generate_receipt(
+            # Generate receipt request
+            request = ReceiptRequest(
                 transaction_id=transaction_id,
                 customer_id=customer_id,
                 amount=amount,
                 description=description,
                 currency=currency,
-                metadata=metadata
+                metadata=metadata or {}
             )
             
+            # Generate receipt
+            receipt = self.generate_receipt(request)
+
             self.logger.info(f"Payment processed successfully: {transaction_id}")
             
             return {
@@ -260,41 +275,26 @@ class PaymentSystem:
             self.logger.error(f"Unexpected error processing payment: {str(e)}")
             raise PaymentError(f"Payment processing failed: {str(e)}")
     
-    def generate_receipt(self, transaction_id: str, customer_id: str, 
-                        amount: Decimal, description: str = "",
-                        currency: str = "USD", 
-                        metadata: Optional[Dict[str, Any]] = None) -> Receipt:
+    def generate_receipt(self, request: ReceiptRequest) -> Receipt:
         """
         Generate a payment receipt.
         
         Args:
-            transaction_id (str): Transaction identifier
-            customer_id (str): Customer identifier
-            amount (Decimal): Payment amount
-            description (str, optional): Payment description
-            currency (str, optional): Currency code
-            metadata (Dict[str, Any], optional): Additional receipt metadata
+            request (ReceiptRequest): Receipt generation request details
         
         Returns:
             Receipt: Generated receipt object
         
         Example:
             >>> from decimal import Decimal
+            >>> from backend.services.payment_system import ReceiptRequest
             >>> payment_system = PaymentSystem()
-            >>> receipt = payment_system.generate_receipt(
-            ...     "txn_12345", "customer_123", Decimal("29.99")
-            ... )
+            >>> request = ReceiptRequest("txn_12345", "customer_123", Decimal("29.99"))
+            >>> receipt = payment_system.generate_receipt(request)
             >>> print(f"Receipt ID: {receipt.receipt_id}")
         """
         try:
-            receipt = Receipt(
-                transaction_id=transaction_id,
-                amount=amount,
-                customer_id=customer_id,
-                description=description,
-                currency=currency,
-                metadata=metadata
-            )
+            receipt = Receipt(request)
             
             # Store receipt for record keeping
             self.receipts.append(receipt)
