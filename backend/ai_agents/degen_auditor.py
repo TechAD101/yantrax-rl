@@ -5,6 +5,131 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+class RiskConfig:
+    """Centralized risk configuration parameters"""
+
+    # Trend Risk
+    TREND_RISK_MAP = {
+        "strong_bearish": 0.9,
+        "bearish": 0.7,
+        "sideways": 0.4,
+        "bullish": 0.5,
+        "strong_bullish": 0.6
+    }
+
+    # Sentiment Risk
+    SENTIMENT_RISK_MAP = {
+        "very_bearish": 0.8,
+        "bearish": 0.6,
+        "neutral": 0.3,
+        "bullish": 0.4,
+        "very_bullish": 0.7
+    }
+
+    # Risk Levels & Scores (for Aggregation)
+    SCORE_LOW = 0.2
+    SCORE_MODERATE_LOW = 0.3
+    SCORE_MEDIUM = 0.5
+    SCORE_HIGH = 0.8
+    SCORE_EXTREME = 1.0
+
+    RISK_LEVEL_LOW_THRESHOLD = 0.3
+    RISK_LEVEL_HIGH_THRESHOLD = 0.6
+
+    # VaR Configuration
+    VAR_CONFIDENCE_MULTIPLIER = 1.645  # 95% confidence
+    VAR_RISK_LOW_THRESHOLD = 0.02
+    VAR_RISK_MEDIUM_THRESHOLD = 0.05
+    VAR_ALERT_THRESHOLD = 0.03
+
+    # Drawdown Configuration
+    DRAWDOWN_MULTIPLIER = 3
+    DRAWDOWN_RISK_LOW_THRESHOLD = 0.1
+    DRAWDOWN_RISK_MEDIUM_THRESHOLD = 0.2
+    DRAWDOWN_ALERT_THRESHOLD = 0.15
+
+    # Sharpe Configuration
+    SHARPE_EXPECTED_RETURN_DEFAULT = 0.05
+    SHARPE_RISK_FREE_RATE = 0.02
+    SHARPE_EXCELLENT_THRESHOLD = 1.0
+    SHARPE_GOOD_THRESHOLD = 0.5
+    SHARPE_FAIR_THRESHOLD = 0
+
+    # Volatility Configuration
+    VOLATILITY_LOW_THRESHOLD = 0.15
+    VOLATILITY_MEDIUM_THRESHOLD = 0.30
+    VOLATILITY_HIGH_THRESHOLD = 0.50
+    VOLATILITY_CRISIS_THRESHOLD = 0.50
+
+    # Portfolio Configuration
+    PORTFOLIO_MAX_RISK = 0.15
+    PORTFOLIO_BUY_RISK_INCREASE = 0.3
+    PORTFOLIO_SELL_RISK_INCREASE = 0.1
+    PORTFOLIO_RECOMMENDATION_THRESHOLD = 0.5
+
+    # Alerts
+    ALERT_CRITICAL_THRESHOLD = 0.8
+    ALERT_WARNING_THRESHOLD = 0.6
+
+    # Market Conditions
+    VOLUME_HIGH_ACTIVITY_THRESHOLD = 8000000
+    VOLUME_LIQUIDITY_HIGH_THRESHOLD = 5000000
+
+    # Default Values
+    DEFAULT_RISK_SCORE = 0.5
+    DEFAULT_VOLATILITY = 0.02
+    DEFAULT_POSITION_SIZE = 0.1
+
+    # Signal Risk
+    SIGNAL_ACTION_RISK = {"BUY": 0.6, "SELL": 0.4, "HOLD": 0.1}
+    SIGNAL_CONFIDENCE_MULTIPLIER = {"VERY_HIGH": 0.7, "HIGH": 0.8, "MEDIUM": 1.0, "LOW": 1.3}
+    SIGNAL_URGENCY_MULTIPLIER = {"VERY_HIGH": 1.4, "HIGH": 1.2, "MEDIUM": 1.0, "LOW": 0.9, "NONE": 0.8}
+
+    # Market Risk Weights
+    WEIGHT_TREND = 0.4
+    WEIGHT_SENTIMENT = 0.3
+    WEIGHT_PRICE = 0.3
+
+    # Price Risk
+    PRICE_LEVEL_EXTREME_HIGH = 60000
+    PRICE_LEVEL_EXTREME_LOW = 5000
+    PRICE_LEVEL_HIGH = 50000
+    PRICE_LEVEL_LOW = 10000
+
+    RISK_PRICE_EXTREME = 0.8
+    RISK_PRICE_HIGH = 0.6
+    RISK_PRICE_NORMAL = 0.3
+
+    # Liquidity Risk
+    VOLUME_VERY_LOW = 500000
+    VOLUME_LOW = 1000000
+
+    RISK_LIQUIDITY_VERY_LOW = 0.9
+    RISK_LIQUIDITY_LOW = 0.7
+    RISK_LIQUIDITY_MEDIUM = 0.4
+    RISK_LIQUIDITY_HIGH = 0.2
+
+    # Correlation Risk
+    RISK_CORRELATION_HIGH = 0.8
+    RISK_CORRELATION_LOW = 0.3
+
+    # Timing Risk
+    MARKET_OPEN_HOUR = 9
+    MARKET_CLOSE_HOUR = 16
+    RISK_TIMING_OFF_HOURS = 0.7
+    RISK_TIMING_NORMAL = 0.2
+
+    TIMING_URGENCY_RISK_MAP = {
+        "VERY_HIGH": 0.8,
+        "HIGH": 0.6,
+        "MEDIUM": 0.4,
+        "LOW": 0.3,
+        "NONE": 0.2
+    }
+
+    TIMING_VOLATILITY_MULTIPLIER = 3
+    TIMING_VOLATILITY_CAP = 0.9
+
 class DegenAuditorAgent:
     """
     Enhanced Degen Auditor - Advanced Risk Assessment and Trade Validation
@@ -225,17 +350,13 @@ class DegenAuditorAgent:
     def _assess_signal_risk(self, action: str, confidence: str, urgency: str) -> float:
         """Assess risk based on signal characteristics"""
         # Base risk by action
-        action_risk = {"BUY": 0.6, "SELL": 0.4, "HOLD": 0.1}.get(action, 0.5)
+        action_risk = RiskConfig.SIGNAL_ACTION_RISK.get(action, RiskConfig.DEFAULT_RISK_SCORE)
 
         # Confidence adjustment
-        confidence_multiplier = {
-            "VERY_HIGH": 0.7, "HIGH": 0.8, "MEDIUM": 1.0, "LOW": 1.3
-        }.get(confidence, 1.0)
+        confidence_multiplier = RiskConfig.SIGNAL_CONFIDENCE_MULTIPLIER.get(confidence, 1.0)
 
         # Urgency adjustment
-        urgency_multiplier = {
-            "VERY_HIGH": 1.4, "HIGH": 1.2, "MEDIUM": 1.0, "LOW": 0.9, "NONE": 0.8
-        }.get(urgency, 1.0)
+        urgency_multiplier = RiskConfig.SIGNAL_URGENCY_MULTIPLIER.get(urgency, 1.0)
 
         return min(1.0, action_risk * confidence_multiplier * urgency_multiplier)
 
@@ -247,38 +368,34 @@ class DegenAuditorAgent:
 
         # Trend risk
         trend_risk_map = {
-            "strong_bearish": 0.9, "bearish": 0.7, "sideways": 0.4,
-            "bullish": 0.5, "strong_bullish": 0.6
+            **RiskConfig.TREND_RISK_MAP
         }
         trend_risk = trend_risk_map.get(trend, 0.5)
 
         # Sentiment risk
-        sentiment_risk_map = {
-            "very_bearish": 0.8, "bearish": 0.6, "neutral": 0.3,
-            "bullish": 0.4, "very_bullish": 0.7  # Extreme bullish can be risky
-        }
+        sentiment_risk_map = RiskConfig.SENTIMENT_RISK_MAP
         sentiment_risk = sentiment_risk_map.get(sentiment, 0.5)
 
         # Price level risk
-        if price > 60000 or price < 5000:  # Extreme price levels
-            price_risk = 0.8
-        elif price > 50000 or price < 10000:
-            price_risk = 0.6
+        if price > RiskConfig.PRICE_LEVEL_EXTREME_HIGH or price < RiskConfig.PRICE_LEVEL_EXTREME_LOW:  # Extreme price levels
+            price_risk = RiskConfig.RISK_PRICE_EXTREME
+        elif price > RiskConfig.PRICE_LEVEL_HIGH or price < RiskConfig.PRICE_LEVEL_LOW:
+            price_risk = RiskConfig.RISK_PRICE_HIGH
         else:
-            price_risk = 0.3
+            price_risk = RiskConfig.RISK_PRICE_NORMAL
 
-        return (trend_risk * 0.4 + sentiment_risk * 0.3 + price_risk * 0.3)
+        return (trend_risk * RiskConfig.WEIGHT_TREND + sentiment_risk * RiskConfig.WEIGHT_SENTIMENT + price_risk * RiskConfig.WEIGHT_PRICE)
 
     def _assess_liquidity_risk(self, volume: int) -> float:
         """Assess liquidity risk based on volume"""
-        if volume < 500000:  # Very low volume
-            return 0.9
-        elif volume < 1000000:  # Low volume
-            return 0.7
-        elif volume < 5000000:  # Medium volume
-            return 0.4
+        if volume < RiskConfig.VOLUME_VERY_LOW:  # Very low volume
+            return RiskConfig.RISK_LIQUIDITY_VERY_LOW
+        elif volume < RiskConfig.VOLUME_LOW:  # Low volume
+            return RiskConfig.RISK_LIQUIDITY_LOW
+        elif volume < RiskConfig.VOLUME_LIQUIDITY_HIGH_THRESHOLD:  # Medium volume
+            return RiskConfig.RISK_LIQUIDITY_MEDIUM
         else:  # High volume
-            return 0.2
+            return RiskConfig.RISK_LIQUIDITY_HIGH
 
     def _assess_correlation_risk(self, market_data: Dict) -> float:
         """Assess correlation risk with broader market"""
@@ -289,9 +406,9 @@ class DegenAuditorAgent:
 
         # High correlation risk when following market sentiment/trend strongly
         if sentiment in ["very_bullish", "very_bearish"] and trend in ["strong_bullish", "strong_bearish"]:
-            return 0.8  # High correlation risk
+            return RiskConfig.RISK_CORRELATION_HIGH  # High correlation risk
         else:
-            return 0.3  # Lower correlation risk
+            return RiskConfig.RISK_CORRELATION_LOW  # Lower correlation risk
 
     def _assess_timing_risk(self, urgency: str, market_data: Dict) -> float:
         """Assess timing risk based on urgency and market conditions"""
@@ -299,24 +416,18 @@ class DegenAuditorAgent:
         volatility = market_data.get("volatility", 0.02)
 
         # Market hours timing risk
-        if current_hour < 9 or current_hour > 16:  # Outside market hours
-            timing_risk = 0.7
+        if current_hour < RiskConfig.MARKET_OPEN_HOUR or current_hour > RiskConfig.MARKET_CLOSE_HOUR:  # Outside market hours
+            timing_risk = RiskConfig.RISK_TIMING_OFF_HOURS
         else:
-            timing_risk = 0.2
+            timing_risk = RiskConfig.RISK_TIMING_NORMAL
 
         # Urgency timing risk
-        urgency_risk_map = {
-            "VERY_HIGH": 0.8,  # Very urgent trades are risky
-            "HIGH": 0.6,
-            "MEDIUM": 0.4,
-            "LOW": 0.3,
-            "NONE": 0.2
-        }
+        urgency_risk_map = RiskConfig.TIMING_URGENCY_RISK_MAP
 
         urgency_risk = urgency_risk_map.get(urgency, 0.5)
 
         # Volatility timing risk
-        vol_timing_risk = min(0.9, volatility * 3)  # Higher vol = higher timing risk
+        vol_timing_risk = min(RiskConfig.TIMING_VOLATILITY_CAP, volatility * RiskConfig.TIMING_VOLATILITY_MULTIPLIER)  # Higher vol = higher timing risk
 
         return max(timing_risk, urgency_risk, vol_timing_risk)
 
@@ -423,19 +534,19 @@ class DegenAuditorAgent:
         sentiment = market_data.get("sentiment", "neutral")
 
         # Determine market regime
-        if volatility > 0.5:
+        if volatility > RiskConfig.VOLATILITY_CRISIS_THRESHOLD:
             regime = "crisis"
-        elif volatility < 0.15:
+        elif volatility < RiskConfig.VOLATILITY_LOW_THRESHOLD:
             regime = "low_volatility"
-        elif volume > 8000000:
+        elif volume > RiskConfig.VOLUME_HIGH_ACTIVITY_THRESHOLD:
             regime = "high_activity"
         else:
             regime = "normal"
 
         return {
             "regime": regime,
-            "volatility_level": "high" if volatility > 0.3 else "normal",
-            "liquidity_level": "high" if volume > 5000000 else "low",
+            "volatility_level": "high" if volatility > RiskConfig.VOLATILITY_MEDIUM_THRESHOLD else "normal",
+            "liquidity_level": "high" if volume > RiskConfig.VOLUME_LIQUIDITY_HIGH_THRESHOLD else "low",
             "sentiment_extremity": sentiment in ["very_bullish", "very_bearish"]
         }
 
@@ -445,24 +556,24 @@ class DegenAuditorAgent:
 
         # Extract risk scores from different models
         if "var" in risk_metrics and "risk_level" in risk_metrics["var"]:
-            var_risk_map = {"LOW": 0.2, "MEDIUM": 0.5, "HIGH": 0.8}
-            risk_scores.append(var_risk_map.get(risk_metrics["var"]["risk_level"], 0.5))
+            var_risk_map = {"LOW": RiskConfig.SCORE_LOW, "MEDIUM": RiskConfig.SCORE_MEDIUM, "HIGH": RiskConfig.SCORE_HIGH}
+            risk_scores.append(var_risk_map.get(risk_metrics["var"]["risk_level"], RiskConfig.DEFAULT_RISK_SCORE))
 
         if "sharpe" in risk_metrics and "risk_assessment" in risk_metrics["sharpe"]:
-            sharpe_risk_map = {"EXCELLENT": 0.2, "GOOD": 0.3, "FAIR": 0.5, "POOR": 0.8}
-            risk_scores.append(sharpe_risk_map.get(risk_metrics["sharpe"]["risk_assessment"], 0.5))
+            sharpe_risk_map = {"EXCELLENT": RiskConfig.SCORE_LOW, "GOOD": RiskConfig.SCORE_MODERATE_LOW, "FAIR": RiskConfig.SCORE_MEDIUM, "POOR": RiskConfig.SCORE_HIGH}
+            risk_scores.append(sharpe_risk_map.get(risk_metrics["sharpe"]["risk_assessment"], RiskConfig.DEFAULT_RISK_SCORE))
 
         if "volatility" in risk_metrics and "risk_level" in risk_metrics["volatility"]:
-            vol_risk_map = {"LOW": 0.3, "MEDIUM": 0.5, "HIGH": 0.8, "EXTREME": 1.0}
-            risk_scores.append(vol_risk_map.get(risk_metrics["volatility"]["risk_level"], 0.5))
+            vol_risk_map = {"LOW": RiskConfig.SCORE_MODERATE_LOW, "MEDIUM": RiskConfig.SCORE_MEDIUM, "HIGH": RiskConfig.SCORE_HIGH, "EXTREME": RiskConfig.SCORE_EXTREME}
+            risk_scores.append(vol_risk_map.get(risk_metrics["volatility"]["risk_level"], RiskConfig.DEFAULT_RISK_SCORE))
 
         # Calculate overall risk
-        overall_risk_score = sum(risk_scores) / len(risk_scores) if risk_scores else 0.5
+        overall_risk_score = sum(risk_scores) / len(risk_scores) if risk_scores else RiskConfig.DEFAULT_RISK_SCORE
 
         # Determine risk level
-        if overall_risk_score < 0.3:
+        if overall_risk_score < RiskConfig.RISK_LEVEL_LOW_THRESHOLD:
             risk_level = "LOW"
-        elif overall_risk_score < 0.6:
+        elif overall_risk_score < RiskConfig.RISK_LEVEL_HIGH_THRESHOLD:
             risk_level = "MEDIUM"
         else:
             risk_level = "HIGH"
@@ -477,7 +588,7 @@ class DegenAuditorAgent:
     def _generate_risk_recommendations(self, risk_analysis: Dict) -> List[str]:
         """Generate actionable risk recommendations"""
         recommendations = []
-        risk_score = risk_analysis.get("risk_score", 0.5)
+        risk_score = risk_analysis.get("risk_score", RiskConfig.DEFAULT_RISK_SCORE)
         risk_level = risk_analysis.get("overall_risk_level", "MEDIUM")
 
         if risk_level == "HIGH":
@@ -506,9 +617,9 @@ class DegenAuditorAgent:
         """Generate risk alerts based on analysis"""
         alerts = []
 
-        if risk_score > 0.8:
+        if risk_score > RiskConfig.ALERT_CRITICAL_THRESHOLD:
             alerts.append("CRITICAL: Very high risk detected")
-        elif risk_score > 0.6:
+        elif risk_score > RiskConfig.ALERT_WARNING_THRESHOLD:
             alerts.append("WARNING: High risk level")
 
         # Specific metric alerts
@@ -548,7 +659,7 @@ class PortfolioRiskTracker:
 
     def __init__(self):
         self.positions = []
-        self.max_portfolio_risk = 0.15  # 15% maximum portfolio risk
+        self.max_portfolio_risk = RiskConfig.PORTFOLIO_MAX_RISK  # 15% maximum portfolio risk
 
     def analyze_impact(self, signal: Dict, market_data: Dict) -> Dict:
         """Analyze impact of new trade on portfolio risk"""
@@ -557,16 +668,16 @@ class PortfolioRiskTracker:
 
         # Simplified portfolio impact analysis
         if action == "BUY":
-            risk_increase = 0.3  # Adding long position increases risk
+            risk_increase = RiskConfig.PORTFOLIO_BUY_RISK_INCREASE  # Adding long position increases risk
         elif action == "SELL":
-            risk_increase = 0.1  # Reducing positions typically reduces risk
+            risk_increase = RiskConfig.PORTFOLIO_SELL_RISK_INCREASE  # Reducing positions typically reduces risk
         else:
             risk_increase = 0.0  # No change
 
         return {
             "risk_increase": risk_increase,
             "portfolio_risk_after": min(1.0, self.max_portfolio_risk + risk_increase),
-            "recommendation": "PROCEED" if risk_increase < 0.5 else "REDUCE_SIZE"
+            "recommendation": "PROCEED" if risk_increase < RiskConfig.PORTFOLIO_RECOMMENDATION_THRESHOLD else "REDUCE_SIZE"
         }
 
 
@@ -576,19 +687,19 @@ class VaRCalculator:
 
     def calculate_var(self, trade_data: Dict, confidence_level: float = 0.95) -> Dict:
         # Simplified VaR calculation
-        volatility = trade_data.get("volatility", 0.02)
-        position_size = trade_data.get("position_size", 0.1)
+        volatility = trade_data.get("volatility", RiskConfig.DEFAULT_VOLATILITY)
+        position_size = trade_data.get("position_size", RiskConfig.DEFAULT_POSITION_SIZE)
 
         # Daily VaR estimate
-        daily_var = volatility * position_size * 1.645  # 95% confidence interval
+        daily_var = volatility * position_size * RiskConfig.VAR_CONFIDENCE_MULTIPLIER  # 95% confidence interval
 
-        risk_level = "LOW" if daily_var < 0.02 else "MEDIUM" if daily_var < 0.05 else "HIGH"
+        risk_level = "LOW" if daily_var < RiskConfig.VAR_RISK_LOW_THRESHOLD else "MEDIUM" if daily_var < RiskConfig.VAR_RISK_MEDIUM_THRESHOLD else "HIGH"
 
         return {
             "daily_var": daily_var,
             "confidence_level": confidence_level,
             "risk_level": risk_level,
-            "alert": f"Daily VaR: {daily_var:.3f}" if daily_var > 0.03 else None
+            "alert": f"Daily VaR: {daily_var:.3f}" if daily_var > RiskConfig.VAR_ALERT_THRESHOLD else None
         }
 
 
@@ -597,18 +708,18 @@ class DrawdownAnalyzer:
 
     def analyze_drawdown(self, trade_data: Dict) -> Dict:
         # Simplified drawdown analysis
-        volatility = trade_data.get("volatility", 0.02)
+        volatility = trade_data.get("volatility", RiskConfig.DEFAULT_VOLATILITY)
         leverage = trade_data.get("leverage", 1.0)
 
         # Estimate potential drawdown
-        estimated_drawdown = volatility * leverage * 3  # Rough estimate
+        estimated_drawdown = volatility * leverage * RiskConfig.DRAWDOWN_MULTIPLIER  # Rough estimate
 
-        risk_level = "LOW" if estimated_drawdown < 0.1 else "MEDIUM" if estimated_drawdown < 0.2 else "HIGH"
+        risk_level = "LOW" if estimated_drawdown < RiskConfig.DRAWDOWN_RISK_LOW_THRESHOLD else "MEDIUM" if estimated_drawdown < RiskConfig.DRAWDOWN_RISK_MEDIUM_THRESHOLD else "HIGH"
 
         return {
             "estimated_max_drawdown": estimated_drawdown,
             "risk_level": risk_level,
-            "alert": f"High drawdown risk: {estimated_drawdown:.1%}" if estimated_drawdown > 0.15 else None
+            "alert": f"High drawdown risk: {estimated_drawdown:.1%}" if estimated_drawdown > RiskConfig.DRAWDOWN_ALERT_THRESHOLD else None
         }
 
 
@@ -617,20 +728,20 @@ class SharpeRatioCalculator:
 
     def calculate_sharpe(self, trade_data: Dict) -> Dict:
         # Simplified Sharpe ratio estimation
-        expected_return = trade_data.get("expected_return", 0.05)  # 5% default
-        volatility = trade_data.get("volatility", 0.02)
-        risk_free_rate = 0.02  # 2% risk-free rate
+        expected_return = trade_data.get("expected_return", RiskConfig.SHARPE_EXPECTED_RETURN_DEFAULT)  # 5% default
+        volatility = trade_data.get("volatility", RiskConfig.DEFAULT_VOLATILITY)
+        risk_free_rate = RiskConfig.SHARPE_RISK_FREE_RATE  # 2% risk-free rate
 
         if volatility == 0:
             sharpe_ratio = 0
         else:
             sharpe_ratio = (expected_return - risk_free_rate) / volatility
 
-        if sharpe_ratio > 1.0:
+        if sharpe_ratio > RiskConfig.SHARPE_EXCELLENT_THRESHOLD:
             assessment = "EXCELLENT"
-        elif sharpe_ratio > 0.5:
+        elif sharpe_ratio > RiskConfig.SHARPE_GOOD_THRESHOLD:
             assessment = "GOOD"
-        elif sharpe_ratio > 0:
+        elif sharpe_ratio > RiskConfig.SHARPE_FAIR_THRESHOLD:
             assessment = "FAIR"
         else:
             assessment = "POOR"
@@ -647,15 +758,15 @@ class VolatilityAnalyzer:
     """Volatility analysis and regime detection"""
 
     def analyze_volatility(self, trade_data: Dict) -> Dict:
-        volatility = trade_data.get("volatility", 0.02)
+        volatility = trade_data.get("volatility", RiskConfig.DEFAULT_VOLATILITY)
 
-        if volatility < 0.15:
+        if volatility < RiskConfig.VOLATILITY_LOW_THRESHOLD:
             risk_level = "LOW"
             regime = "Low Volatility"
-        elif volatility < 0.30:
+        elif volatility < RiskConfig.VOLATILITY_MEDIUM_THRESHOLD:
             risk_level = "MEDIUM"
             regime = "Normal Volatility"
-        elif volatility < 0.50:
+        elif volatility < RiskConfig.VOLATILITY_HIGH_THRESHOLD:
             risk_level = "HIGH"
             regime = "High Volatility"
         else:

@@ -219,6 +219,24 @@ class CathieAgent(PersonaAgent):
             'composite_score': composite_score
         }
     
+
+    def _analyze_innovation(self, context: Dict[str, Any]) -> float:
+        company_data = context.get('company_data', {})
+        rd_ratio = company_data.get('rd_revenue_ratio', 0)
+        return min(1.0, rd_ratio / self.innovation_criteria['rd_spending_threshold'])
+
+    def _assess_growth_potential(self, context: Dict[str, Any]) -> float:
+        company_data = context.get('company_data', {})
+        growth = company_data.get('revenue_growth', 0)
+        return min(1.0, max(0.0, growth / self.innovation_criteria['min_revenue_growth']))
+
+    def _evaluate_disruption(self, context: Dict[str, Any]) -> float:
+        res = self._analyze_disruption_potential(context)
+        return res.get('score', 0.5)
+
+    def _generate_innovation_recommendation(self, innovation_score: float, growth_score: float, disruption_score: float, sector_timing: Dict[str, Any]) -> Dict[str, Any]:
+        return self._generate_recommendation(innovation_score, {'score': growth_score}, {'score': disruption_score}, sector_timing)
+
     # ============ PersonaAgent Interface Implementation ============
     
     def analyze(self, context: Dict[str, Any]) -> PersonaAnalysis:
