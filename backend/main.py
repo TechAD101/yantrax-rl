@@ -50,6 +50,7 @@ PERSONA_REGISTRY = get_persona_registry()
 from db import init_db, get_session
 from models import Strategy
 from models import Portfolio, PortfolioPosition
+from utils.validation import validate_symbol
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -619,7 +620,7 @@ def health_check():
 @handle_errors
 def get_institutional_report():
     """Generate high-precision institutional report (Perplexity spec)"""
-    symbol = request.args.get('symbol', 'AAPL').upper()
+    symbol = validate_symbol(request.args.get('symbol', 'AAPL'))
     from ai_firm.report_generation import InstitutionalReportGenerator
     
     generator = InstitutionalReportGenerator()
@@ -630,13 +631,13 @@ def get_institutional_report():
 @app.route('/market-price', methods=['GET'])
 def get_market_price():
     """Get current market price via Waterfall"""
-    symbol = request.args.get('symbol', 'AAPL').upper()
+    symbol = validate_symbol(request.args.get('symbol', 'AAPL'))
     return jsonify(market_provider.get_price(symbol)), 200
 
 @app.route('/test-alpaca', methods=['GET'])
 def test_alpaca():
     """Force test Alpaca API"""
-    symbol = request.args.get('symbol', 'AAPL').upper()
+    symbol = validate_symbol(request.args.get('symbol', 'AAPL'))
     
     logger.info(f"\n🧪 FORCE TEST: Alpaca API for {symbol}")
     
@@ -691,7 +692,7 @@ def test_alpaca():
 @handle_errors
 def test_fmp():
     """Force test FinancialModelingPrep (FMP) API directly"""
-    symbol = request.args.get('symbol', 'AAPL').upper()
+    symbol = validate_symbol(request.args.get('symbol', 'AAPL'))
 
     logger.info(f"\n🧪 FORCE TEST: FMP API for {symbol}")
 
@@ -784,7 +785,7 @@ def market_price_stream():
       - interval (seconds between events, default 5)
       - count (optional, number of events to emit; if omitted stream indefinitely)
     """
-    symbol = (request.args.get('symbol') or 'AAPL').upper()
+    symbol = validate_symbol(request.args.get('symbol') or 'AAPL')
     try:
         interval = float(request.args.get('interval', os.getenv('MARKET_DATA_STREAM_INTERVAL', '5')))
     except Exception:
@@ -902,7 +903,7 @@ def massive_quote():
     Query params:
       - symbol: required (e.g., AAPL, BTC, EURUSD, SPX)
     """
-    symbol = (request.args.get('symbol') or '').strip().upper()
+    symbol = validate_symbol((request.args.get('symbol') or '').strip())
     if not symbol:
         return jsonify({'status': 'error', 'message': 'symbol query parameter is required'}), 400
 
@@ -1003,7 +1004,7 @@ def metrics():
 @app.route('/god-cycle', methods=['GET'])
 def god_cycle():
     """Execute 24-agent voting cycle with REAL DATA & Debate Engine"""
-    symbol = request.args.get('symbol', 'AAPL').upper()
+    symbol = validate_symbol(request.args.get('symbol', 'AAPL'))
     
     # 1. Fetch Real Data
     # Use provider shims safely in case market_provider is not fully configured in tests
@@ -1172,7 +1173,7 @@ def ai_firm_status():
 @app.route('/api/firm/report/institutional', methods=['GET'])
 def generate_institutional_report():
     """Generates the comprehensive 13-section Institutional Report."""
-    symbol = request.args.get('symbol', 'AAPL').upper()
+    symbol = validate_symbol(request.args.get('symbol', 'AAPL'))
     try:
         from ai_firm.report_generation import InstitutionalReportGenerator
         generator = InstitutionalReportGenerator()
@@ -1334,7 +1335,7 @@ def get_persona_knowledge_context(persona_name: str):
     if not KNOWLEDGE_BASE:
         return jsonify({'error': 'Knowledge Base not initialized'}), 500
     
-    symbol = request.args.get('symbol', 'AAPL').upper()
+    symbol = validate_symbol(request.args.get('symbol', 'AAPL'))
     market_trend = request.args.get('market_trend', 'neutral')
     
     market_context = {
@@ -1371,7 +1372,7 @@ def get_knowledge_stats():
 @app.route('/api/sentiment/comprehensive', methods=['GET'])
 def comprehensive_sentiment():
     """Advanced institutional-grade sentiment analysis endpoint"""
-    symbol = request.args.get('symbol', 'SPY').upper()
+    symbol = validate_symbol(request.args.get('symbol', 'SPY'))
     
     if not SENTIMENT_SERVICE:
         return jsonify({
@@ -1396,6 +1397,8 @@ def comprehensive_sentiment():
 def fear_greed_index():
     """Fear & Greed Index calculation"""
     symbol = request.args.get('symbol')
+    if symbol:
+        symbol = validate_symbol(symbol)
     
     if not SENTIMENT_SERVICE:
         return jsonify({
@@ -1416,7 +1419,7 @@ def fear_greed_index():
 @app.route('/api/sentiment/options-flow', methods=['GET'])
 def options_flow():
     """Options flow analysis for institutional activity detection"""
-    symbol = request.args.get('symbol', 'AAPL').upper()
+    symbol = validate_symbol(request.args.get('symbol', 'AAPL'))
     
     if not SENTIMENT_SERVICE:
         return jsonify({
@@ -1437,7 +1440,7 @@ def options_flow():
 @app.route('/api/strategy/institutional', methods=['GET'])
 def institutional_strategy():
     """Institutional-grade trading strategy signal"""
-    symbol = request.args.get('symbol', 'AAPL').upper()
+    symbol = validate_symbol(request.args.get('symbol', 'AAPL'))
     
     if not STRATEGY_ENGINE_READY:
         return jsonify({
@@ -1675,7 +1678,7 @@ def get_strategy(strategy_id: int):
 @app.route('/api/data/price-verified', methods=['GET'])
 def get_verified_price():
     """Get triple-source verified price - ZERO MOCK DATA"""
-    symbol = request.args.get('symbol', 'AAPL').upper()
+    symbol = validate_symbol(request.args.get('symbol', 'AAPL'))
     
     try:
         result = market_provider.get_price_verified(symbol)
