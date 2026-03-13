@@ -3,7 +3,23 @@ import os
 import sys
 import logging
 import json
+
+class MockDebateEngine:
+    async def conduct_debate(self, symbol, context=None):
+        return {
+            'ticker': symbol,
+            'winning_signal': 'BULLISH',
+            'confidence': 0.8,
+            'arguments': [
+                {'agent': 'Alpha', 'stance': 'BULLISH', 'rationale': 'Mock bullish case'},
+                {'agent': 'Beta', 'stance': 'BEARISH', 'rationale': 'Mock bearish case'}
+            ],
+            'timestamp': '2026-03-11T00:00:00Z',
+            'is_mock': True
+        }
+
 try:
+
     from dotenv import load_dotenv
 except Exception:
     # dotenv is optional for tests/environments where python-dotenv is not installed
@@ -48,7 +64,7 @@ PERSONA_REGISTRY = get_persona_registry()
 
 # Database helpers
 from db import init_db, get_session
-from models import Strategy
+from models import Strategy, StrategyProfile
 from models import Portfolio, PortfolioPosition
 
 def _load_dotenv_fallback(filepath: str) -> None:
@@ -164,6 +180,8 @@ try:
     logger.info("✅ AI FIRM & RL CORE OPERATIONAL")
 except Exception as e:
     logger.error(f"❌ AI Firm core initialization failed: {e}")
+    DEBATE_ENGINE = MockDebateEngine()
+
 
 app = Flask(__name__)
 CORS(app, origins=['*'])

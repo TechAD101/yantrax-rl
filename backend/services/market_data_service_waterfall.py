@@ -11,6 +11,7 @@ import time
 from datetime import datetime
 from typing import Dict, Any
 from threading import Lock
+import concurrent.futures
 
 # dotenv is optional in test environments
 try:
@@ -301,17 +302,27 @@ class WaterfallMarketDataService:
         sources_to_try = ['yfinance', 'fmp', 'alpha_vantage']
         successful_fetches, failed_sources = [], {}
         
-        for source in sources_to_try:
-            try:
-                if source == 'yfinance': price = self._fetch_price_yfinance(symbol)
-                elif source == 'fmp': price = self._fetch_price_fmp(symbol)
-                elif source == 'alpha_vantage': price = self._fetch_price_alpha_vantage(symbol)
-                else: continue
-                
-                if price and price > 0:
-                    successful_fetches.append({'source': source, 'price': price})
-            except Exception as e:
-                failed_sources[source] = str(e)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            future_to_source = {}
+            for source in sources_to_try:
+                if source == 'yfinance':
+                    future = executor.submit(self._fetch_price_yfinance, symbol)
+                elif source == 'fmp':
+                    future = executor.submit(self._fetch_price_fmp, symbol)
+                elif source == 'alpha_vantage':
+                    future = executor.submit(self._fetch_price_alpha_vantage, symbol)
+                else:
+                    continue
+                future_to_source[future] = source
+
+            for future in concurrent.futures.as_completed(future_to_source):
+                source = future_to_source[future]
+                try:
+                    price = future.result()
+                    if price and price > 0:
+                        successful_fetches.append({'source': source, 'price': price})
+                except Exception as e:
+                    failed_sources[source] = str(e)
         
         if not successful_fetches:
             audit_id = self._create_audit_entry(symbol, 'price', [], [], None, None, 'failed', 3)

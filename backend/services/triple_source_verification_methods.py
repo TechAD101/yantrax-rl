@@ -8,6 +8,7 @@ CRITICAL: ZERO MOCK DATA - All values from real APIs or explicit errors.
 """
 
 from typing import Dict, Any, List, Optional
+import concurrent.futures
 from datetime import datetime
 import logging
 
@@ -49,25 +50,31 @@ def get_price_verified(self, symbol: str) -> Dict[str, Any]:
     successful_fetches = []
     failed_sources = {}
     
-    for source in sources_to_try:
-        try:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        future_to_source = {}
+        for source in sources_to_try:
             if source == 'yfinance':
-                price = self._fetch_price_yfinance(symbol)
+                future = executor.submit(self._fetch_price_yfinance, symbol)
             elif source == 'fmp':
-                price = self._fetch_price_fmp(symbol)
+                future = executor.submit(self._fetch_price_fmp, symbol)
             elif source == 'alpha_vantage':
-                price = self._fetch_price_alpha_vantage(symbol)
+                future = executor.submit(self._fetch_price_alpha_vantage, symbol)
             else:
                 continue
-            
-            if price is not None and price > 0:
-                successful_fetches.append({
-                    'source': source,
-                    'price': price
-                })
-        except Exception as e:
-            failed_sources[source] = str(e)
-            logger.warning(f"⚠️ {source} failed for {symbol}: {e}")
+            future_to_source[future] = source
+
+        for future in concurrent.futures.as_completed(future_to_source):
+            source = future_to_source[future]
+            try:
+                price = future.result()
+                if price is not None and price > 0:
+                    successful_fetches.append({
+                        'source': source,
+                        'price': price
+                    })
+            except Exception as e:
+                failed_sources[source] = str(e)
+                logger.warning(f"⚠️ {source} failed for {symbol}: {e}")
     
     # Analyze results
     if len(successful_fetches) == 0:
