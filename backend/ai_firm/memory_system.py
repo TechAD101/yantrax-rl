@@ -58,17 +58,28 @@ class FirmMemorySystem:
         self.context_index: Dict[str, List[str]] = {}
         self.lock = threading.RLock()
         
+        # If using in-memory DB, we need to keep a connection open
+        # otherwise the database is lost after _initialize_database finishes
+        self._conn = None
+        if self.db_path == ":memory:":
+            self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
+
         # Initialize database
         self._initialize_database()
         
         # Load recent memories into cache
         self._load_cache()
+
+    def _get_connection(self):
+        if self._conn:
+            return self._conn
+        return sqlite3.connect(self.db_path)
     
     def _initialize_database(self):
         """Initialize SQLite database for persistent memory storage"""
         
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute('''
+        with self._get_connection() as conn:
+            conn.executescript('''
                 CREATE TABLE IF NOT EXISTS firm_memories (
                     id TEXT PRIMARY KEY,
                     memory_type TEXT NOT NULL,
@@ -82,10 +93,8 @@ class FirmMemorySystem:
                     decay_factor REAL DEFAULT 1.0,
                     associated_agents TEXT NOT NULL,
                     cross_references TEXT
-                )
-            ''')
-            
-            conn.execute('''
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_memory_type ON firm_memories(memory_type);
                 CREATE INDEX IF NOT EXISTS idx_importance ON firm_memories(importance);
                 CREATE INDEX IF NOT EXISTS idx_context_hash ON firm_memories(context_hash);
@@ -251,7 +260,7 @@ class FirmMemorySystem:
     def _persist_memory(self, memory_item: MemoryItem):
         """Persist memory item to database"""
         
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             conn.execute('''
                 INSERT INTO firm_memories 
                 (id, memory_type, content, importance, tags, context_hash, 
@@ -279,7 +288,7 @@ class FirmMemorySystem:
         
         cutoff_date = datetime.now() - timedelta(days=days_back)
         
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute('''
                 SELECT * FROM firm_memories 
@@ -495,7 +504,7 @@ class FirmMemorySystem:
     def _sync_cache_to_database(self):
         """Sync memory cache back to database"""
         
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             # Clear database
             conn.execute('DELETE FROM firm_memories')
             
@@ -533,21 +542,22 @@ class FirmMemorySystem:
             if total_memories == 0:
                 return {'total_memories': 0, 'memory_types': {}, 'agents': {}}
             
-            # Memory type distribution
             type_distribution: Dict[str, int] = {}
+            agent_distribution: Dict[str, int] = {}
+            importance_levels = {'low': 0, 'medium': 0, 'high': 0, 'critical': 0}
+            total_access_count = 0
+            most_accessed = None
+
             for memory in self.memory_cache.values():
+                # Memory type distribution
                 type_key = memory.memory_type.value
                 type_distribution[type_key] = type_distribution.get(type_key, 0) + 1
-            
-            # Agent memory distribution
-            agent_distribution: Dict[str, int] = {}
-            for memory in self.memory_cache.values():
+
+                # Agent memory distribution
                 for agent in memory.associated_agents:
                     agent_distribution[agent] = agent_distribution.get(agent, 0) + 1
-            
-            # Importance distribution
-            importance_levels = {'low': 0, 'medium': 0, 'high': 0, 'critical': 0}
-            for memory in self.memory_cache.values():
+
+                # Importance distribution
                 if memory.importance < 0.4:
                     importance_levels['low'] += 1
                 elif memory.importance < 0.7:
@@ -556,9 +566,13 @@ class FirmMemorySystem:
                     importance_levels['high'] += 1
                 else:
                     importance_levels['critical'] += 1
-            
-            # Access patterns
-            avg_access_count = sum(m.access_count for m in self.memory_cache.values()) / total_memories
+
+                # Access patterns tracking
+                total_access_count += memory.access_count
+                if most_accessed is None or memory.access_count > most_accessed.access_count:
+                    most_accessed = memory
+
+            avg_access_count = total_access_count / total_memories
             
             return {
                 'total_memories': total_memories,
@@ -567,7 +581,7 @@ class FirmMemorySystem:
                 'importance_distribution': importance_levels,
                 'access_analytics': {
                     'average_access_count': round(avg_access_count, 2),
-                    'most_accessed_memory': max(self.memory_cache.values(), key=lambda m: m.access_count).id,
+                    'most_accessed_memory': most_accessed.id if most_accessed else None,
                     'access_patterns': len(self.access_patterns)
                 },
                 'system_health': {
