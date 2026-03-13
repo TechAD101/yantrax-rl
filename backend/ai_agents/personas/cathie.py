@@ -232,14 +232,18 @@ class CathieAgent(PersonaAgent):
             PersonaAnalysis structured result
         """
         symbol = context.get('symbol', 'UNKNOWN')
+        company_data = context.get('company_data', {})
+        market_data = context.get('market_data', {})
+        sector_data = context.get('sector_data', {})
         
         # Run Cathie's existing analysis pipeline
-        innovation_score = self._analyze_innovation(context)
-        growth_score = self._assess_growth_potential(context)
-        disruption_score = self._evaluate_disruption(context)
-        sector_timing = self._evaluate_sector_timing(context)
-        recommendation = self._generate_innovation_recommendation(
-            innovation_score, growth_score, disruption_score, sector_timing
+        innovation_score = self._calculate_innovation_score(company_data, sector_data)
+        growth_analysis = self._assess_growth_potential(company_data, market_data)
+        disruption_analysis = self._analyze_disruption_potential(context)
+        sector_timing = self._evaluate_sector_timing(sector_data)
+        
+        recommendation = self._generate_recommendation(
+            innovation_score, growth_analysis, disruption_analysis, sector_timing
         )
         
         # Create structured PersonaAnalysis
@@ -252,9 +256,9 @@ class CathieAgent(PersonaAgent):
             reasoning=recommendation['reasoning'],
             scores={
                 'innovation': innovation_score,
-                'growth': growth_score,
-                'disruption': disruption_score,
-                'sector_timing': sector_timing.get('score', 0.5),
+                'growth': growth_analysis['score'],
+                'disruption': disruption_analysis['score'],
+                'sector_timing': sector_timing['timing_score'],
                 'composite': recommendation.get('composite_score', 0)
             },
             risk_assessment={

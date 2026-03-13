@@ -18,7 +18,6 @@ class PersonaRegistry:
     - Explicit voting power in debate engine
     - Structured persona discovery
     """
-    
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self._personas: Dict[str, PersonaAgent] = {}
@@ -26,59 +25,43 @@ class PersonaRegistry:
     
     def _initialize_personas(self):
         """Initialize all available personas"""
-        try:
-            # Import and instantiate Warren
-            from ai_agents.personas.warren import WarrenAgent
-            warren = WarrenAgent()
-            self._personas[warren.name.lower()] = warren
-            self.logger.info(f"✓ Registered persona: {warren.name} ({warren.archetype.value})")
-        except Exception as e:
-            self.logger.error(f"Failed to register Warren: {e}")
-        
-        try:
-            # Import and instantiate Cathie
-            from ai_agents.personas.cathie import CathieAgent
-            cathie = CathieAgent()
-            self._personas[cathie.name.lower()] = cathie
-            self.logger.info(f"✓ Registered persona: {cathie.name} ({cathie.archetype.value})")
-        except Exception as e:
-            self.logger.error(f"Failed to register Cathie: {e}")
+        # 1. CORE PERSONAS (Explicitly defined)
+        persona_configs = [
+            ("Warren", "ai_agents.personas.warren", "WarrenAgent"),
+            ("Cathie", "ai_agents.personas.cathie", "CathieAgent"),
+            ("The Ghost", "ai_agents.personas.the_ghost", "TheGhostAgent"),
+            ("Macro Monk", "ai_agents.personas.macro_monk", "MacroMonkAgent"),
+            ("Quant", "ai_agents.personas.quant", "QuantAgent"),
+            ("Degen Auditor", "ai_agents.personas.degen_auditor", "DegenAuditorAgent")
+        ]
 
-        try:
-            # Import and instantiate The Ghost
-            from ai_agents.personas.the_ghost import TheGhostAgent
-            ghost = TheGhostAgent()
-            self._personas[ghost.name.lower()] = ghost
-            self.logger.info(f"✓ Registered persona: {ghost.name} ({ghost.archetype.value})")
-        except Exception as e:
-            self.logger.error(f"Failed to register TheGhost: {e}")
+        for display_name, module_path, class_name in persona_configs:
+            try:
+                import importlib
+                module = importlib.import_module(module_path)
+                agent_class = getattr(module, class_name)
+                agent = agent_class()
+                self._personas[agent.name.lower()] = agent
+                self.logger.info(f"✓ Registered persona: {agent.name} ({agent.archetype.value})")
+            except Exception as e:
+                self.logger.warning(f"Failed to register {display_name} class: {e}. Falling back to placeholder.")
 
-        try:
-            # Import and instantiate Macro Monk
-            from ai_agents.personas.macro_monk import MacroMonkAgent
-            monk = MacroMonkAgent()
-            self._personas[monk.name.lower()] = monk
-            self.logger.info(f"✓ Registered persona: {monk.name} ({monk.archetype.value})")
-        except Exception as e:
-            self.logger.error(f"Failed to register MacroMonk: {e}")
+        # 2. SUPPLEMENTARY PERSONAS (Placeholders for 20+ vision)
+        from ai_agents.base_agent import BaseAgent
+        supplementary_configs = [
+            ("TradeExecutor", PersonaArchetype.SYSTEMATIC),
+            ("NewsAggregator", PersonaArchetype.MACRO),
+            ("SentimentBot", PersonaArchetype.GHOST),
+            ("ValueScout", PersonaArchetype.VALUE),
+            ("GrowthPilot", PersonaArchetype.GROWTH),
+            ("RiskSentinel", PersonaArchetype.RISK_AUDITOR)
+        ]
 
-        # Register placeholders for the rest of the 20+ agents
-        # Money-focused approach: Only keep profitable personas
-        # ELIMINATE: Complex personas that don't drive actual trades
-        from ai_agents.base_agent import BaseAgent, AgentArchetype
-        profitable_personas = [
-            ("Quant", AgentArchetype.QUANTATATIVE),  # Data-driven trading
-            ("DegenAuditor", AgentArchetype.SPECULATIVE),  # Risk management
-            ("TradeExecutor", AgentArchetype.SYSTEMATIC),  # Execution
-]
-
-        # Fixed: Use profitable_personas (not placeholders) - 2026-02-06
-        for name, archetype in profitable_personas:
+        for name, archetype in supplementary_configs:
             if name.lower() not in self._personas:
-                # Create a simple dynamic persona if the specific class doesn't exist
                 placeholder_agent = BaseAgent(name=name, archetype=archetype)
                 self._personas[name.lower()] = placeholder_agent
-                self.logger.debug(f"Registered MONEY-FOCUSED persona: {name}")
+                self.logger.debug(f"Registered institutional placeholder: {name}")
             
         self.logger.info(f"PersonaRegistry initialized with {len(self._personas)} personas")
     

@@ -6,7 +6,7 @@ class QuantAgent(PersonaAgent):
     def __init__(self):
         super().__init__(
             name="quant",
-            archetype=PersonaArchetype.QUANTATATIVE,
+            archetype=PersonaArchetype.SYSTEMATIC,
             voting_weight=1.1,
             preferred_strategies=["statistical_arbitrage", "momentum_ignition", "mean_reversion"],
             department="performance_lab",

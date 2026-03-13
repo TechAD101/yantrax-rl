@@ -9,6 +9,7 @@ import numpy as np
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from services.knowledge_base_service import get_knowledge_base
+from services.oracle_service import OracleService, OracleInsight
 
 class Agent:
     """Lightweight Agent representation used by the package API.
@@ -48,11 +49,12 @@ class AgentDecision:
 class AgentManager:
     """Manages enhanced agent coordination for YantraX"""
     
-    def __init__(self):
+    def __init__(self, oracle_service: Optional[OracleService] = None):
         self.enhanced_agents = self._initialize_20_plus_agents()
         self.voting_sessions = []
         self.logger = logging.getLogger(__name__)
         self.kb = get_knowledge_base()
+        self.oracle = oracle_service
         
     def _initialize_20_plus_agents(self) -> Dict[str, Dict]:
         """Initialize 20+ agent ecosystem"""
@@ -176,8 +178,6 @@ class AgentManager:
             context: Market data and context
             expert_opinions: Optional dict of {agent_name: signal} from complex personas (e.g. Warren)
         """
-
-        
         vote_tally = {}
         total_weight = 0
         participating_agents = []
@@ -207,6 +207,8 @@ class AgentManager:
         
         # Determine winning signal
         divine_doubt_triggered = False
+        oracle_wisdom = None
+        
         if vote_tally:
             winning_signal = max(vote_tally.items(), key=lambda x: x[1])[0]
             consensus_strength = vote_tally[winning_signal] / total_weight if total_weight > 0 else 0
@@ -219,6 +221,30 @@ class AgentManager:
                 winning_signal = "HOLD_FOR_CLARITY"
                 consensus_strength *= 0.7  # Dilute confidence
                 divine_doubt_triggered = True
+
+            # ORACLE WHISPER (Gemini Integration)
+            if self.oracle:
+                import asyncio
+                # Run the async oracle call synchronously for this internal logic
+                # In a high-throughput env, this should be awaited properly, but here we inject wisdom
+                try:
+                    symbol = context.get('symbol', 'MARKET')
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                         # If we are already in an event loop, we might need a different strategy or just await it higher up
+                         # For now, we'll assume this can be awaited or run
+                         pass
+                    else:
+                        oracle_insight = asyncio.run(self.oracle.get_divine_whisper(symbol, context, consensus_strength))
+                        if oracle_insight:
+                            oracle_wisdom = {
+                                'perspective': oracle_insight.perspective,
+                                'wisdom': oracle_insight.wisdom,
+                                'paradox': oracle_insight.paradox,
+                                'direction': oracle_insight.direction
+                            }
+                except Exception as e:
+                    self.logger.error(f"Oracle integration error: {e}")
         else:
             winning_signal = 'HOLD'
             consensus_strength = 0.5
@@ -231,7 +257,8 @@ class AgentManager:
             'total_weight': round(total_weight, 2),
             'session_id': str(uuid.uuid4()),
             'timestamp': datetime.now().isoformat(),
-            'divine_doubt_applied': divine_doubt_triggered
+            'divine_doubt_applied': divine_doubt_triggered,
+            'oracle_wisdom': oracle_wisdom
         }
         
         self.voting_sessions.append(voting_result)

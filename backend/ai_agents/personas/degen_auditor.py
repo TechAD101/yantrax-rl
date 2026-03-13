@@ -6,7 +6,7 @@ class DegenAuditorAgent(PersonaAgent):
     def __init__(self):
         super().__init__(
             name="degen_auditor",
-            archetype=PersonaArchetype.SPECULATIVE,
+            archetype=PersonaArchetype.RISK_AUDITOR,
             voting_weight=1.5,
             preferred_strategies=["risk_mitigation", "volatility_crush", "capital_preservation"],
             department="risk_control",

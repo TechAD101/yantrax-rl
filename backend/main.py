@@ -161,8 +161,10 @@ try:
     from ai_firm.ceo import AutonomousCEO, CEOPersonality
     from ai_firm.agent_manager import AgentManager
     from rl_core.env_market_sim import MarketSimEnv
+    from services.oracle_service import OracleService
     
-    agent_manager = AgentManager()
+    oracle_service = OracleService()
+    agent_manager = AgentManager(oracle_service=oracle_service)
     ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
     if PERPLEXITY_READY:
         ceo.set_perplexity_service(PERPLEXITY_SERVICE)
@@ -1220,7 +1222,42 @@ def ai_firm_voting_history():
             'count': len(history),
             'timestamp': datetime.now().isoformat()
         }), 200
-    return jsonify({'status': 'degraded'}), 500
+@app.route('/api/oracle/wisdom', methods=['GET'])
+def get_oracle_wisdom():
+    """Direct line to the Divine Whisper (Gemini Oracle)"""
+    if not AI_FIRM_READY or not oracle_service:
+        return jsonify({'error': 'Oracle service not available'}), 503
+    
+    symbol = request.args.get('symbol', 'MARKET').upper()
+    # Fetch context from system state if possible
+    context = {
+        'timestamp': datetime.now().isoformat(),
+        'note': 'Direct query from terminal'
+    }
+    
+    # We run the async call in a thread safely
+    try:
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        insight = loop.run_until_complete(oracle_service.get_divine_whisper(symbol, context, 0.5))
+        loop.close()
+        
+        if insight:
+            return jsonify({
+                'symbol': symbol,
+                'perspective': insight.perspective,
+                'whisper': insight.wisdom,
+                'paradox': insight.paradox,
+                'direction': insight.direction,
+                'confidence': insight.confidence,
+                'timestamp': insight.timestamp
+            }), 200
+    except Exception as e:
+        logger.error(f"Oracle direct query failed: {e}")
+        return jsonify({'error': str(e)}), 500
+
+    return jsonify({'status': 'silent'}), 204
 
 # ==================== EXPLICIT PERSONA API ENDPOINTS ====================
 

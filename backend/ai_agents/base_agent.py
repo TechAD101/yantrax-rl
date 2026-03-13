@@ -9,35 +9,44 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
 
-class AgentArchetype(Enum):
-    """Agent personality archetypes"""
-    VALUE = "value"
-    GROWTH = "growth"
-    QUANTATATIVE = "quantitative"
-    SYSTEMATIC = "systematic"
-    SPECULATIVE = "speculative"
+from .base_persona import PersonaAgent, PersonaArchetype, PersonaVote, PersonaAnalysis, VoteType
 
-
-@dataclass
-class BaseAgent:
+class BaseAgent(PersonaAgent):
     """Base agent class for placeholder agents in the registry"""
-    name: str
-    archetype: AgentArchetype
-    confidence: float = 0.75
+    def __init__(self, name: str, archetype: PersonaArchetype, voting_weight: float = 1.0):
+        super().__init__(
+            name=name,
+            archetype=archetype,
+            voting_weight=voting_weight,
+            mandate=f"Support institutional growth through {archetype.value} analysis."
+        )
+        self.confidence = 0.75
     
-    def analyze(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze(self, context: Dict[str, Any]) -> PersonaAnalysis:
         """Placeholder analysis method"""
-        return {
-            'agent': self.name,
-            'signal': 'HOLD',
-            'confidence': self.confidence,
-            'reasoning': f'{self.name} ({self.archetype.value}) placeholder analysis'
-        }
+        return PersonaAnalysis(
+            symbol=context.get('symbol', 'UNKNOWN'),
+            persona_name=self.name,
+            archetype=self.archetype,
+            recommendation='HOLD',
+            confidence=self.confidence,
+            reasoning=f'{self.name} ({self.archetype.value}) placeholder analysis',
+            scores={'general': 0.5},
+            risk_assessment={'risk': 'low'},
+            time_horizon="Medium-term"
+        )
+    
+    def vote(self, proposal: Dict[str, Any], market_context: Dict[str, Any]) -> PersonaVote:
+        """Cast a neutral vote by default"""
+        return PersonaVote(
+            persona_name=self.name,
+            archetype=self.archetype,
+            vote=VoteType.HOLD,
+            confidence=self.confidence,
+            reasoning=f"{self.name} neutral stance on proposal.",
+            weight=self.voting_weight
+        )
     
     def to_dict(self) -> Dict[str, Any]:
         """Serialize agent to dictionary"""
-        return {
-            'name': self.name,
-            'archetype': self.archetype.value,
-            'confidence': self.confidence
-        }
+        return self.get_performance_summary()
