@@ -74,6 +74,7 @@ class MarketDataService:
     def __init__(self, config: MarketDataConfig):
         self.config = config
         self.cache: Dict[str, tuple[datetime, Dict]] = {}
+        self.active_provider = "FMP (v2)"
         # Only FMP in production
         self.rate_limiters = {
             DataProvider.FMP: RateLimiter(self.config.rate_limit_calls, self.config.rate_limit_period)
@@ -294,3 +295,20 @@ class MarketDataService:
                 for provider, limiter in self.rate_limiters.items()
             }
         }
+
+    # --- Compatibility Shims for Legacy Routes ---
+    def get_fundamentals(self, symbol: str) -> Dict[str, Any]:
+        """Shim for backwards compatibility with legacy routes."""
+        return {}
+
+    def get_verification_stats(self) -> Dict[str, Any]:
+        """Shim for backwards compatibility with legacy routes."""
+        return {}
+
+    def get_price_verified(self, symbol: str) -> Dict[str, Any]:
+        """Shim for backwards compatibility with legacy routes."""
+        return {'verified': False, 'price': self.get_price(symbol).get('price', 0)}
+
+    def get_recent_audit_logs(self, limit: int = 10) -> List[Any]:
+        """Shim for backwards compatibility with legacy routes."""
+        return []
