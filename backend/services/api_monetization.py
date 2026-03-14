@@ -180,23 +180,33 @@ class RateLimiter:
         
         remaining_limits = {}
         
-        for window_name, (limit, window_seconds) in limits.items():
-            key = f"rate_limit:{api_key}:{endpoint}:{window_name}:{current_time // window_seconds}"
-            
-            try:
-                pipe = self.redis.pipeline()
+        try:
+            pipe = self.redis.pipeline()
+            window_order = []
+            for window_name, (limit, window_seconds) in limits.items():
+                key = f"rate_limit:{api_key}:{endpoint}:{window_name}:{current_time // window_seconds}"
                 pipe.incr(key)
                 pipe.expire(key, window_seconds)
-                results = pipe.execute()
-                
-                current_count = results[0]
+                window_order.append((window_name, limit))
+
+            results = pipe.execute()
+
+            is_limited = False
+            for i, (window_name, limit) in enumerate(window_order):
+                # results[i*2] is the result of incr
+                current_count = results[i * 2]
                 remaining_limits[window_name] = max(0, limit - current_count)
-                
                 if current_count > limit:
-                    return True, remaining_limits
-            except Exception as e:
-                logger.error(f"Rate limiting error: {e}")
-                remaining_limits[window_name] = limit
+                    is_limited = True
+
+            if is_limited:
+                return True, remaining_limits
+        except Exception as e:
+            logger.error(f"Rate limiting error: {e}")
+            # Fallback for error case
+            for window_name, (limit, _) in limits.items():
+                if window_name not in remaining_limits:
+                    remaining_limits[window_name] = limit
         
         return False, remaining_limits
 
