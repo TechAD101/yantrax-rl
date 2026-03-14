@@ -1,6 +1,5 @@
 """Simple authentication service using bcrypt"""
 import os
-from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import hashlib
 import hmac
