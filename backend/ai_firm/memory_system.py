@@ -85,7 +85,7 @@ class FirmMemorySystem:
                 )
             ''')
             
-            conn.execute('''
+            conn.executescript('''
                 CREATE INDEX IF NOT EXISTS idx_memory_type ON firm_memories(memory_type);
                 CREATE INDEX IF NOT EXISTS idx_importance ON firm_memories(importance);
                 CREATE INDEX IF NOT EXISTS idx_context_hash ON firm_memories(context_hash);
@@ -499,15 +499,9 @@ class FirmMemorySystem:
             # Clear database
             conn.execute('DELETE FROM firm_memories')
             
-            # Reinsert all cached memories
-            for memory in self.memory_cache.values():
-                conn.execute('''
-                    INSERT INTO firm_memories 
-                    (id, memory_type, content, importance, tags, context_hash, 
-                     created_at, last_accessed, access_count, decay_factor, 
-                     associated_agents, cross_references)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
+            # Prepare data for bulk insert using a generator expression to avoid memory bloat
+            memory_data = (
+                (
                     memory.id,
                     memory.memory_type.value,
                     json.dumps(memory.content, default=str),
@@ -520,7 +514,18 @@ class FirmMemorySystem:
                     memory.decay_factor,
                     json.dumps(memory.associated_agents),
                     json.dumps(memory.cross_references)
-                ))
+                )
+                for memory in self.memory_cache.values()
+            )
+
+            # Reinsert all cached memories efficiently
+            conn.executemany('''
+                INSERT INTO firm_memories
+                (id, memory_type, content, importance, tags, context_hash,
+                 created_at, last_accessed, access_count, decay_factor,
+                 associated_agents, cross_references)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', memory_data)
             
             conn.commit()
     
