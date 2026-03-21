@@ -1868,12 +1868,12 @@ def get_backtest_results():
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     data = request.get_json() or {}
+    if not data or not data.get('username') or not data.get('email') or not data.get('password'):
+        return jsonify({'message': 'Missing required fields'}), 400
+
     username = data.get('username')
     email = data.get('email')
     password = data.get('password')
-    
-    if not (username and email and password):
-        return jsonify({'error': 'Missing required fields'}), 400
     
     try:
         user = register_user(username, email, password)
@@ -1886,11 +1886,11 @@ def register():
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     data = request.get_json() or {}
+    if not data or not data.get('username') or not data.get('password'):
+        return jsonify({'message': 'Missing credentials'}), 400
+
     username = data.get('username')
     password = data.get('password')
-    
-    if not (username and password):
-        return jsonify({'error': 'Missing credentials'}), 400
     
     try:
         user = authenticate_user(username, password)

@@ -66,3 +66,32 @@ def test_user_registration_and_login(client):
     
     assert resp2.status_code == 200
     assert resp2.get_json()['user']['username'] == 'testuser'
+
+
+def test_login_missing_credentials(client):
+    # Missing username
+    resp = client.post('/api/auth/login', json={'password': 'secret123'})
+    assert resp.status_code == 400
+    assert resp.get_json()['message'] == 'Missing credentials'
+
+    # Missing password
+    resp = client.post('/api/auth/login', json={'username': 'testuser'})
+    assert resp.status_code == 400
+    assert resp.get_json()['message'] == 'Missing credentials'
+
+
+def test_register_missing_fields(client):
+    # Missing email
+    resp = client.post('/api/auth/register', json={'username': 'testuser', 'password': 'secret123'})
+    assert resp.status_code == 400
+    assert resp.get_json()['message'] == 'Missing required fields'
+
+    # Missing username
+    resp = client.post('/api/auth/register', json={'email': 'test@example.com', 'password': 'secret123'})
+    assert resp.status_code == 400
+    assert resp.get_json()['message'] == 'Missing required fields'
+
+    # Missing password
+    resp = client.post('/api/auth/register', json={'username': 'testuser', 'email': 'test@example.com'})
+    assert resp.status_code == 400
+    assert resp.get_json()['message'] == 'Missing required fields'
