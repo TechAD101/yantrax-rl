@@ -139,7 +139,7 @@ try:
     config_data = Config.get_market_config()
     market_config = MarketDataConfig(**config_data)
     market_data = MarketDataService(market_config)
-    market_provider = market_data  # Fix: Create the market_provider reference
+    market_provider = market_data
     registry.register_service('market_data', market_data)
     MARKET_SERVICE_READY = True
     logger.info("✅ MarketDataService initialized successfully")
