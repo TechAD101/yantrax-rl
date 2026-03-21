@@ -140,14 +140,24 @@ class KnowledgeBaseService:
             }
         ]
         
-        for item in wisdom:
-            self.store_wisdom(
-                content=item["content"],
-                source=item["source"],
-                tags=item["tags"],
-                archetype=item["archetype"]
+        collection = self.collections['investor_wisdom']
+        now = datetime.now().isoformat()
+
+        try:
+            collection.add(
+                documents=[item["content"] for item in wisdom],
+                metadatas=[{
+                    "source": item["source"],
+                    "tags": ",".join(item["tags"]),
+                    "archetype": ",".join(item["archetype"]),
+                    "confidence": 0.9,
+                    "created_at": now
+                } for item in wisdom],
+                ids=[f"wisdom_{i + 1:04d}" for i in range(len(wisdom))]
             )
-        self.logger.info(f"🌱 Seeded Knowledge Base with {len(wisdom)} core principles.")
+            self.logger.info(f"🌱 Seeded Knowledge Base with {len(wisdom)} core principles.")
+        except Exception as e:
+            self.logger.error(f"Failed to seed wisdom: {e}")
 
     def _initialize_collections(self):
         """Create or load ChromaDB collections"""
