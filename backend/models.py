@@ -145,7 +145,7 @@ class Memecoin(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     
     # Relationships
-    positions = relationship('PortfolioPosition', primaryjoin='Memecoin.symbol == PortfolioPosition.symbol', foreign_keys=[PortfolioPosition.symbol], viewonly=True, backref='memecoin_ref')
+    positions = relationship('PortfolioPosition', primaryjoin='Memecoin.symbol == PortfolioPosition.symbol', foreign_keys='[PortfolioPosition.symbol]', viewonly=True, backref='memecoin_ref')
 
     def to_dict(self) -> Dict[str, Any]:
         return {
