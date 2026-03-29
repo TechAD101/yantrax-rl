@@ -50,7 +50,6 @@ import asyncio
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from sqlalchemy import func, Float
-import numpy as np
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -64,7 +63,7 @@ PERSONA_REGISTRY = get_persona_registry()
 
 # Database helpers
 from db import init_db, get_session
-from models import Strategy, StrategyProfile
+from models import Strategy, StrategyProfile, JournalEntry
 from models import Portfolio, PortfolioPosition
 
 def _load_dotenv_fallback(filepath: str) -> None:
@@ -183,6 +182,9 @@ try:
 except Exception as e:
     logger.error(f"❌ AI Firm core initialization failed: {e}")
     DEBATE_ENGINE = MockDebateEngine()
+    oracle_service = None
+    agent_manager = None
+    ceo = None
 
 
 app = Flask(__name__)
@@ -1562,7 +1564,7 @@ def institutional_strategy():
         }), 500
 
 @app.route('/api/strategy/ai-debate/trigger', methods=['POST'])
-async def trigger_ai_debate():
+def trigger_ai_debate():
     """Trigger a persona debate for a given symbol/ticker"""
     data = request.get_json() or {}
     symbol = data.get('symbol') or data.get('ticker')
@@ -1571,7 +1573,10 @@ async def trigger_ai_debate():
         return jsonify({'error': 'symbol is required'}), 400
     if 'DEBATE_ENGINE' in globals() and DEBATE_ENGINE:
         try:
-            result = await DEBATE_ENGINE.conduct_debate(symbol.upper(), context)
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(DEBATE_ENGINE.conduct_debate(symbol.upper(), context))
+            loop.close()
             return jsonify(result), 200
         except Exception as e:
             logger.error(f"Error running debate: {e}")
@@ -2462,16 +2467,19 @@ def execute_trade_mvp(portfolio_id: int):
 # ==================== KNOWLEDGE BASE INGESTION ====================
 
 @app.route('/api/knowledge/ingest', methods=['POST'])
-async def trigger_knowledge_ingest():
+def trigger_knowledge_ingest():
     """Manually trigger autonomous wisdom ingestion"""
     kb = registry.get_service('kb')
     perp = registry.get_service('perplexity')
-    
+
     if not kb or not perp:
         return jsonify({'error': 'Intelligence services not fully operational'}), 503
-        
+
     try:
-        result = await kb.autonomous_wisdom_ingestion(perp)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(kb.autonomous_wisdom_ingestion(perp))
+        loop.close()
         return jsonify(result), 200
     except Exception as e:
         logger.error(f"Manual ingestion failed: {e}")

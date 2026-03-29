@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from db import get_session
 from models import Order
@@ -52,7 +52,7 @@ def list_orders(limit: int = 100) -> List[Dict[str, Any]]:
         session.close()
 
 
-def get_order(order_id: int) -> Dict[str, Any] | None:
+def get_order(order_id: int) -> Optional[Dict[str, Any]]:
     session = get_session()
     try:
         o = session.query(Order).get(order_id)

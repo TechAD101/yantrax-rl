@@ -49,17 +49,6 @@ import { BASE_URL } from './api/api'
 // Expose resolved BASE_URL for runtime debugging
 try { window.__YANTRAX_BASE_URL = BASE_URL } catch (e) {}
 
-window.addEventListener('unhandledrejection', (evt) => {
-  try {
-    const r = evt.reason
-    if (r == null) console.error('Unhandled rejection with no reason')
-    else if (typeof r === 'object' && typeof r.then === 'function') console.error('Unhandled rejection: Promise/Thenable thrown', r)
-    else console.error('Unhandled rejection reason:', r)
-  } catch (e) {
-    console.error('Unhandled rejection handler failed', e)
-  }
-})
-
 try {
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
