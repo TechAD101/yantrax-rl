@@ -102,14 +102,6 @@ class AgentManager:
             'arbitrage_scout': {
                 'confidence': 0.75, 'performance': 17.2, 'specialty': 'Cross-Market Analysis',
                 'department': 'trade_operations', 'role': 'analyst', 'persona': False
-            },
-            'macro_monk': {
-                'confidence': 0.88, 'performance': 0.0, 'specialty': 'Geopolitics & Black Swan',
-                'department': 'market_intelligence', 'role': 'specialist', 'persona': True
-            },
-            'degen_auditor': {
-                'confidence': 0.95, 'performance': 0.0, 'specialty': 'Scam Detection',
-                'department': 'risk_control', 'role': 'director', 'persona': True
             }
         })
         
@@ -166,6 +158,26 @@ class AgentManager:
             'degen_auditor': {
                 'confidence': 0.88, 'performance': 25.5, 'specialty': 'Degenerate Risk Mitigation',
                 'department': 'risk_control', 'role': 'senior', 'persona': True
+            }
+        })
+        
+        # Communications & Institutional Department (4 agents)
+        agents.update({
+            'risk_auditor': {
+                'confidence': 0.85, 'performance': 23.2, 'specialty': 'Risk Compliance',
+                'department': 'risk_control', 'role': 'specialist', 'persona': False
+            },
+            'market_observer': {
+                'confidence': 0.80, 'performance': 20.5, 'specialty': 'Market Microstructure',
+                'department': 'market_intelligence', 'role': 'analyst', 'persona': False
+            },
+            'compliance_officer': {
+                'confidence': 0.82, 'performance': 21.3, 'specialty': 'Regulatory Compliance',
+                'department': 'communications', 'role': 'director', 'persona': False
+            },
+            'communications_lead': {
+                'confidence': 0.78, 'performance': 18.9, 'specialty': 'Stakeholder Relations',
+                'department': 'communications', 'role': 'senior', 'persona': False
             }
         })
         

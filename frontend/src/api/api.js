@@ -2,7 +2,7 @@
 // Resolve backend BASE URL from Vite env var or process env fallbacks
 const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL)
   ? import.meta.env.VITE_API_URL
-  : 'https://yantrax-backend.onrender.com';
+  : 'https://5000-i3rn3hf9cb0he5na8ycyo-ba976247.sg1.manus.computer';
 
 const BASE_URL = API_BASE_URL;
 export { BASE_URL };
