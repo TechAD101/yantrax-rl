@@ -14,6 +14,7 @@ import os
 import time
 import logging
 import requests  # type: ignore[import]
+import numpy as np
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from dataclasses import dataclass
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 class DataProvider(Enum):
     """Available market data providers"""
     FMP = "fmp"
+    YFINANCE = "yfinance"
 
 @dataclass
 class MarketDataConfig:
@@ -74,9 +76,10 @@ class MarketDataService:
     def __init__(self, config: MarketDataConfig):
         self.config = config
         self.cache: Dict[str, tuple[datetime, Dict]] = {}
-        # Only FMP in production
+        # Rate limiters for providers
         self.rate_limiters = {
-            DataProvider.FMP: RateLimiter(self.config.rate_limit_calls, self.config.rate_limit_period)
+            DataProvider.FMP: RateLimiter(self.config.rate_limit_calls, self.config.rate_limit_period),
+            DataProvider.YFINANCE: RateLimiter(2000, 3600) # yfinance is more generous for testing
         }
 
         # Determine available providers
@@ -84,14 +87,21 @@ class MarketDataService:
         logger.info(f"🚀 MarketDataService initialized with providers: {[p.value for p in self.providers]}")
         
     def _get_available_providers(self) -> List[DataProvider]:
-        """Determine which providers are configured and available (FMP-only)."""
+        """Determine which providers are configured and available."""
         providers: List[DataProvider] = []
+        
+        # FMP Check
         fmp_key = getattr(self.config, "fmp_api_key", None)
         if fmp_key:
             providers.append(DataProvider.FMP)
             logger.info("✅ FinancialModelingPrep (FMP) configured")
         else:
-            logger.error("❌ FMP API key not configured. Set FMP_API_KEY in environment or pass via MarketDataConfig.fmp_api_key")
+            logger.warning("⚠️ FMP API key not configured. FMP provider disabled.")
+
+        # yfinance is always available as a fallback
+        providers.append(DataProvider.YFINANCE)
+        logger.info("✅ yfinance (Yahoo Finance) fallback enabled")
+        
         return providers
         
     def _check_cache(self, symbol: str) -> Optional[Dict[str, Any]]:
@@ -109,7 +119,7 @@ class MarketDataService:
         return None
         
     def get_stock_price(self, symbol: str) -> Dict[str, Any]:
-        """Get a single symbol price using FMP batch endpoint (production ready)."""
+        """Get a single symbol price with intelligent fallback."""
         symbol = symbol.upper()
 
         # Check cache first
@@ -117,24 +127,62 @@ class MarketDataService:
         if cached:
             return cached
 
-        # Ensure FMP provider is available
-        if DataProvider.FMP not in self.providers:
-            logger.error("❌ No configured provider available for market data")
-            return self._generate_error_response(symbol)
+        # 1. Try FMP if available
+        if DataProvider.FMP in self.providers:
+            try:
+                result = self._fetch_fmp_single(symbol)
+                if result and result.get('price', 0) > 0:
+                    self.cache[symbol] = (datetime.now(), result)
+                    logger.info(f"✅ SUCCESS with FMP for {symbol}: ${result['price']}")
+                    return result
+            except Exception as e:
+                logger.error(f"❌ FMP provider failed for {symbol}: {e}")
 
-        # Attempt to fetch from FMP (single symbol via batch endpoint)
-        try:
-            result = self._fetch_fmp_single(symbol)
-            if result and result.get('price', 0) > 0:
-                self.cache[symbol] = (datetime.now(), result)
-                logger.info(f"✅ SUCCESS with fmp for {symbol}: ${result['price']}")
-                return result
-            else:
-                logger.error(f"❌ FMP returned no price for {symbol}")
-        except Exception as e:
-            logger.error(f"❌ FMP provider failed for {symbol}: {e}")
+        # 2. Fallback to yfinance
+        if DataProvider.YFINANCE in self.providers:
+            try:
+                result = self._fetch_yfinance_single(symbol)
+                if result and result.get('price', 0) > 0:
+                    self.cache[symbol] = (datetime.now(), result)
+                    logger.info(f"✅ SUCCESS with yfinance for {symbol}: ${result['price']}")
+                    return result
+            except Exception as e:
+                logger.error(f"❌ yfinance provider failed for {symbol}: {e}")
 
         return self._generate_error_response(symbol)
+
+    def _fetch_yfinance_single(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Fetch data from Yahoo Finance via yfinance library."""
+        import yfinance as yf
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.fast_info
+            
+            # Get current price
+            price = info.get('last_price') or info.get('regular_market_price')
+            if not price:
+                # Fallback to history if fast_info fails
+                hist = ticker.history(period="1d")
+                if not hist.empty:
+                    price = hist['Close'].iloc[-1]
+
+            if price:
+                # Calculate change if possible
+                prev_close = info.get('previous_close')
+                change = price - prev_close if prev_close else 0
+                change_pct = (change / prev_close * 100) if prev_close else 0
+
+                return {
+                    'symbol': symbol,
+                    'price': round(float(price), 2),
+                    'change': round(float(change), 2),
+                    'changePercent': round(float(change_pct), 2),
+                    'timestamp': datetime.now().isoformat(),
+                    'source': 'yfinance'
+                }
+        except Exception as e:
+            logger.error(f"yfinance error for {symbol}: {e}")
+        return None
 
     # Backwards-compatible alias used by some callers
     def get_price(self, symbol: str) -> Dict[str, Any]:
@@ -254,25 +302,71 @@ class MarketDataService:
         }
         
     def get_batch_prices(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:
-        """Get prices for multiple symbols in a single FMP batch request where possible."""
+        """Get prices for multiple symbols with intelligent fallback."""
         symbols_norm = [s.upper() for s in symbols]
         results: Dict[str, Dict[str, Any]] = {}
+        remaining_symbols = []
 
-        if DataProvider.FMP not in self.providers:
-            for s in symbols_norm:
-                results[s] = self._generate_error_response(s)
-            return results
+        # 1. Try FMP for all symbols if available
+        if DataProvider.FMP in self.providers:
+            try:
+                fetched = self._fetch_fmp_batch(symbols_norm)
+                for s in symbols_norm:
+                    data = fetched.get(s)
+                    if data and data.get('price', 0) > 0:
+                        self.cache[s] = (datetime.now(), data)
+                        results[s] = data
+                    else:
+                        remaining_symbols.append(s)
+            except Exception as e:
+                logger.error(f"FMP batch failed: {e}")
+                remaining_symbols = symbols_norm
+        else:
+            remaining_symbols = symbols_norm
 
-        fetched = self._fetch_fmp_batch(symbols_norm)
-        now_ts = datetime.now().isoformat()
-        for s in symbols_norm:
-            data = fetched.get(s)
-            if data and data.get('price', 0) > 0:
-                # cache and return
-                self.cache[s] = (datetime.now(), data)
-                results[s] = data
-            else:
-                results[s] = self._generate_error_response(s)
+        # 2. Try yfinance for remaining symbols
+        if remaining_symbols and DataProvider.YFINANCE in self.providers:
+            try:
+                import yfinance as yf
+                # yfinance download is efficient for batches
+                tickers_str = " ".join(remaining_symbols)
+                data = yf.download(tickers_str, period="1d", interval="1m", progress=False)
+                
+                for s in remaining_symbols:
+                    try:
+                        # Handle both single and multi-ticker dataframes
+                        if len(remaining_symbols) > 1:
+                            if s in data['Close']:
+                                price = data['Close'][s].iloc[-1]
+                            else:
+                                price = None
+                        else:
+                            price = data['Close'].iloc[-1] if not data.empty else None
+
+                        if price and not np.isnan(price):
+                            res = {
+                                'symbol': s,
+                                'price': round(float(price), 2),
+                                'timestamp': datetime.now().isoformat(),
+                                'source': 'yfinance'
+                            }
+                            self.cache[s] = (datetime.now(), res)
+                            results[s] = res
+                        else:
+                            results[s] = self._generate_error_response(s)
+                    except Exception as e:
+                        logger.error(f"yfinance batch error for {s}: {e}")
+                        results[s] = self._generate_error_response(s)
+            except Exception as e:
+                logger.error(f"yfinance batch download failed: {e}")
+                for s in remaining_symbols:
+                    if s not in results:
+                        results[s] = self._generate_error_response(s)
+        else:
+            for s in remaining_symbols:
+                if s not in results:
+                    results[s] = self._generate_error_response(s)
+
         return results
         
     def clear_cache(self):
