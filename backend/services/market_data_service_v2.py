@@ -26,6 +26,7 @@ class DataProvider(Enum):
     """Available market data providers"""
     FMP = "fmp"
     YFINANCE = "yfinance"
+    FINNHUB = "finnhub"
 
 @dataclass
 class MarketDataConfig:
@@ -79,7 +80,8 @@ class MarketDataService:
         # Rate limiters for providers
         self.rate_limiters = {
             DataProvider.FMP: RateLimiter(self.config.rate_limit_calls, self.config.rate_limit_period),
-            DataProvider.YFINANCE: RateLimiter(2000, 3600) # yfinance is more generous for testing
+            DataProvider.YFINANCE: RateLimiter(2000, 3600), # yfinance is more generous for testing
+            DataProvider.FINNHUB: RateLimiter(60, 60) # Finnhub free tier: 60 calls/min
         }
 
         # Determine available providers
@@ -101,6 +103,12 @@ class MarketDataService:
         # yfinance is always available as a fallback
         providers.append(DataProvider.YFINANCE)
         logger.info("✅ yfinance (Yahoo Finance) fallback enabled")
+
+        # Finnhub Check
+        finnhub_key = os.getenv("FINNHUB_API_KEY")
+        if finnhub_key:
+            providers.append(DataProvider.FINNHUB)
+            logger.info("✅ Finnhub configured")
         
         return providers
         
@@ -138,7 +146,18 @@ class MarketDataService:
             except Exception as e:
                 logger.error(f"❌ FMP provider failed for {symbol}: {e}")
 
-        # 2. Fallback to yfinance
+        # 2. Fallback to Finnhub if available
+        if DataProvider.FINNHUB in self.providers:
+            try:
+                result = self._fetch_finnhub_single(symbol)
+                if result and result.get('price', 0) > 0:
+                    self.cache[symbol] = (datetime.now(), result)
+                    logger.info(f"✅ SUCCESS with Finnhub for {symbol}: ${result['price']}")
+                    return result
+            except Exception as e:
+                logger.error(f"❌ Finnhub provider failed for {symbol}: {e}")
+
+        # 3. Fallback to yfinance
         if DataProvider.YFINANCE in self.providers:
             try:
                 result = self._fetch_yfinance_single(symbol)
@@ -150,6 +169,31 @@ class MarketDataService:
                 logger.error(f"❌ yfinance provider failed for {symbol}: {e}")
 
         return self._generate_error_response(symbol)
+
+    def _fetch_finnhub_single(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Fetch data from Finnhub API."""
+        api_key = os.getenv("FINNHUB_API_KEY")
+        if not api_key:
+            return None
+            
+        try:
+            url = f"https://finnhub.io/api/v1/quote?symbol={symbol}&token={api_key}"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                price = data.get('c') # Current price
+                if price and price > 0:
+                    return {
+                        'symbol': symbol,
+                        'price': round(float(price), 2),
+                        'change': round(float(data.get('d', 0)), 2),
+                        'changePercent': round(float(data.get('dp', 0)), 2),
+                        'timestamp': datetime.now().isoformat(),
+                        'source': 'finnhub'
+                    }
+        except Exception as e:
+            logger.error(f"Finnhub error for {symbol}: {e}")
+        return None
 
     def _fetch_yfinance_single(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Fetch data from Yahoo Finance via yfinance library."""
