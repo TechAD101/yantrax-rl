@@ -4,7 +4,7 @@ Professional-grade market data abstraction with multiple providers,
 rate limiting, caching, and comprehensive error handling.
 
 Providers:
-- FinancialModelingPrep (FMP) - batch quote API (primary and only providey")
+- FinancialModelingPrep (FMP) - batch quote API (primary and only provider)
 
 Author: YantraX Team
 Date: 2025-11-27

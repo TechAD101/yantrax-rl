@@ -1,7 +1,10 @@
 """Backtester service - simulate strategy performance on historical data"""
+import logging
 import random
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
+
+logger = logging.getLogger(__name__)
 
 from db import get_session
 from models import Strategy
@@ -100,8 +103,11 @@ def backtest_strategy(strategy_id: int, symbol: str = 'AAPL', days: int = 30, in
 
 def list_backtest_results(limit: int = 10) -> List[Dict[str, Any]]:
     """List recent backtest results from KB"""
+    if not KB_AVAILABLE or not kb_service:
+        return []
     try:
         results = kb_service.search("backtest", limit=limit)
         return results
     except Exception as e:
-        return {'error': str(e)}
+        logger.error(f"Failed to list backtest results: {e}")
+        return []
