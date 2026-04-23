@@ -5,12 +5,22 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
-# Mock external dependencies
+# Mock external dependencies only if missing
+import importlib.util
+
+def is_installed(pkg_name):
+    try:
+        return importlib.util.find_spec(pkg_name) is not None
+    except Exception:
+        return False
+
 for mod in ["sqlalchemy", "sqlalchemy.orm", "sqlalchemy.ext.declarative", "flask", "numpy",
             "alpaca", "alpaca.data", "alpaca.data.historical", "alpaca.data.requests",
             "alpaca.data.timeframe", "chromadb", "chromadb.config", "redis", "pydantic",
             "google", "google.generativeai", "openai", "anthropic"]:
-    sys.modules[mod] = MagicMock()
+    root_pkg = mod.split('.')[0]
+    if not is_installed(root_pkg):
+        sys.modules[mod] = MagicMock()
 
 from services.trade_validator import TradeValidator, get_trade_validator
 
