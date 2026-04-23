@@ -1,7 +1,6 @@
 
 import sys
 import os
-import json
 
 # Setup path
 sys.path.append(os.path.abspath("c:/Users/ABhati/Documents/yantrax-rl/backend"))
