@@ -20,7 +20,7 @@ def print_status(test_name, passed, message=""):
 def test_imports():
     """Test all critical imports"""
     try:
-        from main import app, market_provider, AI_FIRM_READY
+        from main import app, AI_FIRM_READY
         print_status("Backend imports", True)
         return True
     except Exception as e:
