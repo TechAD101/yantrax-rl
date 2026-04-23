@@ -13,7 +13,6 @@ sys.path.append(os.path.join(os.getcwd(), 'backend'))
 from ai_firm.agent_manager import AgentManager
 from services.knowledge_base import get_knowledge_base
 from services.trade_validator import TradeValidator
-from services.market_data_service_waterfall import get_waterfall_service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Verification")
