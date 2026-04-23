@@ -208,7 +208,7 @@ metrics_registry = {
     'api_call_errors': 0
 }
 
-# Define error_counts to fix undefined variable
+# Define error_counts to fix undefined variable.
 error_counts = {
     'market_data_errors': 0,
     'ai_firm_errors': 0,
