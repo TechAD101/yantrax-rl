@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import hashlib
 import hmac
+import bcrypt
 
 from db import get_session
 from models import User
@@ -12,9 +13,34 @@ from models import User
 SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 
+def is_legacy_hash(hashed: str) -> bool:
+    """Check if the hash is a legacy SHA256 hash (64 hex characters)"""
+    if len(hashed) == 64:
+        try:
+            int(hashed, 16)
+            return True
+        except ValueError:
+            return False
+    return False
+
+
 def hash_password(password: str) -> str:
-    """Hash password using SHA256"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash password using bcrypt"""
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode(), salt).decode('utf-8')
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    """Verify password against bcrypt or legacy SHA256 hash"""
+    if is_legacy_hash(hashed):
+        legacy_hash = hashlib.sha256(password.encode()).hexdigest()
+        return hmac.compare_digest(legacy_hash, hashed)
+
+    try:
+        # bcrypt.checkpw expects bytes
+        return bcrypt.checkpw(password.encode(), hashed.encode('utf-8'))
+    except Exception:
+        return False
 
 
 def register_user(username: str, email: str, password: str) -> Dict[str, Any]:
@@ -46,8 +72,14 @@ def authenticate_user(username: str, password: str) -> Optional[Dict[str, Any]]:
         if not user:
             return None
         
-        pwd_hash = hash_password(password)
-        if pwd_hash == user.password_hash:
+        if verify_password(password, user.password_hash):
+            # Optional: Migrate legacy hash to bcrypt on successful login
+            if is_legacy_hash(user.password_hash):
+                try:
+                    user.password_hash = hash_password(password)
+                    session.commit()
+                except Exception:
+                    session.rollback()
             return user.to_dict()
         return None
     finally:
