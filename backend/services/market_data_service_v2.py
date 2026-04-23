@@ -79,6 +79,8 @@ class MarketDataService:
             DataProvider.FMP: RateLimiter(self.config.rate_limit_calls, self.config.rate_limit_period)
         }
 
+        self.active_provider = 'FMP (v2)'
+
         # Determine available providers
         self.providers = self._get_available_providers()
         logger.info(f"🚀 MarketDataService initialized with providers: {[p.value for p in self.providers]}")
