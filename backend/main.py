@@ -186,7 +186,14 @@ except Exception as e:
 
 
 app = Flask(__name__)
-CORS(app, origins=['*'])
+
+# Secure CORS configuration
+cors_origins_env = os.getenv('CORS_ORIGINS')
+if cors_origins_env:
+    allowed_origins = [origin.strip() for origin in cors_origins_env.split(',')]
+else:
+    allowed_origins = ['http://localhost:5173', 'http://localhost:3000']
+CORS(app, origins=allowed_origins)
 
 # Register Institutional Blueprints
 from routes.data_ingest import data_ingest_bp
