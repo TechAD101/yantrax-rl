@@ -63,7 +63,7 @@ def test_oracle_wisdom_fallback():
 
     # Store old values
     old_ready = main.AI_FIRM_READY
-    old_oracle = main.oracle_service
+    old_oracle = getattr(main, 'oracle_service', None)
 
     try:
         # Test fallback when AI_FIRM_READY is False
