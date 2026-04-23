@@ -93,5 +93,63 @@ class TestDataWhispererML(unittest.TestCase):
         self.assertEqual(result['sentiment_source'], 'heuristic_fallback')
         self.assertEqual(result['sentiment_confidence'], 0.5)
 
+class TestDataWhispererFallback(unittest.TestCase):
+    def setUp(self):
+        # Reset mocks
+        market_data_mock.get_latest_price.reset_mock()
+        market_data_mock.get_latest_price.return_value = 150.0
+
+        # Save original and mock cb
+        import ai_agents.data_whisperer as dw
+        self.original_cb = dw.cb
+        dw.cb = MagicMock()
+
+    def tearDown(self):
+        import ai_agents.data_whisperer as dw
+        dw.cb = self.original_cb
+
+    def test_circuit_breaker_open_fallback(self):
+        import ai_agents.data_whisperer as dw
+        dw.cb.allow_request.return_value = False
+
+        result = analyze_data("AAPL")
+
+        self.assertGreaterEqual(result['price'], 10000)
+        self.assertLessEqual(result['price'], 60000)
+        dw.cb.allow_request.assert_called_once_with("AAPL")
+
+    def test_circuit_breaker_exception_allows_request(self):
+        import ai_agents.data_whisperer as dw
+        dw.cb.allow_request.side_effect = Exception("Redis connection error")
+
+        result = analyze_data("AAPL")
+
+        self.assertEqual(result['price'], 150.0)
+        dw.cb.allow_request.assert_called_once_with("AAPL")
+        market_data_mock.get_latest_price.assert_called_once_with("AAPL")
+
+    def test_get_latest_price_exception_fallback(self):
+        import ai_agents.data_whisperer as dw
+        dw.cb.allow_request.return_value = True
+        market_data_mock.get_latest_price.side_effect = Exception("API timeout")
+
+        result = analyze_data("AAPL")
+
+        self.assertGreaterEqual(result['price'], 10000)
+        self.assertLessEqual(result['price'], 60000)
+        dw.cb.record_failure.assert_called_once_with("AAPL")
+
+    def test_get_latest_price_returns_none_fallback(self):
+        import ai_agents.data_whisperer as dw
+        dw.cb.allow_request.return_value = True
+        market_data_mock.get_latest_price.return_value = None
+
+        result = analyze_data("AAPL")
+
+        self.assertGreaterEqual(result['price'], 10000)
+        self.assertLessEqual(result['price'], 60000)
+        dw.cb.record_failure.assert_called_once_with("AAPL")
+
+
 if __name__ == '__main__':
     unittest.main()
