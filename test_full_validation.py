@@ -6,7 +6,6 @@ Tests all endpoints with real market data (Perplexity API)
 
 import sys
 import os
-import json
 import time
 
 # Add backend to path
@@ -293,5 +292,7 @@ def main():
         return 1
 
 if __name__ == '__main__':
-    os.chdir('/workspaces/yantrax-rl')
+    # Ensure we are in the project root relative to this script
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(project_root)
     sys.exit(main())
