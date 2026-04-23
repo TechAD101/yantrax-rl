@@ -43,11 +43,21 @@ def scan_market(sample_symbols: List[str]) -> List[Dict[str, Any]]:
     # Persist top 3 to DB for quick access
     session = get_session()
     try:
-        for r in results[:3]:
-            # Upsert by symbol
-            m = session.query(Memecoin).filter_by(symbol=r['symbol']).first()
+        top_results = results[:3]
+        symbols = [r['symbol'] for r in top_results]
+
+        # Batch fetch existing memecoins to prevent N+1 queries
+        existing_memecoins = session.query(Memecoin).filter(Memecoin.symbol.in_(symbols)).all()
+        memecoin_map = {m.symbol: m for m in existing_memecoins}
+
+        for r in top_results:
+            m = memecoin_map.get(r['symbol'])
             if not m:
-                m = Memecoin(symbol=r['symbol'], score=r['degen_score'], meta={'social': r['social'], 'mentions': r['mentions'], 'price': r['price'], 'momentum': r['momentum']})
+                m = Memecoin(
+                    symbol=r['symbol'],
+                    score=r['degen_score'],
+                    meta={'social': r['social'], 'mentions': r['mentions'], 'price': r['price'], 'momentum': r['momentum']}
+                )
                 session.add(m)
             else:
                 m.score = r['degen_score']
