@@ -10,10 +10,8 @@ Institutional-grade sentiment analysis combining:
 
 import logging
 import numpy as np
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timedelta
-import requests
-import json
+from typing import Dict, Any
+from datetime import datetime
 
 class MarketSentimentService:
     """Advanced sentiment analysis for institutional trading decisions"""
