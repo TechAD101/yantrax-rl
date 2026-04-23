@@ -5,12 +5,17 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
-# Mock external dependencies
-for mod in ["sqlalchemy", "sqlalchemy.orm", "sqlalchemy.ext.declarative", "flask", "numpy",
-            "alpaca", "alpaca.data", "alpaca.data.historical", "alpaca.data.requests",
-            "alpaca.data.timeframe", "chromadb", "chromadb.config", "redis", "pydantic",
-            "google", "google.generativeai", "openai", "anthropic"]:
-    sys.modules[mod] = MagicMock()
+# Mock external dependencies only in restricted environments
+try:
+    import sqlalchemy
+except ImportError:
+    for mod in ["sqlalchemy", "sqlalchemy.orm", "sqlalchemy.ext.declarative", "flask", "numpy",
+                "alpaca", "alpaca.data", "alpaca.data.historical", "alpaca.data.requests",
+                "alpaca.data.timeframe", "chromadb", "chromadb.config", "redis", "pydantic",
+                "google", "google.generativeai", "openai", "anthropic"]:
+        m = MagicMock()
+        m.__path__ = []
+        sys.modules[mod] = m
 
 from services.trade_validator import TradeValidator, get_trade_validator
 
