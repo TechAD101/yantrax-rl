@@ -7,7 +7,7 @@ import json
 sys.path.append(os.path.abspath("c:/Users/ABhati/Documents/yantrax-rl/backend"))
 
 # Mock imports
-from ai_firm.ceo import AutonomousCEO, CEOPersonality
+from ai_firm.ceo import AutonomousCEO
 from ai_firm.philosophy import PhilosophyManager
 
 print("--- 🧪 PHASE 1: THE SOUL LAYER VALIDATION ---")
