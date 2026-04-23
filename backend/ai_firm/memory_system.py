@@ -533,32 +533,41 @@ class FirmMemorySystem:
             if total_memories == 0:
                 return {'total_memories': 0, 'memory_types': {}, 'agents': {}}
             
-            # Memory type distribution
             type_distribution: Dict[str, int] = {}
+            agent_distribution: Dict[str, int] = {}
+            importance_levels = {'low': 0, 'medium': 0, 'high': 0, 'critical': 0}
+            total_access_count = 0
+            most_accessed_id = None
+            max_access = -1
+
             for memory in self.memory_cache.values():
+                # Memory type distribution
                 type_key = memory.memory_type.value
                 type_distribution[type_key] = type_distribution.get(type_key, 0) + 1
-            
-            # Agent memory distribution
-            agent_distribution: Dict[str, int] = {}
-            for memory in self.memory_cache.values():
+
+                # Agent memory distribution
                 for agent in memory.associated_agents:
                     agent_distribution[agent] = agent_distribution.get(agent, 0) + 1
-            
-            # Importance distribution
-            importance_levels = {'low': 0, 'medium': 0, 'high': 0, 'critical': 0}
-            for memory in self.memory_cache.values():
-                if memory.importance < 0.4:
+
+                # Importance distribution
+                imp = memory.importance
+                if imp < 0.4:
                     importance_levels['low'] += 1
-                elif memory.importance < 0.7:
+                elif imp < 0.7:
                     importance_levels['medium'] += 1
-                elif memory.importance < 0.9:
+                elif imp < 0.9:
                     importance_levels['high'] += 1
                 else:
                     importance_levels['critical'] += 1
+
+                # Access patterns
+                access = memory.access_count
+                total_access_count += access
+                if access > max_access:
+                    max_access = access
+                    most_accessed_id = memory.id
             
-            # Access patterns
-            avg_access_count = sum(m.access_count for m in self.memory_cache.values()) / total_memories
+            avg_access_count = total_access_count / total_memories
             
             return {
                 'total_memories': total_memories,
@@ -567,7 +576,7 @@ class FirmMemorySystem:
                 'importance_distribution': importance_levels,
                 'access_analytics': {
                     'average_access_count': round(avg_access_count, 2),
-                    'most_accessed_memory': max(self.memory_cache.values(), key=lambda m: m.access_count).id,
+                    'most_accessed_memory': most_accessed_id,
                     'access_patterns': len(self.access_patterns)
                 },
                 'system_health': {
