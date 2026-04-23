@@ -43,15 +43,37 @@ def scan_market(sample_symbols: List[str]) -> List[Dict[str, Any]]:
     # Persist top 3 to DB for quick access
     session = get_session()
     try:
-        for r in results[:3]:
-            # Upsert by symbol
-            m = session.query(Memecoin).filter_by(symbol=r['symbol']).first()
+        top_results = results[:3]
+        symbols = [r['symbol'] for r in top_results]
+
+        # Batch fetch existing memecoins to avoid N+1 queries
+        existing_memecoins = session.query(Memecoin).filter(Memecoin.symbol.in_(symbols)).all()
+        memecoin_map = {m.symbol: m for m in existing_memecoins}
+
+        for r in top_results:
+            symbol = r['symbol']
+            m = memecoin_map.get(symbol)
+
+            meta_data = {
+                'social': r['social'],
+                'mentions': r['mentions'],
+                'price': r['price'],
+                'momentum': r['momentum']
+            }
+
             if not m:
-                m = Memecoin(symbol=r['symbol'], score=r['degen_score'], meta={'social': r['social'], 'mentions': r['mentions'], 'price': r['price'], 'momentum': r['momentum']})
+                m = Memecoin(
+                    symbol=symbol,
+                    score=r['degen_score'],
+                    meta=meta_data
+                )
                 session.add(m)
+                # Add to map in case of duplicate symbols in top_results
+                memecoin_map[symbol] = m
             else:
                 m.score = r['degen_score']
-                m.meta = {'social': r['social'], 'mentions': r['mentions'], 'price': r['price'], 'momentum': r['momentum']}
+                m.meta = meta_data
+
         session.commit()
     except Exception:
         session.rollback()
