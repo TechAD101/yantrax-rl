@@ -141,18 +141,23 @@ try:
     market_data = MarketDataService(market_config)
     market_provider = market_data  # Fix: Create the market_provider reference
     registry.register_service('market_data', market_data)
+    registry.register_service('market_provider', market_data)
     MARKET_SERVICE_READY = True
     logger.info("✅ MarketDataService initialized successfully")
 except Exception as e:
     logger.error(f"❌ MarketDataService initialization failed: {e}")
     # Fallback to prevent crashes
     class DummyMarketProvider:
+        def __init__(self):
+            self.active_provider = "Fallback"
         def get_price(self, symbol): return {'price': 0, 'error': 'Market data unavailable'}
         def get_fundamentals(self, symbol): return {}
         def get_verification_stats(self): return {}
         def get_price_verified(self, symbol): return {'verified': False, 'price': 0}
         def get_recent_audit_logs(self, limit): return []
     market_provider = DummyMarketProvider()
+    registry.register_service('market_data', market_provider)
+    registry.register_service('market_provider', market_provider)
 
 # Initialize AI Firm
 AI_FIRM_READY = False
