@@ -140,14 +140,19 @@ class KnowledgeBaseService:
             }
         ]
         
-        for item in wisdom:
-            self.store_wisdom(
-                content=item["content"],
-                source=item["source"],
-                tags=item["tags"],
-                archetype=item["archetype"]
-            )
-        self.logger.info(f"🌱 Seeded Knowledge Base with {len(wisdom)} core principles.")
+        try:
+            self.store_wisdom_batch(wisdom)
+            self.logger.info(f"🌱 Seeded Knowledge Base with {len(wisdom)} core principles (Batched).")
+        except Exception as e:
+            self.logger.error(f"Failed to batch seed wisdom: {e}")
+            # Fallback to individual storage if batch fails
+            for item in wisdom:
+                self.store_wisdom(
+                    content=item["content"],
+                    source=item["source"],
+                    tags=item["tags"],
+                    archetype=item["archetype"]
+                )
 
     def _initialize_collections(self):
         """Create or load ChromaDB collections"""
@@ -191,26 +196,76 @@ class KnowledgeBaseService:
         Returns:
             Document ID
         """
+        item = {
+            "content": content,
+            "source": source,
+            "tags": tags,
+            "archetype": archetype,
+            "confidence": confidence,
+            "metadata": metadata
+        }
+        ids = self.store_wisdom_batch([item])
+        return ids[0]
+
+    def store_wisdom_batch(self, items: List[Dict[str, Any]]) -> List[str]:
+        """
+        Store multiple wisdom items in investor_wisdom collection
+
+        Args:
+            items: List of dicts containing content, source, tags, archetype, and optional metadata
+
+        Returns:
+            List of Document IDs
+        """
         collection = self.collections['investor_wisdom']
-        doc_id = f"wisdom_{collection.count() + 1:04d}"
+        count = collection.count()
+
+        documents = []
+        metadatas = []
+        ids = []
         
+        for i, item in enumerate(items):
+            doc_id = f"wisdom_{count + i + 1:04d}"
+            documents.append(item["content"])
+
+            # Format tags and archetype as comma-separated strings for ChromaDB
+            tags = item["tags"]
+            if isinstance(tags, list):
+                tags = ",".join(tags)
+
+            archetype = item["archetype"]
+            if isinstance(archetype, list):
+                archetype = ",".join(archetype)
+
+            meta = {
+                "source": item["source"],
+                "tags": tags,
+                "archetype": archetype,
+                "confidence": item.get("confidence", 0.9),
+                "created_at": datetime.now().isoformat()
+            }
+
+            # Add any additional metadata
+            if "metadata" in item:
+                meta.update(item["metadata"])
+            # Handle direct extra keys if they are not the main ones
+            for k, v in item.items():
+                if k not in ["content", "source", "tags", "archetype", "confidence", "metadata"]:
+                    meta[k] = v
+
+            metadatas.append(meta)
+            ids.append(doc_id)
+
         try:
             collection.add(
-                documents=[content],
-                metadatas=[{
-                    "source": source,
-                    "tags": ",".join(tags),
-                    "archetype": ",".join(archetype),
-                    "confidence": confidence,
-                    "created_at": datetime.now().isoformat(),
-                    **metadata
-                }],
-                ids=[doc_id]
+                documents=documents,
+                metadatas=metadatas,
+                ids=ids
             )
-            self.logger.debug(f"✓ Stored wisdom: {doc_id}")
-            return doc_id
+            self.logger.debug(f"✓ Stored {len(ids)} wisdom items in batch")
+            return ids
         except Exception as e:
-            self.logger.error(f"Failed to store wisdom: {e}")
+            self.logger.error(f"Failed to batch store wisdom: {e}")
             raise
     
     def store_strategy_result(self, strategy_name: str, outcome: str, 
@@ -415,21 +470,21 @@ class KnowledgeBaseService:
                 search_data = await perplexity_service.search_financial_news(topic, max_results=3)
                 
                 if search_data.get('results'):
+                    items_to_ingest = []
                     for news_item in search_data['results']:
-                        content = f"{news_item['title']}: {news_item['summary'][:500]}"
-                        source = news_item.get('source', 'Perplexity Insight')
-                        
-                        # Store in KB
-                        doc_id = self.store_wisdom(
-                            content=content,
-                            source=source,
-                            tags=["autonomous", "real_time_insight"],
-                            archetype=["macros", "quant", "ghost"],
-                            url=news_item.get('url', ''),
-                            ingestion_type="autonomous"
-                        )
-                        ingested_count += 1
-                        results.append(doc_id)
+                        items_to_ingest.append({
+                            "content": f"{news_item['title']}: {news_item['summary'][:500]}",
+                            "source": news_item.get('source', 'Perplexity Insight'),
+                            "tags": ["autonomous", "real_time_insight"],
+                            "archetype": ["macros", "quant", "ghost"],
+                            "url": news_item.get('url', ''),
+                            "ingestion_type": "autonomous"
+                        })
+
+                    if items_to_ingest:
+                        doc_ids = self.store_wisdom_batch(items_to_ingest)
+                        ingested_count += len(doc_ids)
+                        results.extend(doc_ids)
             except Exception as e:
                 self.logger.error(f"Autonomous ingestion error for topic '{topic}': {e}")
                 
