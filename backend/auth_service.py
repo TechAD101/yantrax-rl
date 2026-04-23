@@ -9,7 +9,11 @@ from db import get_session
 from models import User
 
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+DEFAULT_SECRET = 'dev-secret-key-change-in-production'
+SECRET_KEY = os.getenv('SECRET_KEY', DEFAULT_SECRET)
+
+if os.getenv('FLASK_ENV', 'development') != 'development' and SECRET_KEY == DEFAULT_SECRET:
+    raise ValueError("SECRET_KEY must be configured for non-development environments.")
 
 
 def hash_password(password: str) -> str:
