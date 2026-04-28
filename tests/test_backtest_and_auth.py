@@ -52,18 +52,18 @@ def test_user_registration_and_login(client):
     
     # Register
     resp = client.post('/api/auth/register',
-        data=json.dumps({'username': 'testuser', 'email': 'test@example.com', 'password': 'secret123'}),
+        data=json.dumps({'username': 'testuser_backtest', 'email': 'test@example.com', 'password': 'secret123'}),
         content_type='application/json')
     
     assert resp.status_code == 201
     user_data = resp.get_json()
     assert 'user' in user_data
-    assert user_data['user']['username'] == 'testuser'
+    assert user_data['user']['username'] == 'testuser_backtest'
     
     # Login
     resp2 = client.post('/api/auth/login',
-        data=json.dumps({'username': 'testuser', 'password': 'secret123'}),
+        data=json.dumps({'username': 'testuser_backtest', 'password': 'secret123'}),
         content_type='application/json')
     
     assert resp2.status_code == 200
-    assert resp2.get_json()['user']['username'] == 'testuser'
+    assert resp2.get_json()['user']['username'] == 'testuser_backtest'
