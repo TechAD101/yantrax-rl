@@ -1,14 +1,7 @@
 import os
 import sys
 import pytest
-from unittest.mock import MagicMock, patch
-
-# Mock problematic dependencies before import using standard MagicMock
-sys.modules['numpy'] = MagicMock()
-sys.modules['sqlalchemy'] = MagicMock()
-sys.modules['sqlalchemy.orm'] = MagicMock()
-sys.modules['sqlalchemy.ext.declarative'] = MagicMock()
-sys.modules['services.market_data_service_massive'] = MagicMock()
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
@@ -26,18 +19,20 @@ def test_massive_quote_missing_symbol(client):
     assert response.status_code == 400
     assert response.json == {'status': 'error', 'message': 'symbol query parameter is required'}
 
+@patch.dict(os.environ, clear=True)
 def test_massive_quote_missing_api_key(client):
     """Test /massive-quote missing API key environment variable"""
-    # Use patch.dict to safely remove the keys
-    env_patch = {
-        'MASSIVE_API_KEY': '',
-        'POLYGON_API_KEY': '',
-        'POLYGON_KEY': ''
-    }
-    with patch.dict(os.environ, env_patch, clear=False):
-        response = client.get('/massive-quote?symbol=AAPL')
-        assert response.status_code == 400
-        assert response.json == {'status': 'error', 'message': 'MASSIVE/POLYGON API key not configured'}
+    # ensure these are not in environ
+    if 'MASSIVE_API_KEY' in os.environ:
+        del os.environ['MASSIVE_API_KEY']
+    if 'POLYGON_API_KEY' in os.environ:
+        del os.environ['POLYGON_API_KEY']
+    if 'POLYGON_KEY' in os.environ:
+        del os.environ['POLYGON_KEY']
+
+    response = client.get('/massive-quote?symbol=AAPL')
+    assert response.status_code == 400
+    assert response.json == {'status': 'error', 'message': 'MASSIVE/POLYGON API key not configured'}
 
 @patch.dict(os.environ, {'MASSIVE_API_KEY': 'test_key', 'MASSIVE_BASE_URL': 'http://test'})
 @patch('services.market_data_service_massive.MassiveMarketDataService')
