@@ -58,6 +58,36 @@ class TestBackendAPI:
             response = client.get('/market-price?symbol=AAPL')
             assert response.status_code == 200
     
+
+    def test_global_error_handler(self, client):
+        # We test the global error handler by seeing how the API responds
+        # to unexpected input that causes internal exceptions.
+        # However, due to limited mocking in test client, it's safer
+        # to explicitly test the error handler directly if available
+        # or simulate.
+
+        # In testing environment (test_client), we check if the handler is defined on the app.
+
+        if isinstance(client, Mock):
+            return # skip test if we are fully mocked
+
+        from main import handle_global_error, metrics_registry, app
+
+        # Test the function directly with app context to get the correct flask response object
+        with app.app_context():
+            initial_errors = metrics_registry.get('api_call_errors', 0)
+
+            test_exception = ValueError("Simulated Explosion")
+            response, status_code = handle_global_error(test_exception)
+
+            assert status_code == 500
+
+            data = response.get_json()
+            assert data['error'] == 'internal_server_error'
+            assert data['message'] == 'Simulated Explosion'
+            assert 'timestamp' in data
+
+            assert metrics_registry['api_call_errors'] == initial_errors + 1
     def test_rl_cycle_endpoint(self, client):
         response = client.post('/run-cycle', json={})
         assert response.status_code in [200, 500]
