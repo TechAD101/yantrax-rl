@@ -1,4 +1,5 @@
 import os
+os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
 import sys
 
 os.environ['DATABASE_URL'] = 'sqlite:///:memory:'

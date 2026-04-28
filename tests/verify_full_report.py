@@ -1,5 +1,6 @@
 import sys
 import os
+os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
 from pprint import pprint
 
 # Add project root and backend to path

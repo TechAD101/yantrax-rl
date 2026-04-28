@@ -1,4 +1,5 @@
 import os
+os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
 import json
 import sys
 import pytest
