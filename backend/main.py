@@ -953,6 +953,7 @@ def ping():
     return jsonify({"pong": True, "timestamp": datetime.now().isoformat()}), 200
 
 
+@app.route('/api/health/detailed', methods=['GET'])
 @app.route('/health', methods=['GET'])
 @handle_errors  
 def detailed_health():
