@@ -12,6 +12,7 @@ Usage: pytest tests/test_all.py -v --cov=backend
 """
 
 import os
+os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
 import sys
 import pytest
 from unittest.mock import Mock, patch
