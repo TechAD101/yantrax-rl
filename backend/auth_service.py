@@ -9,8 +9,9 @@ from db import get_session
 from models import User
 
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
-
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError("A secure SECRET_KEY must be provided")
 
 def hash_password(password: str) -> str:
     """Hash password using SHA256"""

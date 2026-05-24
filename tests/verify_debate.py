@@ -1,6 +1,7 @@
 import asyncio
 import sys
 import os
+os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
 
 # Add project root and backend to path
 current_dir = os.path.dirname(os.path.abspath(__file__))

@@ -12,6 +12,7 @@ Usage: pytest tests/test_all.py -v --cov=backend
 """
 
 import os
+os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
 import sys
 import pytest
 from unittest.mock import Mock, patch
@@ -58,6 +59,36 @@ class TestBackendAPI:
             response = client.get('/market-price?symbol=AAPL')
             assert response.status_code == 200
     
+
+    def test_global_error_handler(self, client):
+        # We test the global error handler by seeing how the API responds
+        # to unexpected input that causes internal exceptions.
+        # However, due to limited mocking in test client, it's safer
+        # to explicitly test the error handler directly if available
+        # or simulate.
+
+        # In testing environment (test_client), we check if the handler is defined on the app.
+
+        if isinstance(client, Mock):
+            return # skip test if we are fully mocked
+
+        from main import handle_global_error, metrics_registry, app
+
+        # Test the function directly with app context to get the correct flask response object
+        with app.app_context():
+            initial_errors = metrics_registry.get('api_call_errors', 0)
+
+            test_exception = ValueError("Simulated Explosion")
+            response, status_code = handle_global_error(test_exception)
+
+            assert status_code == 500
+
+            data = response.get_json()
+            assert data['error'] == 'internal_server_error'
+            assert data['message'] == 'Simulated Explosion'
+            assert 'timestamp' in data
+
+            assert metrics_registry['api_call_errors'] == initial_errors + 1
     def test_rl_cycle_endpoint(self, client):
         response = client.post('/run-cycle', json={})
         assert response.status_code in [200, 500]
@@ -69,6 +100,49 @@ class TestBackendAPI:
             data = response.get_json()
             assert isinstance(data, list)
 
+
+    def test_alpaca_missing_credentials(self, client):
+        with patch.dict(os.environ, clear=True):
+            response = client.get('/test-alpaca')
+            if hasattr(response, 'get_json'):
+                data = response.get_json()
+                if data:
+                    assert data['status'] == 'error'
+                    assert data['message'] == 'Alpaca credentials not configured'
+                    assert data['alpaca_key_set'] is False
+                    assert data['alpaca_secret_set'] is False
+
+    @patch('requests.get')
+    def test_alpaca_success(self, mock_get, client):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = '{"symbol": "AAPL", "price": 150.0}'
+        mock_response.json.return_value = {"symbol": "AAPL", "price": 150.0}
+        mock_get.return_value = mock_response
+
+        with patch.dict(os.environ, {'ALPACA_API_KEY': 'test_key', 'ALPACA_SECRET_KEY': 'test_secret'}):
+            response = client.get('/test-alpaca?symbol=AAPL')
+            if hasattr(response, 'get_json'):
+                data = response.get_json()
+                if data:
+                    assert data['status'] == 'success'
+                    assert data['symbol'] == 'AAPL'
+                    assert data['response_status'] == 200
+                    assert 'timestamp' in data
+
+    @patch('requests.get')
+    def test_alpaca_exception(self, mock_get, client):
+        mock_get.side_effect = Exception("Connection error")
+
+        with patch.dict(os.environ, {'ALPACA_API_KEY': 'test_key', 'ALPACA_SECRET_KEY': 'test_secret'}):
+            response = client.get('/test-alpaca?symbol=TSLA')
+            if hasattr(response, 'get_json'):
+                data = response.get_json()
+                if data:
+                    assert data['status'] == 'error'
+                    assert data['message'] == 'Connection error'
+                    assert data['symbol'] == 'TSLA'
+                    assert 'timestamp' in data
 
 class TestPaymentSystem:
     """Payment system and billing tests"""

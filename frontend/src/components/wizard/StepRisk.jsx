@@ -4,18 +4,11 @@ import React from 'react';
 const StepRisk = ({ config, setConfig }) => {
     const riskLevels = ['Conservative', 'Moderate', 'Aggressive'];
     // Map string values to indices for slider
-    const currentIndex = (() => {
-        if (config.risk === 'aggressive') return 2;
-        if (config.risk === 'moderate') return 1;
-        return 0; // conservative
-    })();
+    const currentIndex = Math.max(0, riskLevels.findIndex(level => level.toLowerCase() === (config.risk || '').toLowerCase()));
 
     const handleChange = (e) => {
-        const val = parseInt(e.target.value);
-        let level = 'conservative';
-        if (val === 1) level = 'moderate';
-        if (val === 2) level = 'aggressive';
-        setConfig({ ...config, risk: level });
+        const val = parseInt(e.target.value, 10);
+        setConfig({ ...config, risk: riskLevels[val].toLowerCase() });
     };
 
     const getRiskInfo = () => {
