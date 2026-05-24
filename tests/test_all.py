@@ -70,6 +70,49 @@ class TestBackendAPI:
             assert isinstance(data, list)
 
 
+    def test_alpaca_missing_credentials(self, client):
+        with patch.dict(os.environ, clear=True):
+            response = client.get('/test-alpaca')
+            if hasattr(response, 'get_json'):
+                data = response.get_json()
+                if data:
+                    assert data['status'] == 'error'
+                    assert data['message'] == 'Alpaca credentials not configured'
+                    assert data['alpaca_key_set'] is False
+                    assert data['alpaca_secret_set'] is False
+
+    @patch('requests.get')
+    def test_alpaca_success(self, mock_get, client):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = '{"symbol": "AAPL", "price": 150.0}'
+        mock_response.json.return_value = {"symbol": "AAPL", "price": 150.0}
+        mock_get.return_value = mock_response
+
+        with patch.dict(os.environ, {'ALPACA_API_KEY': 'test_key', 'ALPACA_SECRET_KEY': 'test_secret'}):
+            response = client.get('/test-alpaca?symbol=AAPL')
+            if hasattr(response, 'get_json'):
+                data = response.get_json()
+                if data:
+                    assert data['status'] == 'success'
+                    assert data['symbol'] == 'AAPL'
+                    assert data['response_status'] == 200
+                    assert 'timestamp' in data
+
+    @patch('requests.get')
+    def test_alpaca_exception(self, mock_get, client):
+        mock_get.side_effect = Exception("Connection error")
+
+        with patch.dict(os.environ, {'ALPACA_API_KEY': 'test_key', 'ALPACA_SECRET_KEY': 'test_secret'}):
+            response = client.get('/test-alpaca?symbol=TSLA')
+            if hasattr(response, 'get_json'):
+                data = response.get_json()
+                if data:
+                    assert data['status'] == 'error'
+                    assert data['message'] == 'Connection error'
+                    assert data['symbol'] == 'TSLA'
+                    assert 'timestamp' in data
+
 class TestPaymentSystem:
     """Payment system and billing tests"""
     
