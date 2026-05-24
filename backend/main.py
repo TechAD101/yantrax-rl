@@ -28,12 +28,14 @@ except Exception:
 
 # --- RENDER/CHROMA DB PATCH ---
 # Fix for old SQLite versions on Render/Linux
-try:
-    __import__('pysqlite3')
-    import sys
-    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-except ImportError:
-    pass
+import sqlite3
+if sqlite3.sqlite_version_info < (3, 35, 0):
+    try:
+        __import__('pysqlite3')
+        import sys
+        sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+    except ImportError:
+        pass
 # ------------------------------
 
 load_dotenv()
