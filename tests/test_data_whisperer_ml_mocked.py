@@ -9,12 +9,14 @@ sys.path.append(os.path.join(os.getcwd(), 'backend'))
 # Mock dependencies
 sys.modules['services.market_data_service'] = MagicMock()
 sys.modules['services.perplexity_intelligence'] = MagicMock()
-sys.modules['services.market_sentiment_service'] = MagicMock()
+if 'services.market_sentiment_service' not in sys.modules:
+    sys.modules['services.market_sentiment_service'] = MagicMock()
 sys.modules['services.circuit_breaker'] = MagicMock()
 sys.modules['services.metrics_service'] = MagicMock()
 # Mock httpx and numpy as they might be imported by other things
-sys.modules['httpx'] = MagicMock()
-sys.modules['numpy'] = MagicMock()
+if 'httpx' not in sys.modules:
+    sys.modules['httpx'] = MagicMock()
+
 sys.modules['alpaca'] = MagicMock()
 sys.modules['alpaca.data'] = MagicMock()
 
