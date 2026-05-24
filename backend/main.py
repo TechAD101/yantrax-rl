@@ -1547,7 +1547,7 @@ def institutional_strategy():
         
         # Generate synthetic price history for technical analysis
         try:
-            price_history = [current_price * (1 + np.sin(i/10) * 0.02 + np.random.normal(0, 0.01)) for i in range(50)]
+            price_history = (current_price * (1 + np.sin(np.arange(50)/10) * 0.02 + np.random.normal(0, 0.01, 50))).tolist()
             volatility = float(np.std(np.diff(price_history)))
             volume = int(np.random.randint(100000, 5000000))
             trend = 'bullish' if np.random.random() > 0.5 else 'bearish'
