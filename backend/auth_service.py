@@ -1,5 +1,6 @@
 """Simple authentication service using bcrypt"""
 import os
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import hashlib
@@ -9,7 +10,16 @@ from db import get_session
 from models import User
 
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+_raw_secret = os.getenv('SECRET_KEY')
+_env = os.getenv('FLASK_ENV', 'development')
+
+if _env != 'development':
+    if not _raw_secret or _raw_secret == 'dev-secret-key-change-in-production':
+        raise ValueError("SECURITY FAILURE: SECRET_KEY must be set to a secure value in non-development environments.")
+    SECRET_KEY = _raw_secret
+else:
+    # In development, use provided key or generate a secure random one
+    SECRET_KEY = _raw_secret or secrets.token_hex(32)
 
 
 def hash_password(password: str) -> str:
