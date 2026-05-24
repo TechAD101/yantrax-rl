@@ -38,3 +38,7 @@ class TheGhostAgent(PersonaAgent):
             reasoning="The Ghost senses uncertainty in current liquidity zones.",
             weight=self.voting_weight
         )
+
+    def _adjust_weight_for_context(self, context: Dict[str, Any], base_weight: float) -> float:
+        """Placeholder weight adjustment"""
+        return base_weight
