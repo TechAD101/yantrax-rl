@@ -12,6 +12,7 @@ class Config:
     ENVIRONMENT = os.getenv('FLASK_ENV', 'development')
     DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
     PORT = int(os.getenv('PORT', 5000))
+    CORS_ORIGINS = [o.strip() for o in os.getenv('CORS_ORIGINS', '*').split(',')]
     
 # API Keys - Environment variables required for production
     FMP_API_KEY = os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY')
