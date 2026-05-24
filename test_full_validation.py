@@ -55,7 +55,7 @@ def test_perplexity_key():
 def test_backend_startup():
     """Test backend initializes with all components"""
     try:
-        from main import app, market_provider, AI_FIRM_READY, agent_manager
+        from main import app
         client = app.test_client()
         
         # Health check
@@ -293,5 +293,5 @@ def main():
         return 1
 
 if __name__ == '__main__':
-    os.chdir('/workspaces/yantrax-rl')
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
     sys.exit(main())
