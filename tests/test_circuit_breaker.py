@@ -1,5 +1,6 @@
 import time
 import os
+os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))

@@ -1,6 +1,7 @@
 # ai_agents/data_whisperer.py - Enhanced Data Analysis Agent
 
 import random
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any
 from services.market_data_service import get_latest_price
 
@@ -272,8 +273,6 @@ def _detect_market_phase(price: float) -> str:
 
 
 # --- Parallel agent execution utility ---
-from concurrent.futures import ThreadPoolExecutor
-
 def run_agents_in_parallel(agent_funcs, *args, **kwargs):
     """
     Run multiple agent functions in parallel threads for efficiency.
