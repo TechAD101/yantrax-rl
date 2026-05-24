@@ -1,8 +1,6 @@
 
 import sys
 import os
-import json
-from datetime import datetime
 
 # Add backend to path
 sys.path.append(os.path.abspath('backend'))
