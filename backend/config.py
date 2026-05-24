@@ -13,6 +13,11 @@ class Config:
     DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
     PORT = int(os.getenv('PORT', 5000))
     
+    # Security Configuration
+    CORS_ORIGINS = [
+        origin.strip() for origin in os.getenv('CORS_ORIGINS', '*').split(',')
+    ]
+
 # API Keys - Environment variables required for production
     FMP_API_KEY = os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY')
     if not FMP_API_KEY:
