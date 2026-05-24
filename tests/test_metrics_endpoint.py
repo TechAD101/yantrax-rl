@@ -1,4 +1,7 @@
 import os
+os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
+
+import os
 import sys
 import pytest
 
