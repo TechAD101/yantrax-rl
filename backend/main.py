@@ -658,14 +658,22 @@ def test_alpaca():
     
     logger.info(f"\n🧪 FORCE TEST: Alpaca API for {symbol}")
     
-    alpaca_key = os.getenv('ALPACA_API_KEY')
-    alpaca_secret = os.getenv('ALPACA_SECRET_KEY')
+    alpaca_key = os.getenv('ALPACA_API_KEY', '').strip()
+    alpaca_secret = os.getenv('ALPACA_SECRET_KEY', '').strip()
     
-    if not alpaca_key or not alpaca_secret:
-        logger.error("❌ Alpaca credentials missing!")
+    def is_valid_token(token):
+        if not token or len(token) < 5:
+            return False
+        placeholders = ['your_', 'replace_', 'dummy', 'none', 'null', 'test_']
+        if any(p in token.lower() for p in placeholders):
+            return False
+        return True
+
+    if not is_valid_token(alpaca_key) or not is_valid_token(alpaca_secret):
+        logger.error("❌ Alpaca credentials missing or insecure!")
         return jsonify({
             'status': 'error',
-            'message': 'Alpaca credentials not configured',
+            'message': 'Alpaca credentials not securely configured',
             'alpaca_key_set': bool(alpaca_key),
             'alpaca_secret_set': bool(alpaca_secret)
         })
@@ -673,7 +681,7 @@ def test_alpaca():
     try:
         import requests  # type: ignore[import]
         
-        logger.info(f"  Alpaca Key (first 10): {alpaca_key[:10] if alpaca_key else 'NONE'}")
+        logger.info(f"  Alpaca Key configured: {'[SET]' if alpaca_key else 'NONE'}")
         logger.info("  Making request to Alpaca...")
         
         headers = {
@@ -713,21 +721,29 @@ def test_fmp():
 
     logger.info(f"\n🧪 FORCE TEST: FMP API for {symbol}")
 
-    fmp_key = os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY')
+    fmp_key = (os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY') or '').strip()
 
-    if not fmp_key:
-        logger.error("❌ FMP credentials missing!")
+    def is_valid_token(token):
+        if not token or len(token) < 5:
+            return False
+        placeholders = ['your_', 'replace_', 'dummy', 'none', 'null', 'test_']
+        if any(p in token.lower() for p in placeholders):
+            return False
+        return True
+
+    if not is_valid_token(fmp_key):
+        logger.error("❌ FMP credentials missing or insecure!")
         return jsonify({
             'status': 'error',
-            'message': 'FMP credentials not configured',
-            'fmp_key_set': False,
+            'message': 'FMP credentials not securely configured',
+            'fmp_key_set': bool(fmp_key),
             'tried_envs': ['FMP_API_KEY', 'FMP_KEY']
         })
 
     try:
         import requests  # type: ignore[import]
 
-        logger.info(f"  FMP Key (first 10): {fmp_key[:10] if fmp_key else 'NONE'}")
+        logger.info(f"  FMP Key configured: {'[SET]' if fmp_key else 'NONE'}")
         logger.info("  Making request to FMP (quote endpoint)...")
 
         params = {'apikey': fmp_key}
