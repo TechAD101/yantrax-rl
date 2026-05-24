@@ -105,6 +105,7 @@ class PerplexityIntelligenceService:
         self._cache: Dict[str, Any] = {}
         self._cache_timestamps: Dict[str, datetime] = {}
         self._last_api_call: Optional[datetime] = None
+        self._client: Optional[httpx.AsyncClient] = None
         
         if not self.api_key:
             logger.warning(
@@ -115,6 +116,23 @@ class PerplexityIntelligenceService:
             # Mask key for logging
             masked = f"{self.api_key[:8]}...{self.api_key[-4:]}" if len(self.api_key) > 12 else "***"
             logger.info(f"✅ Perplexity Intelligence Service initialized with key: {masked}")
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Get or create a persistent httpx AsyncClient."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=30.0)
+        return self._client
+
+    async def close(self):
+        """Close the persistent httpx client."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
     
     def _is_cache_valid(self, key: str, ttl: int) -> bool:
         """Check if cached data is still valid."""
@@ -135,6 +153,20 @@ class PerplexityIntelligenceService:
         """Update the timestamp of the last API call."""
         self._last_api_call = datetime.now()
         logger.info("🕐 Perplexity API call timestamp updated. Next call allowed in 1 hour.")
+
+    def _run_coroutine_sync(self, coro):
+        """Helper to run coroutines from synchronous methods."""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            return asyncio.run(coro)
+
+        if loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                return executor.submit(asyncio.run, coro).result()
+        else:
+            return loop.run_until_complete(coro)
     
     async def _call_perplexity(
         self, 
@@ -175,16 +207,17 @@ class PerplexityIntelligenceService:
         }
         
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(
-                    self.PERPLEXITY_API_URL,
-                    json=payload,
-                    headers=headers
-                )
-                response.raise_for_status()
-                
-                data = response.json()
-                return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            client = self._get_client()
+            response = await client.post(
+                self.PERPLEXITY_API_URL,
+                json=payload,
+                headers=headers,
+                timeout=timeout
+            )
+            response.raise_for_status()
+
+            data = response.json()
+            return data.get("choices", [{}])[0].get("message", {}).get("content", "")
                 
         except httpx.TimeoutException:
             logger.error(f"Perplexity API timeout after {timeout}s")
@@ -203,24 +236,7 @@ class PerplexityIntelligenceService:
         timeout: float = 30.0
     ) -> Optional[str]:
         """Synchronous wrapper for Perplexity API calls."""
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If we're in an async context, create a new task
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(
-                        asyncio.run, 
-                        self._call_perplexity(prompt, system_prompt, timeout)
-                    )
-                    return future.result(timeout=timeout + 5)
-            else:
-                return loop.run_until_complete(
-                    self._call_perplexity(prompt, system_prompt, timeout)
-                )
-        except Exception as e:
-            logger.error(f"Sync Perplexity call failed: {e}")
-            return None
+        return self._run_coroutine_sync(self._call_perplexity(prompt, system_prompt, timeout))
     
     async def get_market_sentiment(
         self, 
@@ -271,79 +287,10 @@ class PerplexityIntelligenceService:
         self._cache_timestamps[cache_key] = datetime.now()
         
         return sentiment
-        
-        prompt = f"""Analyze the current market sentiment for {ticker} stock.
-
-Respond ONLY with a JSON object in this exact format:
-{{
-    "mood": "bullish|bearish|neutral|mixed",
-    "confidence": 0.0 to 1.0,
-    "summary": "2-3 sentence summary of current sentiment",
-    "key_factors": ["factor 1", "factor 2", "factor 3"],
-    "sources": ["source 1", "source 2"]
-}}
-
-{"Include recent news events in your analysis." if include_news else ""}
-Be specific about price levels, percentages, and concrete data points."""
-        
-        response = await self._call_perplexity(prompt, system_prompt)
-        
-        if response:
-            try:
-                # Extract JSON from response
-                json_str = response
-                if "```json" in response:
-                    json_str = response.split("```json")[1].split("```")[0]
-                elif "```" in response:
-                    json_str = response.split("```")[1].split("```")[0]
-                
-                data = json.loads(json_str.strip())
-                
-                sentiment = MarketSentiment(
-                    ticker=ticker,
-                    mood=data.get("mood", "neutral"),
-                    confidence=float(data.get("confidence", 0.5)),
-                    summary=data.get("summary", "Unable to analyze sentiment"),
-                    key_factors=data.get("key_factors", []),
-                    sources=data.get("sources", ["Perplexity AI"]),
-                    timestamp=datetime.now().isoformat()
-                )
-                
-                # Cache result
-                self._cache[cache_key] = sentiment
-                self._cache_timestamps[cache_key] = datetime.now()
-                
-                return sentiment
-                
-            except json.JSONDecodeError as e:
-                logger.warning(f"Failed to parse Perplexity response as JSON: {e}")
-        
-        # Return fallback sentiment
-        return MarketSentiment(
-            ticker=ticker,
-            mood="neutral",
-            confidence=0.3,
-            summary=f"Unable to fetch real-time sentiment for {ticker}. Perplexity API may be unavailable.",
-            key_factors=["API unavailable"],
-            sources=["Fallback"],
-            timestamp=datetime.now().isoformat()
-        )
     
     def get_market_sentiment_sync(self, ticker: str, include_news: bool = True) -> MarketSentiment:
         """Synchronous version of get_market_sentiment."""
-        try:
-            return asyncio.run(self.get_market_sentiment(ticker, include_news))
-        except Exception as e:
-            logger.error(f"Sync sentiment fetch failed: {e}")
-            return MarketSentiment(
-                ticker=ticker,
-                mood="neutral",
-                confidence=0.3,
-                summary=f"Error fetching sentiment: {str(e)}",
-                key_factors=[],
-                sources=["Error"],
-                timestamp=datetime.now().isoformat()
-            )
+        return self._run_coroutine_sync(self.get_market_sentiment(ticker, include_news))
     
     async def get_trending_analysis(
         self,
@@ -696,33 +643,34 @@ Be specific with price levels, catalysts, and actionable insights."""
         }
         
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    self.SEARCH_API_URL,
-                    json=payload,
-                    headers=headers
-                )
-                response.raise_for_status()
-                data = response.json()
-                
-                # Process and standardize results
-                results = []
-                for item in data.get("results", []):
-                    results.append({
-                        "title": item.get("title", ""),
-                        "url": item.get("url", ""),
-                        "snippet": item.get("snippet", "")[:500],  # Truncate for efficiency
-                        "date": item.get("date"),
-                        "source": self._extract_domain(item.get("url", ""))
-                    })
-                
-                return {
-                    "query": query,
-                    "results": results,
-                    "count": len(results),
-                    "timestamp": datetime.now().isoformat(),
-                    "trusted_sources": trusted_sources_only
-                }
+            client = self._get_client()
+            response = await client.post(
+                self.SEARCH_API_URL,
+                json=payload,
+                headers=headers,
+                timeout=30.0
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            # Process and standardize results
+            results = []
+            for item in data.get("results", []):
+                results.append({
+                    "title": item.get("title", ""),
+                    "url": item.get("url", ""),
+                    "snippet": item.get("snippet", "")[:500],  # Truncate for efficiency
+                    "date": item.get("date"),
+                    "source": self._extract_domain(item.get("url", ""))
+                })
+
+            return {
+                "query": query,
+                "results": results,
+                "count": len(results),
+                "timestamp": datetime.now().isoformat(),
+                "trusted_sources": trusted_sources_only
+            }
                 
         except httpx.HTTPStatusError as e:
             logger.error(f"Search API error: {e.response.status_code}")
@@ -773,7 +721,7 @@ Be specific with price levels, catalysts, and actionable insights."""
         query_suffix: str = "latest news"
     ) -> Dict[str, List[Dict]]:
         """
-        Search news for multiple tickers efficiently.
+        Search news for multiple tickers efficiently using concurrent execution.
         
         Args:
             tickers: List of ticker symbols
@@ -782,17 +730,22 @@ Be specific with price levels, catalysts, and actionable insights."""
         Returns:
             Dict mapping ticker to search results
         """
-        results = {}
-        for ticker in tickers[:5]:  # Limit to 5 tickers
+        async def fetch_ticker_news(ticker):
             try:
                 search_result = await self.search_financial_news(
                     f"{ticker} {query_suffix}",
                     max_results=3
                 )
-                results[ticker] = search_result.get("results", [])
+                return ticker, search_result.get("results", [])
             except Exception as e:
                 logger.warning(f"Multi-search failed for {ticker}: {e}")
-                results[ticker] = []
+                return ticker, []
+
+        # Run concurrent searches
+        tasks = [fetch_ticker_news(ticker) for ticker in tickers[:5]]
+        completed_searches = await asyncio.gather(*tasks)
+
+        results = dict(completed_searches)
         
         return {
             "tickers": tickers,
@@ -807,10 +760,7 @@ Be specific with price levels, catalysts, and actionable insights."""
         trusted_sources_only: bool = True
     ) -> Dict[str, Any]:
         """Synchronous version of search_financial_news."""
-        try:
-            return asyncio.run(self.search_financial_news(query, max_results, trusted_sources_only))
-        except Exception as e:
-            return {"error": str(e), "results": [], "query": query}
+        return self._run_coroutine_sync(self.search_financial_news(query, max_results, trusted_sources_only))
     
     def is_configured(self) -> bool:
         """Check if the service has a valid API key configured."""
@@ -851,7 +801,7 @@ def get_commentary(tickers: List[str], persona: Optional[str] = None) -> Dict:
     """Quick synchronous commentary generation."""
     service = get_perplexity_service()
     try:
-        result = asyncio.run(service.generate_market_commentary(tickers, persona))
+        result = service._run_coroutine_sync(service.generate_market_commentary(tickers, persona))
         return result.to_dict()
     except Exception as e:
         return {"error": str(e), "tickers": tickers}
