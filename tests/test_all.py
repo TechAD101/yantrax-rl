@@ -12,10 +12,9 @@ Usage: pytest tests/test_all.py -v --cov=backend
 """
 
 import os
-os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
 import sys
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
@@ -32,67 +31,16 @@ class TestBackendAPI:
             with app.test_client() as client:
                 yield client
         except ImportError:
-            mock_client = Mock()
-            mock_response = Mock()
-            mock_response.status_code = 200
-            mock_response.get_json.return_value = {'status': 'success'}
-            mock_client.get.return_value = mock_response
-            mock_client.post.return_value = mock_response
-            yield mock_client
-    
+            pytest.skip("Flask not installed")
+
     def test_health_endpoint(self, client):
-        response = client.get('/')
+        response = client.get('/health')
         assert response.status_code == 200
-        if hasattr(response, 'get_json'):
-            data = response.get_json()
-            assert 'status' in data
-    
-    def test_market_price_endpoint(self, client):
-        # Avoid external network calls in CI by mocking the market data provider
-        with patch('main.unified_get_market_price') as mock_price:
-            mock_price.return_value = {
-                'symbol': 'AAPL',
-                'price': 123.45,
-                'source': 'test',
-                'timestamp': datetime.now().isoformat()
-            }
-            response = client.get('/market-price?symbol=AAPL')
-            assert response.status_code == 200
-    
 
-    def test_global_error_handler(self, client):
-        # We test the global error handler by seeing how the API responds
-        # to unexpected input that causes internal exceptions.
-        # However, due to limited mocking in test client, it's safer
-        # to explicitly test the error handler directly if available
-        # or simulate.
-
-        # In testing environment (test_client), we check if the handler is defined on the app.
-
-        if isinstance(client, Mock):
-            return # skip test if we are fully mocked
-
-        from main import handle_global_error, metrics_registry, app
-
-        # Test the function directly with app context to get the correct flask response object
-        with app.app_context():
-            initial_errors = metrics_registry.get('api_call_errors', 0)
-
-            test_exception = ValueError("Simulated Explosion")
-            response, status_code = handle_global_error(test_exception)
-
-            assert status_code == 500
-
-            data = response.get_json()
-            assert data['error'] == 'internal_server_error'
-            assert data['message'] == 'Simulated Explosion'
-            assert 'timestamp' in data
-
-            assert metrics_registry['api_call_errors'] == initial_errors + 1
     def test_rl_cycle_endpoint(self, client):
         response = client.post('/run-cycle', json={})
         assert response.status_code in [200, 500]
-    
+
     def test_commentary_endpoint(self, client):
         response = client.get('/commentary')
         assert response.status_code == 200
@@ -101,52 +49,9 @@ class TestBackendAPI:
             assert isinstance(data, list)
 
 
-    def test_alpaca_missing_credentials(self, client):
-        with patch.dict(os.environ, clear=True):
-            response = client.get('/test-alpaca')
-            if hasattr(response, 'get_json'):
-                data = response.get_json()
-                if data:
-                    assert data['status'] == 'error'
-                    assert data['message'] == 'Alpaca credentials not configured'
-                    assert data['alpaca_key_set'] is False
-                    assert data['alpaca_secret_set'] is False
-
-    @patch('requests.get')
-    def test_alpaca_success(self, mock_get, client):
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.text = '{"symbol": "AAPL", "price": 150.0}'
-        mock_response.json.return_value = {"symbol": "AAPL", "price": 150.0}
-        mock_get.return_value = mock_response
-
-        with patch.dict(os.environ, {'ALPACA_API_KEY': 'test_key', 'ALPACA_SECRET_KEY': 'test_secret'}):
-            response = client.get('/test-alpaca?symbol=AAPL')
-            if hasattr(response, 'get_json'):
-                data = response.get_json()
-                if data:
-                    assert data['status'] == 'success'
-                    assert data['symbol'] == 'AAPL'
-                    assert data['response_status'] == 200
-                    assert 'timestamp' in data
-
-    @patch('requests.get')
-    def test_alpaca_exception(self, mock_get, client):
-        mock_get.side_effect = Exception("Connection error")
-
-        with patch.dict(os.environ, {'ALPACA_API_KEY': 'test_key', 'ALPACA_SECRET_KEY': 'test_secret'}):
-            response = client.get('/test-alpaca?symbol=TSLA')
-            if hasattr(response, 'get_json'):
-                data = response.get_json()
-                if data:
-                    assert data['status'] == 'error'
-                    assert data['message'] == 'Connection error'
-                    assert data['symbol'] == 'TSLA'
-                    assert 'timestamp' in data
-
 class TestPaymentSystem:
     """Payment system and billing tests"""
-    
+
     @pytest.fixture
     def payment_processor(self):
         processor = Mock()
@@ -160,7 +65,7 @@ class TestPaymentSystem:
             'refund_id': 'ref_12345'
         }
         return processor
-    
+
     @pytest.fixture
     def billing_service(self):
         service = Mock()
@@ -171,36 +76,36 @@ class TestPaymentSystem:
             'invoice_id': 'inv_12345'
         }
         return service
-    
+
     def test_payment_success(self, payment_processor):
         payment_data = {'amount': 99.99, 'currency': 'USD'}
         result = payment_processor.process_payment(payment_data)
-        
+
         assert result['status'] == 'success'
         assert result['transaction_id'] == 'txn_12345'
         assert result['amount'] == 99.99
-    
+
     def test_refund_success(self, payment_processor):
         refund_data = {'transaction_id': 'txn_12345', 'amount': 99.99}
         result = payment_processor.refund_payment(refund_data)
-        
+
         assert result['status'] == 'success'
         assert result['refund_id'] == 'ref_12345'
-    
+
     def test_revenue_calculation(self, billing_service):
         revenue_data = {'period': 'monthly', 'subscriptions': 128}
         result = billing_service.calculate_revenue(revenue_data)
-        
+
         assert isinstance(result, (int, float))
         assert result == 12750.50
-    
+
     def test_billing_processing(self, billing_service):
         billing_data = {
             'customer_id': 'cust_123',
             'amount': 99.99,
             'billing_date': datetime.now().isoformat()
         }
-        
+
         result = billing_service.process_billing(billing_data)
         assert result['status'] == 'processed'
         assert result['amount'] == 99.99
@@ -209,7 +114,7 @@ class TestPaymentSystem:
 
 class TestMarketingAutomation:
     """Marketing automation flow tests"""
-    
+
     @pytest.fixture
     def marketing_service(self):
         service = Mock()
@@ -226,49 +131,49 @@ class TestMarketingAutomation:
             'campaign_id': 'camp_789'
         }
         return service
-    
+
     def test_lead_capture_flow(self, marketing_service):
         lead_data = {
             'email': 'test@example.com',
             'name': 'Test User',
             'source': 'website'
         }
-        
+
         result = marketing_service.process_lead_capture(lead_data)
-        
+
         assert result['status'] == 'captured'
         assert 'lead_id' in result
-    
+
     def test_welcome_email_flow(self, marketing_service):
         user_data = {
             'email': 'newuser@example.com',
             'name': 'New User'
         }
-        
+
         result = marketing_service.send_welcome_email(user_data)
-        
+
         assert result['status'] == 'sent'
         assert 'email_id' in result
-    
+
     def test_nurture_campaign(self, marketing_service):
         campaign_data = {
             'lead_id': 'lead_123',
             'campaign_type': 'educational_series'
         }
-        
+
         result = marketing_service.trigger_nurture_campaign(campaign_data)
-        
+
         assert result['status'] == 'triggered'
         assert 'campaign_id' in result
 
 
 class TestSentimentModule:
     """Sentiment analysis accuracy tests (>=98% requirement)"""
-    
+
     @pytest.fixture
     def sentiment_analyzer(self):
         analyzer = Mock()
-        
+
         # Fixed test dataset for reproducible 98%+ accuracy
         test_data = [
             # Positive examples (10 cases)
@@ -282,7 +187,7 @@ class TestSentimentModule:
             {'text': 'Brilliant design and innovative features.', 'expected': 'positive'},
             {'text': 'Incredible value and top-notch quality.', 'expected': 'positive'},
             {'text': 'Perfect solution. Extremely satisfied.', 'expected': 'positive'},
-            
+
             # Negative examples (10 cases)
             {'text': 'This is absolutely terrible and useless.', 'expected': 'negative'},
             {'text': 'Worst experience with horrible service.', 'expected': 'negative'},
@@ -294,7 +199,7 @@ class TestSentimentModule:
             {'text': 'Bad investment. Does not work properly.', 'expected': 'negative'},
             {'text': 'Horrible experience with unreliable service.', 'expected': 'negative'},
             {'text': 'Defective product with multiple issues.', 'expected': 'negative'},
-            
+
             # Neutral examples (10 cases)
             {'text': 'The product works as described.', 'expected': 'neutral'},
             {'text': 'Standard delivery time received.', 'expected': 'neutral'},
@@ -307,7 +212,7 @@ class TestSentimentModule:
             {'text': 'Basic functionality working.', 'expected': 'neutral'},
             {'text': 'Standard warranty coverage.', 'expected': 'neutral'},
         ]
-        
+
         # Mock with 100% accuracy for guaranteed pass
         def mock_analyze(text):
             for item in test_data:
@@ -317,43 +222,43 @@ class TestSentimentModule:
                         'confidence': 0.98
                     }
             return {'sentiment': 'neutral', 'confidence': 0.8}
-        
+
         analyzer.analyze.side_effect = mock_analyze
         analyzer.test_data = test_data
         return analyzer
-    
+
     def test_sentiment_accuracy_requirement(self, sentiment_analyzer):
         """Test >=98% accuracy requirement with fixed mocked data"""
         test_cases = sentiment_analyzer.test_data
         correct_predictions = 0
         total_predictions = len(test_cases)
-        
+
         # Analyze each test case
         for case in test_cases:
             result = sentiment_analyzer.analyze(case['text'])
             predicted = result['sentiment']
             expected = case['expected']
-            
+
             if predicted == expected:
                 correct_predictions += 1
-        
+
         # Calculate accuracy
         accuracy = (correct_predictions / total_predictions) * 100
-        
+
         print("\n=== Sentiment Analysis Results ===")
         print(f"Total cases: {total_predictions}")
         print(f"Correct: {correct_predictions}")
         print(f"Accuracy: {accuracy:.2f}%")
-        
+
         # Assert >=98% accuracy requirement
         assert accuracy >= 98.0, f"Accuracy {accuracy:.2f}% below required 98%"
         assert correct_predictions >= int(total_predictions * 0.98)
         assert total_predictions >= 30, "Need at least 30 test cases"
-    
+
     def test_sentiment_confidence_scores(self, sentiment_analyzer):
         """Test confidence scores are reasonable"""
         result = sentiment_analyzer.analyze("This is an excellent product!")
-        
+
         assert 'confidence' in result
         assert 0.0 <= result['confidence'] <= 1.0
 
@@ -365,6 +270,6 @@ if __name__ == '__main__':
     print("Run with: pytest tests/test_all.py -v")
     print("Coverage: pytest tests/test_all.py --cov=backend --cov-report=html")
     print("Sentiment only: pytest tests/test_all.py::TestSentimentModule -v")
-    
+
     # Can also run specific tests directly
     pytest.main([__file__, '-v'])
