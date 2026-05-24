@@ -134,6 +134,7 @@ except Exception as e:
 MARKET_SERVICE_READY = False
 market_data = None
 market_provider = None
+MARKET_PRICE_CACHE: Dict[str, Dict[str, Any]] = {}
 try:
     from services.market_data_service_v2 import MarketDataService, MarketDataConfig
     config_data = Config.get_market_config()
@@ -273,10 +274,14 @@ def unified_get_market_price(symbol: str) -> Dict[str, Any]:
     symbol = symbol.upper()
 
     # 1) Attempt primary FMP provider (via MarketDataService)
+    if symbol in MARKET_PRICE_CACHE:
+        return MARKET_PRICE_CACHE[symbol]
+
     if MARKET_SERVICE_READY and market_data:
         try:
             res = market_data.get_stock_price(symbol)
             if res and res.get('price') and res.get('price') > 0:
+                MARKET_PRICE_CACHE[symbol] = res
                 return res
             logger.warning(f"FMP returned no usable price for {symbol}: {res}")
         except Exception as e:
@@ -290,6 +295,7 @@ def unified_get_market_price(symbol: str) -> Dict[str, Any]:
             msvc = MassiveMarketDataService(api_key=massive_key, base_url=os.getenv('MASSIVE_BASE_URL'))
             data = msvc.fetch_quote(symbol)
             if data and data.get('price'):
+                MARKET_PRICE_CACHE[symbol] = data
                 logger.info(f"✅ MASSIVE provider success for {symbol}: {data.get('price')}")
                 return data
             else:
