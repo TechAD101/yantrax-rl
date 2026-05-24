@@ -28,14 +28,12 @@ except Exception:
 
 # --- RENDER/CHROMA DB PATCH ---
 # Fix for old SQLite versions on Render/Linux
-import sqlite3
-if sqlite3.sqlite_version_info < (3, 35, 0):
-    try:
-        __import__('pysqlite3')
-        import sys
-        sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-    except ImportError:
-        pass
+try:
+    __import__('pysqlite3')
+    import sys
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+except ImportError:
+    pass
 # ------------------------------
 
 load_dotenv()
@@ -43,7 +41,6 @@ load_dotenv()
 # Suppress ChromaDB telemetry noise
 os.environ['ANONYMIZED_TELEMETRY'] = 'False'
 
-import time
 import numpy as np
 from datetime import datetime, timedelta
 from functools import wraps
@@ -144,23 +141,18 @@ try:
     market_data = MarketDataService(market_config)
     market_provider = market_data  # Fix: Create the market_provider reference
     registry.register_service('market_data', market_data)
-    registry.register_service('market_provider', market_provider)
     MARKET_SERVICE_READY = True
     logger.info("✅ MarketDataService initialized successfully")
 except Exception as e:
     logger.error(f"❌ MarketDataService initialization failed: {e}")
     # Fallback to prevent crashes
     class DummyMarketProvider:
-        def __init__(self): self.active_provider = 'Fallback'
         def get_price(self, symbol): return {'price': 0, 'error': 'Market data unavailable'}
         def get_fundamentals(self, symbol): return {}
         def get_verification_stats(self): return {}
         def get_price_verified(self, symbol): return {'verified': False, 'price': 0}
         def get_recent_audit_logs(self, limit): return []
     market_provider = DummyMarketProvider()
-    market_data = market_provider
-    registry.register_service('market_data', market_data)
-    registry.register_service('market_provider', market_provider)
 
 # Initialize AI Firm
 AI_FIRM_READY = False
@@ -194,14 +186,16 @@ except Exception as e:
 
 
 app = Flask(__name__)
-
-# Secure CORS configuration
-cors_origins_env = os.getenv('CORS_ORIGINS')
-if cors_origins_env:
-    allowed_origins = [origin.strip() for origin in cors_origins_env.split(',')]
+import os
+cors_origins_raw = os.environ.get('CORS_ORIGINS')
+if cors_origins_raw:
+    origins = [o.strip() for o in cors_origins_raw.split(',') if o.strip()]
 else:
-    allowed_origins = ['http://localhost:5173', 'http://localhost:3000']
-CORS(app, origins=allowed_origins)
+    origins = ['*']
+if '*' in origins:
+    CORS(app, origins=origins, supports_credentials=False)
+else:
+    CORS(app, origins=origins, supports_credentials=True)
 
 # Register Institutional Blueprints
 from routes.data_ingest import data_ingest_bp
@@ -223,7 +217,7 @@ metrics_registry = {
     'api_call_errors': 0
 }
 
-# Define error_counts to fix undefined variable.
+# Define error_counts to fix undefined variable
 error_counts = {
     'market_data_errors': 0,
     'ai_firm_errors': 0,
@@ -270,38 +264,6 @@ def _get_git_version() -> Dict[str, str]:
 
 
 
-import time
-from functools import wraps
-
-def ttl_cache(maxsize=128, ttl=60):
-    """
-    A simple TTL (Time To Live) cache implementation using a dictionary.
-    """
-    def wrapper(func):
-        cache = {}
-
-        @wraps(func)
-        def inner(*args, **kwargs):
-            key = str(args) + str(kwargs)
-            now = time.time()
-
-            if key in cache:
-                result, timestamp = cache[key]
-                if now - timestamp < ttl:
-                    return result
-
-            result = func(*args, **kwargs)
-
-            if len(cache) >= maxsize:
-                oldest_key = min(cache.keys(), key=lambda k: cache[k][1])
-                del cache[oldest_key]
-
-            cache[key] = (result, now)
-            return result
-        return inner
-    return wrapper
-
-@ttl_cache(maxsize=100, ttl=60)
 def unified_get_market_price(symbol: str) -> Dict[str, Any]:
     """Get current market price for a symbol using configured provider (FMP-first).
 
@@ -375,7 +337,6 @@ class YantraXEnhancedSystem:
             'data_whisperer': {'confidence': 0.990, 'performance': 12.9, 'analysis': 'BULLISH_BREAKOUT'},
             'degen_auditor': {'confidence': 0.904, 'performance': 22.1, 'audit': 'LOW_RISK_APPROVED'}
         }
-        self._cached_legacy_status = None
     
     def _map_signal_to_action(self, signal: str) -> str:
         """Map trading signal to RL action"""
@@ -579,7 +540,6 @@ class YantraXEnhancedSystem:
     
     def _execute_legacy_cycle(self) -> Dict[str, Any]:
         """Legacy 4-agent fallback"""
-        self._cached_legacy_status = None
         for state in self.legacy_agents.values():
             variation = np.random.normal(0, 0.05)
             state['confidence'] = np.clip(state['confidence'] + variation, 0.1, 0.99)
@@ -594,7 +554,13 @@ class YantraXEnhancedSystem:
             'strategy': 'LEGACY_4_AGENTS',
             'final_balance': round(self.portfolio_balance, 2),
             'total_reward': round(reward, 2),
-            'agents': self._get_agent_status(),
+            'agents': {
+                name: {
+                    'confidence': round(state['confidence'], 3),
+                    'performance': state['performance']
+                }
+                for name, state in self.legacy_agents.items()
+            },
             'timestamp': datetime.now().isoformat(),
             'note': 'Legacy mode - AI Firm & RL not loaded'
         }
@@ -602,15 +568,13 @@ class YantraXEnhancedSystem:
     def _get_agent_status(self) -> Dict[str, Any]:
         """Get agent status with defensive handling"""
         if not AI_FIRM_READY:
-            if self._cached_legacy_status is None:
-                self._cached_legacy_status = {
-                    name: {
-                        'confidence': round(state['confidence'], 3),
-                        'performance': state['performance']
-                    }
-                    for name, state in self.legacy_agents.items()
+            return {
+                name: {
+                    'confidence': round(state['confidence'], 3),
+                    'performance': state['performance']
                 }
-            return self._cached_legacy_status
+                for name, state in self.legacy_agents.items()
+            }
         
         all_agents = {}
         
@@ -705,22 +669,14 @@ def test_alpaca():
     
     logger.info(f"\n🧪 FORCE TEST: Alpaca API for {symbol}")
     
-    alpaca_key = os.getenv('ALPACA_API_KEY', '').strip()
-    alpaca_secret = os.getenv('ALPACA_SECRET_KEY', '').strip()
+    alpaca_key = os.getenv('ALPACA_API_KEY')
+    alpaca_secret = os.getenv('ALPACA_SECRET_KEY')
     
-    def is_valid_token(token):
-        if not token or len(token) < 5:
-            return False
-        placeholders = ['your_', 'replace_', 'dummy', 'none', 'null', 'test_']
-        if any(p in token.lower() for p in placeholders):
-            return False
-        return True
-
-    if not is_valid_token(alpaca_key) or not is_valid_token(alpaca_secret):
-        logger.error("❌ Alpaca credentials missing or insecure!")
+    if not alpaca_key or not alpaca_secret:
+        logger.error("❌ Alpaca credentials missing!")
         return jsonify({
             'status': 'error',
-            'message': 'Alpaca credentials not securely configured',
+            'message': 'Alpaca credentials not configured',
             'alpaca_key_set': bool(alpaca_key),
             'alpaca_secret_set': bool(alpaca_secret)
         })
@@ -728,7 +684,7 @@ def test_alpaca():
     try:
         import requests  # type: ignore[import]
         
-        logger.info(f"  Alpaca Key configured: {'[SET]' if alpaca_key else 'NONE'}")
+        logger.info(f"  Alpaca Key (first 10): {alpaca_key[:10] if alpaca_key else 'NONE'}")
         logger.info("  Making request to Alpaca...")
         
         headers = {
@@ -768,29 +724,21 @@ def test_fmp():
 
     logger.info(f"\n🧪 FORCE TEST: FMP API for {symbol}")
 
-    fmp_key = (os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY') or '').strip()
+    fmp_key = os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY')
 
-    def is_valid_token(token):
-        if not token or len(token) < 5:
-            return False
-        placeholders = ['your_', 'replace_', 'dummy', 'none', 'null', 'test_']
-        if any(p in token.lower() for p in placeholders):
-            return False
-        return True
-
-    if not is_valid_token(fmp_key):
-        logger.error("❌ FMP credentials missing or insecure!")
+    if not fmp_key:
+        logger.error("❌ FMP credentials missing!")
         return jsonify({
             'status': 'error',
-            'message': 'FMP credentials not securely configured',
-            'fmp_key_set': bool(fmp_key),
+            'message': 'FMP credentials not configured',
+            'fmp_key_set': False,
             'tried_envs': ['FMP_API_KEY', 'FMP_KEY']
         })
 
     try:
         import requests  # type: ignore[import]
 
-        logger.info(f"  FMP Key configured: {'[SET]' if fmp_key else 'NONE'}")
+        logger.info(f"  FMP Key (first 10): {fmp_key[:10] if fmp_key else 'NONE'}")
         logger.info("  Making request to FMP (quote endpoint)...")
 
         params = {'apikey': fmp_key}
@@ -912,6 +860,7 @@ def market_price_stream():
 
                 # Sleep, but break if client disconnects (Flask will close generator)
                 try:
+                    import time
                     time.sleep(interval)
                 except GeneratorExit:
                     break
@@ -966,6 +915,7 @@ def market_price_stream():
                 failure_count += 1
                 backoff = min(60, backoff * 2) if failure_count > 1 else 1
                 try:
+                    import time
                     time.sleep(min(backoff, interval))
                 except GeneratorExit:
                     break
@@ -1606,7 +1556,7 @@ def institutional_strategy():
         
         # Generate synthetic price history for technical analysis
         try:
-            price_history = (current_price * (1 + np.sin(np.arange(50)/10) * 0.02 + np.random.normal(0, 0.01, 50))).tolist()
+            price_history = [current_price * (1 + np.sin(i/10) * 0.02 + np.random.normal(0, 0.01)) for i in range(50)]
             volatility = float(np.std(np.diff(price_history)))
             volume = int(np.random.randint(100000, 5000000))
             trend = 'bullish' if np.random.random() > 0.5 else 'bearish'
@@ -2581,6 +2531,7 @@ def autonomous_ingestion_loop():
     logger.info("🧠 Autonomous Ingestion worker started")
     
     # Wait for system to stabilize
+    import time
     time.sleep(30)
     
     while True:
