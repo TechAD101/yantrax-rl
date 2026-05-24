@@ -20,12 +20,12 @@ def test_polygon_disabled_after_consecutive_403s():
     msvc._disable_duration = 1  # 1 second
 
     mock_resp = Mock()
-    mock_resp.ok = False
+    type(mock_resp).ok = False # Fix Mock evaluation
     mock_resp.status_code = 403
     # use a non-entitlement message so the standard disable-by-threshold path is used
     mock_resp.text = '403 Temporary quota exceeded'
 
-    with patch('requests.request', return_value=mock_resp):
+    with patch('services.market_data_service_massive.requests.request', return_value=mock_resp):
         # force fallbacks to fail so polygon failures accumulate
         with patch.object(MassiveMarketDataService, '_try_alpha_vantage', return_value=None):
             with patch.object(MassiveMarketDataService, '_try_yfinance', return_value=None):
