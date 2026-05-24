@@ -88,6 +88,9 @@ def test_market_price_with_perplexity():
                 source = data.get('source', 'unknown')
                 results.append((symbol, price, source))
         
+        if len(results) < 3:
+            print_test("Market price (Perplexity)", False, "Failed to fetch enough prices")
+            return False
         if len(results) >= 3:
             details = ", ".join([f"{s}: ${p}" for s, p, _ in results[:3]])
             print_test("Market price (Perplexity)", True, f"Real prices: {details}")
