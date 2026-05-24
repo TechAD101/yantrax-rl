@@ -12,7 +12,7 @@ const StepMarkets = ({ config, setConfig }) => {
     ];
 
     const toggleMarket = (id) => {
-        const current = config.markets || [];
+        const { markets: current = [] } = config || {};
         const updated = current.includes(id)
             ? current.filter(m => m !== id)
             : [...current, id];

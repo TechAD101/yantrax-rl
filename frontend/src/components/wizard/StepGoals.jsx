@@ -10,7 +10,7 @@ const StepGoals = ({ config, setConfig }) => {
     ];
 
     const toggleGoal = (id) => {
-        const current = config.goals || [];
+        const { goals: current = [] } = config || {};
         const updated = current.includes(id)
             ? current.filter(g => g !== id)
             : [...current, id];

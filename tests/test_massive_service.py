@@ -1,4 +1,5 @@
 import os
+os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
 import sys
 from unittest.mock import patch, Mock
 from datetime import datetime
