@@ -5,7 +5,6 @@ Validates all core functionality without external dependencies
 """
 
 import sys
-import json
 import os
 
 # Add backend to path
