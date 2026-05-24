@@ -7,12 +7,13 @@ YantraX AI Firm's 20+ agent ecosystem.
 from enum import Enum
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
+from abc import abstractmethod
 
 
 from .base_persona import PersonaAgent, PersonaArchetype, PersonaVote, PersonaAnalysis, VoteType
 
 class BaseAgent(PersonaAgent):
-    """Base agent class for placeholder agents in the registry"""
+    """Base agent class for AI trading personas"""
     def __init__(self, name: str, archetype: PersonaArchetype, voting_weight: float = 1.0):
         super().__init__(
             name=name,
@@ -22,6 +23,24 @@ class BaseAgent(PersonaAgent):
         )
         self.confidence = 0.75
     
+    @abstractmethod
+    def analyze(self, context: Dict[str, Any]) -> PersonaAnalysis:
+        """Perform persona-specific analysis"""
+        pass
+
+    @abstractmethod
+    def vote(self, proposal: Dict[str, Any], market_context: Dict[str, Any]) -> PersonaVote:
+        """Cast a vote on a trade proposal"""
+        pass
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize agent to dictionary"""
+        return self.get_performance_summary()
+
+
+class PlaceholderAgent(BaseAgent):
+    """Concrete placeholder agent class for the registry"""
+
     def analyze(self, context: Dict[str, Any]) -> PersonaAnalysis:
         """Placeholder analysis method"""
         return PersonaAnalysis(
@@ -46,7 +65,3 @@ class BaseAgent(PersonaAgent):
             reasoning=f"{self.name} neutral stance on proposal.",
             weight=self.voting_weight
         )
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Serialize agent to dictionary"""
-        return self.get_performance_summary()

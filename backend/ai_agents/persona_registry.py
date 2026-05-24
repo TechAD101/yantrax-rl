@@ -47,7 +47,7 @@ class PersonaRegistry:
                 self.logger.warning(f"Failed to register {display_name} class: {e}. Falling back to placeholder.")
 
         # 2. SUPPLEMENTARY PERSONAS (Placeholders for 20+ vision)
-        from ai_agents.base_agent import BaseAgent
+        from ai_agents.base_agent import PlaceholderAgent
         supplementary_configs = [
             ("TradeExecutor", PersonaArchetype.SYSTEMATIC),
             ("NewsAggregator", PersonaArchetype.MACRO),
@@ -59,7 +59,7 @@ class PersonaRegistry:
 
         for name, archetype in supplementary_configs:
             if name.lower() not in self._personas:
-                placeholder_agent = BaseAgent(name=name, archetype=archetype)
+                placeholder_agent = PlaceholderAgent(name=name, archetype=archetype)
                 self._personas[name.lower()] = placeholder_agent
                 self.logger.debug(f"Registered institutional placeholder: {name}")
             
