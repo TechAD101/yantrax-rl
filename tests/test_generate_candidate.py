@@ -96,6 +96,5 @@ class TestGenerateCandidate:
 
         assert result['degen_score'] == 50.0
 
-# Ensure patcher is stopped when module is unloaded (good practice, though pytest handles it if run once)
 import atexit
 atexit.register(patcher.stop)
