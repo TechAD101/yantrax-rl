@@ -1,0 +1,7 @@
+🎯 **What:** The code health issue addressed was the use of logical OR operators (`||`) to assign default values to properties destructured from component props in `StepCapital.jsx`, `StepGoals.jsx`, and `StepMarkets.jsx`.
+
+💡 **Why:** Using object destructuring with default assignments prevents valid falsy values (like `0`) from being incorrectly overwritten by defaults. It improves code readability, safety against `undefined` parameters, and enforces consistency across the components.
+
+✅ **Verification:** Verified by running the local Vitest test suite (`cd frontend && npm install && npx vitest run --environment jsdom`), confirming 3/3 tests passed with no regressions introduced.
+
+✨ **Result:** The wizard components are safer, cleaner, and strictly adhere to modern ES6 best practices for React components.

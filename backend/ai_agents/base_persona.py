@@ -177,12 +177,13 @@ class PersonaAgent(ABC):
         
         return weight
     
+    @abstractmethod
     def _adjust_weight_for_context(self, context: Dict[str, Any], base_weight: float) -> float:
         """
         Hook for subclasses to adjust weight based on market context
         Override in subclasses for persona-specific logic
         """
-        return base_weight
+        pass
     
     def record_vote(self, vote: PersonaVote):
         """Record vote in history"""

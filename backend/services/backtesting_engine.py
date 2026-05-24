@@ -103,16 +103,31 @@ def _generate_synthetic_prices(symbol: str, days: int) -> List[Dict[str, Any]]:
 def _sma_crossover_signals(prices: List[float], fast: int = 9, slow: int = 21) -> List[str]:
     """Generate BUY/SELL/HOLD signals from SMA crossover."""
     signals = ["HOLD"] * len(prices)
+    if len(prices) <= slow:
+        return signals
+
+    # Initial sums for previous window
+    prev_fast_sum = sum(prices[slow - fast : slow])
+    prev_slow_sum = sum(prices[0 : slow])
+
     for i in range(slow, len(prices)):
-        fast_ma = sum(prices[i - fast + 1 : i + 1]) / fast
-        slow_ma = sum(prices[i - slow + 1 : i + 1]) / slow
-        prev_fast_ma = sum(prices[i - fast : i]) / fast
-        prev_slow_ma = sum(prices[i - slow : i]) / slow
+        prev_fast_ma = prev_fast_sum / fast
+        prev_slow_ma = prev_slow_sum / slow
+
+        fast_sum = prev_fast_sum - prices[i - fast] + prices[i]
+        slow_sum = prev_slow_sum - prices[i - slow] + prices[i]
+
+        fast_ma = fast_sum / fast
+        slow_ma = slow_sum / slow
 
         if prev_fast_ma <= prev_slow_ma and fast_ma > slow_ma:
             signals[i] = "BUY"
         elif prev_fast_ma >= prev_slow_ma and fast_ma < slow_ma:
             signals[i] = "SELL"
+
+        prev_fast_sum = fast_sum
+        prev_slow_sum = slow_sum
+
     return signals
 
 
@@ -120,22 +135,35 @@ def _rsi_signals(prices: List[float], period: int = 14,
                  oversold: float = 30, overbought: float = 70) -> List[str]:
     """RSI mean-reversion signal generator."""
     signals = ["HOLD"] * len(prices)
+    if len(prices) <= period:
+        return signals
+
+    deltas = [prices[k+1] - prices[k] for k in range(len(prices)-1)]
+    gains = [d if d > 0 else 0 for d in deltas]
+    losses = [-d if d < 0 else 0 for d in deltas]
+
+    current_gain_sum = sum(gains[1:period+1]) if len(gains) >= period + 1 else sum(gains[1:])
+    current_loss_sum = sum(losses[1:period+1]) if len(losses) >= period + 1 else sum(losses[1:])
+
     for i in range(period + 1, len(prices)):
-        gains, losses = [], []
-        for j in range(i - period, i):
-            delta = prices[j + 1] - prices[j]
-            if delta > 0:
-                gains.append(delta)
-            else:
-                losses.append(abs(delta))
-        avg_gain = sum(gains) / period if gains else 0
-        avg_loss = sum(losses) / period if losses else 1e-9
+        avg_gain = current_gain_sum / period
+        avg_loss = current_loss_sum / period
+
+        if avg_loss == 0:
+            avg_loss = 1e-9
+
         rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
+
         if rsi < oversold:
             signals[i] = "BUY"
         elif rsi > overbought:
             signals[i] = "SELL"
+
+        if i < len(prices) - 1:
+            current_gain_sum = current_gain_sum - gains[i - period] + gains[i]
+            current_loss_sum = current_loss_sum - losses[i - period] + losses[i]
+
     return signals
 
 

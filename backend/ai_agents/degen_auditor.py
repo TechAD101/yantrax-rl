@@ -10,6 +10,11 @@ class DegenAuditorAgent:
     Enhanced Degen Auditor - Advanced Risk Assessment and Trade Validation
     """
 
+    # Class-level risk constants
+    ACTION_RISK_WEIGHTS = {"BUY": 0.6, "SELL": 0.4, "HOLD": 0.1}
+    CONFIDENCE_MULTIPLIERS = {"VERY_HIGH": 0.7, "HIGH": 0.8, "MEDIUM": 1.0, "LOW": 1.3}
+    URGENCY_MULTIPLIERS = {"VERY_HIGH": 1.4, "HIGH": 1.2, "MEDIUM": 1.0, "LOW": 0.9, "NONE": 0.8}
+
     def __init__(self):
         self.audit_history = []
         self.risk_metrics_cache = {}
@@ -225,17 +230,13 @@ class DegenAuditorAgent:
     def _assess_signal_risk(self, action: str, confidence: str, urgency: str) -> float:
         """Assess risk based on signal characteristics"""
         # Base risk by action
-        action_risk = {"BUY": 0.6, "SELL": 0.4, "HOLD": 0.1}.get(action, 0.5)
+        action_risk = self.ACTION_RISK_WEIGHTS.get(action, 0.5)
 
         # Confidence adjustment
-        confidence_multiplier = {
-            "VERY_HIGH": 0.7, "HIGH": 0.8, "MEDIUM": 1.0, "LOW": 1.3
-        }.get(confidence, 1.0)
+        confidence_multiplier = self.CONFIDENCE_MULTIPLIERS.get(confidence, 1.0)
 
         # Urgency adjustment
-        urgency_multiplier = {
-            "VERY_HIGH": 1.4, "HIGH": 1.2, "MEDIUM": 1.0, "LOW": 0.9, "NONE": 0.8
-        }.get(urgency, 1.0)
+        urgency_multiplier = self.URGENCY_MULTIPLIERS.get(urgency, 1.0)
 
         return min(1.0, action_risk * confidence_multiplier * urgency_multiplier)
 
