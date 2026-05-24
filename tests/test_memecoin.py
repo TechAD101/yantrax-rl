@@ -43,3 +43,50 @@ def test_simulate_trade():
     res = ok.get_json()['result']
     assert res['symbol'] == 'TEST1'
     assert 'quantity' in res
+
+def test_get_top_memecoins_direct():
+    from memecoin_service import get_top_memecoins
+    from db import get_session
+    from models import Memecoin
+
+    session = get_session()
+    # Insert test data
+    coins_data = [
+        ('COIN_A', 10.5),
+        ('COIN_B', 50.2),
+        ('COIN_C', 5.1),
+        ('COIN_D', 10000.0),  # very high to ensure it's at the top
+        ('COIN_E', 25.5)
+    ]
+
+    for symbol, score in coins_data:
+        m = session.query(Memecoin).filter_by(symbol=symbol).first()
+        if not m:
+            session.add(Memecoin(symbol=symbol, score=score))
+        else:
+            m.score = score
+    session.commit()
+
+    try:
+        # Test default limit
+        results_default = get_top_memecoins()
+        assert len(results_default) <= 10
+        assert len(results_default) >= 5 # since we inserted 5
+
+        # Assert sorting
+        scores = [r['score'] for r in results_default]
+        assert scores == sorted(scores, reverse=True)
+        assert results_default[0]['symbol'] == 'COIN_D'
+
+        # Test specific limit
+        results_limit = get_top_memecoins(limit=3)
+        assert len(results_limit) == 3
+        assert results_limit[0]['symbol'] == 'COIN_D'
+        assert results_limit[0]['score'] >= results_limit[1]['score']
+        assert results_limit[1]['score'] >= results_limit[2]['score']
+    finally:
+        # cleanup
+        for symbol, _ in coins_data:
+            session.query(Memecoin).filter_by(symbol=symbol).delete()
+        session.commit()
+        session.close()
