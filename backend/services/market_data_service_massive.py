@@ -74,16 +74,13 @@ class MassiveMarketDataService:
             try:
                 resp = requests.request(method, url, params=params, timeout=timeout)
                 # If server error, try again
-                status_code = getattr(resp, 'status_code', 0)
-                if isinstance(status_code, int) and 500 <= status_code < 600:
+                if 500 <= getattr(resp, 'status_code', 0) < 600:
                     last_exc = RuntimeError(f"Server error {resp.status_code}")
                     attempts += 1
                     time.sleep(self._backoff * (2 ** (attempts - 1)))
                     continue
                 return resp
-            except Exception as e:
-                if type(e).__name__ not in ("Timeout", "ConnectionError", "Exception", "MagicMock"):
-                    raise
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
                 last_exc = e
                 attempts += 1
                 time.sleep(self._backoff * (2 ** (attempts - 1)))

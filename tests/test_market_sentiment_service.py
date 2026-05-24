@@ -8,8 +8,14 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '
 
 # Mock numpy and other dependencies using patch.dict to avoid test suite pollution
 # BUT do it globally here so unittest decorators can access the module
-sys.modules['numpy'] = MagicMock()
-sys.modules['requests'] = MagicMock()
+try:
+    import numpy
+except ImportError:
+    sys.modules['numpy'] = MagicMock()
+try:
+    import requests
+except ImportError:
+    sys.modules['requests'] = MagicMock()
 
 try:
     from services.market_sentiment_service import MarketSentimentService
