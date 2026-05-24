@@ -255,6 +255,38 @@ def _get_git_version() -> Dict[str, str]:
 
 
 
+import time
+from functools import wraps
+
+def ttl_cache(maxsize=128, ttl=60):
+    """
+    A simple TTL (Time To Live) cache implementation using a dictionary.
+    """
+    def wrapper(func):
+        cache = {}
+
+        @wraps(func)
+        def inner(*args, **kwargs):
+            key = str(args) + str(kwargs)
+            now = time.time()
+
+            if key in cache:
+                result, timestamp = cache[key]
+                if now - timestamp < ttl:
+                    return result
+
+            result = func(*args, **kwargs)
+
+            if len(cache) >= maxsize:
+                oldest_key = min(cache.keys(), key=lambda k: cache[k][1])
+                del cache[oldest_key]
+
+            cache[key] = (result, now)
+            return result
+        return inner
+    return wrapper
+
+@ttl_cache(maxsize=100, ttl=60)
 def unified_get_market_price(symbol: str) -> Dict[str, Any]:
     """Get current market price for a symbol using configured provider (FMP-first).
 
