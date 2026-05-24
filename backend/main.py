@@ -192,7 +192,10 @@ if cors_origins_raw:
     origins = [o.strip() for o in cors_origins_raw.split(',') if o.strip()]
 else:
     origins = ['*']
-CORS(app, origins=origins, supports_credentials=False)
+if '*' in origins:
+    CORS(app, origins=origins, supports_credentials=False)
+else:
+    CORS(app, origins=origins, supports_credentials=True)
 
 # Register Institutional Blueprints
 from routes.data_ingest import data_ingest_bp
