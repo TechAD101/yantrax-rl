@@ -47,6 +47,10 @@ class BaseAgent(PersonaAgent):
             weight=self.voting_weight
         )
     
+    def _adjust_weight_for_context(self, context: Dict[str, Any], base_weight: float) -> float:
+        """Placeholder weight adjustment"""
+        return base_weight
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize agent to dictionary"""
         return self.get_performance_summary()

@@ -1,9 +1,10 @@
 import os
+os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
 import sys
 from unittest.mock import Mock, patch
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
 import sys
 from unittest.mock import MagicMock
 if 'requests' not in sys.modules:

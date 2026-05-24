@@ -3,7 +3,7 @@ import React from 'react';
 
 const StepCapital = ({ config, setConfig }) => {
     // Default to 100k if not set
-    const capital = config.capital || 100000;
+    const { capital = 100000 } = config || {};
 
     const handleSliderChange = (e) => {
         setConfig({ ...config, capital: parseInt(e.target.value) });

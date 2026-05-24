@@ -16,6 +16,7 @@ Created: August 28, 2025
 import hashlib
 import logging
 import time
+import asyncio
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
@@ -153,8 +154,8 @@ class StandardPricingCalculator(IPricingCalculator):
         total_cost = tier.monthly_fee
         
         if tier.billing_model == BillingModel.PAY_PER_REQUEST:
-            for record in usage_records:
-                total_cost += await self.calculate_cost(record, tier)
+            costs = await asyncio.gather(*(self.calculate_cost(record, tier) for record in usage_records))
+            total_cost += sum(costs)
         elif tier.billing_model == BillingModel.MONTHLY_QUOTA:
             if total_requests > base_requests:
                 overage = total_requests - base_requests
