@@ -6,7 +6,7 @@ from datetime import datetime
 
 
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
 
 import sys
 from unittest.mock import MagicMock
