@@ -186,7 +186,13 @@ except Exception as e:
 
 
 app = Flask(__name__)
-CORS(app, origins=['*'])
+import os
+cors_origins_raw = os.environ.get('CORS_ORIGINS')
+if cors_origins_raw:
+    origins = [o.strip() for o in cors_origins_raw.split(',') if o.strip()]
+else:
+    origins = ['*']
+CORS(app, origins=origins, supports_credentials=False)
 
 # Register Institutional Blueprints
 from routes.data_ingest import data_ingest_bp
