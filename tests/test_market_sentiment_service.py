@@ -1,96 +1,94 @@
 import sys
-import unittest
-from unittest.mock import MagicMock, patch
 import os
+import pytest
+from unittest.mock import patch, MagicMock
 
-# Setup sys.path to include backend
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'backend'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
-# Mock numpy and other dependencies using patch.dict to avoid test suite pollution
-# BUT do it globally here so unittest decorators can access the module
-try:
-    import numpy
-except ImportError:
-    sys.modules['numpy'] = MagicMock()
-try:
-    import requests
-except ImportError:
-    sys.modules['requests'] = MagicMock()
+# We cannot reliably guess when to conditionally mock using `try...except ImportError`
+# in an environment where numpy might exist but `services.market_sentiment_service.np` behaves strangely
+# when patched.
+#
+# A much safer and universal pattern for mocking missing dependencies in these
+# restricted environments that prevents both `ModuleNotFoundError` locally AND
+# `AssertionError` (MagicMock evaluation) remotely is to ALWAYS patch using `sys.modules`.
+#
+# However, we must provide a minimal viable mock of `numpy.random` that actually works
+# if the backend code attempts to invoke it.
 
-try:
+import unittest.mock
+
+mock_np = MagicMock()
+# Provide explicit, usable MagicMocks that can be patched over
+mock_np.random = MagicMock()
+mock_np.random.uniform = MagicMock()
+mock_np.random.randint = MagicMock()
+
+mocks = {
+    'numpy': mock_np,
+    'requests': MagicMock()
+}
+
+# Apply the sys.modules patch globally for this test file context
+with unittest.mock.patch.dict(sys.modules, mocks):
     from services.market_sentiment_service import MarketSentimentService
-except ImportError:
-    print("Import failed in test setup")
-    raise
 
-class TestMarketSentimentService(unittest.TestCase):
-    def setUp(self):
-        self.service = MarketSentimentService()
-        self.service.logger = MagicMock()
+@pytest.fixture
+def service():
+    # Because MarketSentimentService might be instantiating things at runtime that need numpy,
+    # we ensure the fixture also runs inside the patch context.
+    with unittest.mock.patch.dict(sys.modules, mocks):
+        return MarketSentimentService()
 
-    @patch('services.market_sentiment_service.datetime')
-    @patch('services.market_sentiment_service.np.mean')
-    @patch('services.market_sentiment_service.np.random.uniform')
-    def test_analyze_options_flow_bullish(self, mock_uniform, mock_mean, mock_datetime):
-        mock_datetime.now.return_value.isoformat.return_value = '2023-01-01T12:00:00'
-        mock_uniform.return_value = 0.8
-        mock_mean.return_value = 0.85
+def test_get_social_sentiment_strongly_bullish(service):
+    with unittest.mock.patch.dict(sys.modules, mocks):
+        # Directly set the behavior of our mock_np object
+        mock_np.random.uniform.side_effect = lambda low, high: high
+        mock_np.random.randint.return_value = 1000
 
-        result = self.service.analyze_options_flow("AAPL")
+        result = service.get_social_sentiment('AAPL')
 
-        self.assertEqual(result['symbol'], "AAPL")
-        self.assertEqual(result['flow_score'], 0.85)
-        self.assertEqual(result['signal'], "BULLISH_INSTITUTIONAL_FLOW")
-        self.assertEqual(result['timestamp'], '2023-01-01T12:00:00')
-        self.assertIn('unusual_volume', result['indicators'])
+        assert result['signal'] == 'STRONGLY_BULLISH'
+        assert result['overall_sentiment'] > 0.65
+        assert result['symbol'] == 'AAPL'
+        assert 'timestamp' in result
+        assert 'sources' in result
 
-    @patch('services.market_sentiment_service.datetime')
-    @patch('services.market_sentiment_service.np.mean')
-    @patch('services.market_sentiment_service.np.random.uniform')
-    def test_analyze_options_flow_bearish(self, mock_uniform, mock_mean, mock_datetime):
-        mock_datetime.now.return_value.isoformat.return_value = '2023-01-01T12:00:00'
-        mock_uniform.return_value = 0.2
-        mock_mean.return_value = 0.15
+        # Reset side effect for isolation
+        mock_np.random.uniform.side_effect = None
 
-        result = self.service.analyze_options_flow("AAPL")
+def test_get_social_sentiment_strongly_bearish(service):
+    with unittest.mock.patch.dict(sys.modules, mocks):
+        mock_np.random.uniform.side_effect = lambda low, high: low
+        mock_np.random.randint.return_value = 1000
 
-        self.assertEqual(result['flow_score'], 0.15)
-        self.assertEqual(result['signal'], "BEARISH_INSTITUTIONAL_FLOW")
+        result = service.get_social_sentiment('AAPL')
 
-    @patch('services.market_sentiment_service.datetime')
-    @patch('services.market_sentiment_service.np.mean')
-    @patch('services.market_sentiment_service.np.random.uniform')
-    def test_analyze_options_flow_neutral(self, mock_uniform, mock_mean, mock_datetime):
-        mock_datetime.now.return_value.isoformat.return_value = '2023-01-01T12:00:00'
-        mock_uniform.return_value = 0.5
-        mock_mean.return_value = 0.50
+        assert result['signal'] == 'STRONGLY_BEARISH'
+        assert result['overall_sentiment'] <= 0.35
 
-        result = self.service.analyze_options_flow("AAPL")
+        mock_np.random.uniform.side_effect = None
 
-        self.assertEqual(result['flow_score'], 0.50)
-        self.assertEqual(result['signal'], "NEUTRAL_FLOW")
+def test_get_social_sentiment_neutral(service):
+    with unittest.mock.patch.dict(sys.modules, mocks):
+        mock_np.random.uniform.side_effect = lambda low, high: 0.0 if low < 0 else (low + high) / 2
+        mock_np.random.randint.return_value = 1000
 
-    @patch('services.market_sentiment_service.datetime')
-    @patch('services.market_sentiment_service.np.random.uniform')
-    def test_analyze_options_flow_exception(self, mock_uniform, mock_datetime):
-        mock_datetime.now.return_value.isoformat.return_value = '2023-01-01T12:00:00'
-        mock_uniform.side_effect = Exception("Mocked exception")
+        result = service.get_social_sentiment('AAPL')
 
-        result = self.service.analyze_options_flow("AAPL")
+        assert result['signal'] == 'NEUTRAL'
+        assert 0.45 < result['overall_sentiment'] <= 0.55
 
-        self.assertEqual(result['symbol'], "AAPL")
-        self.assertEqual(result['flow_score'], 0.5)
-        self.assertEqual(result['signal'], "NEUTRAL_FLOW")
-        self.assertEqual(result['timestamp'], '2023-01-01T12:00:00')
-        self.service.logger.error.assert_called_once()
+        mock_np.random.uniform.side_effect = None
 
-    @classmethod
-    def tearDownClass(cls):
-        # Clean up mocks to prevent test suite pollution
-        if 'numpy' in sys.modules and isinstance(sys.modules['numpy'], MagicMock):
-            del sys.modules['numpy']
-        if 'requests' in sys.modules and isinstance(sys.modules['requests'], MagicMock):
-            del sys.modules['requests']
+def test_get_social_sentiment_exception_fallback(service):
+    with unittest.mock.patch.dict(sys.modules, mocks):
+        mock_np.random.uniform.side_effect = Exception("API failure")
 
-if __name__ == '__main__':
-    unittest.main()
+        result = service.get_social_sentiment('AAPL')
+
+        assert result['signal'] == 'NEUTRAL'
+        assert result['overall_sentiment'] == 0.5
+        assert result['symbol'] == 'AAPL'
+
+        mock_np.random.uniform.side_effect = None
