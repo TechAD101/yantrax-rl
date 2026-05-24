@@ -2,6 +2,7 @@ import sys
 import unittest
 from unittest.mock import MagicMock
 import os
+os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
 
 # Setup sys.path to include backend
 sys.path.append(os.path.join(os.getcwd(), 'backend'))
