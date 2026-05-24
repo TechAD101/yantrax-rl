@@ -12,7 +12,6 @@ import logging
 import numpy as np
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
-import requests
 import json
 
 class MarketSentimentService:
