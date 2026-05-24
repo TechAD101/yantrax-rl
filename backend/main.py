@@ -328,6 +328,7 @@ class YantraXEnhancedSystem:
             'data_whisperer': {'confidence': 0.990, 'performance': 12.9, 'analysis': 'BULLISH_BREAKOUT'},
             'degen_auditor': {'confidence': 0.904, 'performance': 22.1, 'audit': 'LOW_RISK_APPROVED'}
         }
+        self._cached_legacy_status = None
     
     def _map_signal_to_action(self, signal: str) -> str:
         """Map trading signal to RL action"""
@@ -531,6 +532,7 @@ class YantraXEnhancedSystem:
     
     def _execute_legacy_cycle(self) -> Dict[str, Any]:
         """Legacy 4-agent fallback"""
+        self._cached_legacy_status = None
         for state in self.legacy_agents.values():
             variation = np.random.normal(0, 0.05)
             state['confidence'] = np.clip(state['confidence'] + variation, 0.1, 0.99)
@@ -545,13 +547,7 @@ class YantraXEnhancedSystem:
             'strategy': 'LEGACY_4_AGENTS',
             'final_balance': round(self.portfolio_balance, 2),
             'total_reward': round(reward, 2),
-            'agents': {
-                name: {
-                    'confidence': round(state['confidence'], 3),
-                    'performance': state['performance']
-                }
-                for name, state in self.legacy_agents.items()
-            },
+            'agents': self._get_agent_status(),
             'timestamp': datetime.now().isoformat(),
             'note': 'Legacy mode - AI Firm & RL not loaded'
         }
@@ -559,13 +555,15 @@ class YantraXEnhancedSystem:
     def _get_agent_status(self) -> Dict[str, Any]:
         """Get agent status with defensive handling"""
         if not AI_FIRM_READY:
-            return {
-                name: {
-                    'confidence': round(state['confidence'], 3),
-                    'performance': state['performance']
+            if self._cached_legacy_status is None:
+                self._cached_legacy_status = {
+                    name: {
+                        'confidence': round(state['confidence'], 3),
+                        'performance': state['performance']
+                    }
+                    for name, state in self.legacy_agents.items()
                 }
-                for name, state in self.legacy_agents.items()
-            }
+            return self._cached_legacy_status
         
         all_agents = {}
         
