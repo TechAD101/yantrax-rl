@@ -75,7 +75,7 @@ def simulate_trade(symbol: str, usd: float) -> Dict[str, Any]:
     session = get_session()
     try:
         m = session.query(Memecoin).filter_by(symbol=symbol.upper()).first()
-        if m and m.meta and m.meta.get('price'):
+        if m and m.meta and m.meta.get('price') is not None:
             price = m.meta['price']
         else:
             price = round(random.uniform(0.0001, 5.0), 6)

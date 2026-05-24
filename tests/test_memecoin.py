@@ -43,3 +43,25 @@ def test_simulate_trade():
     res = ok.get_json()['result']
     assert res['symbol'] == 'TEST1'
     assert 'quantity' in res
+
+def test_simulate_trade_price_zero():
+    import main
+    from db import get_session
+    from models import Memecoin
+
+    # Insert Memecoin with price 0
+    session = get_session()
+    m = Memecoin(symbol='ZERO', score=0, meta={'price': 0})
+    session.add(m)
+    session.commit()
+    session.close()
+
+    client = main.app.test_client()
+
+    # Simulate with symbol ZERO
+    ok = client.post('/api/memecoin/simulate', json={'symbol': 'ZERO', 'usd': 100})
+    assert ok.status_code == 200
+    res = ok.get_json()['result']
+    assert res['symbol'] == 'ZERO'
+    assert res['price'] == 0
+    assert res['quantity'] == 0
