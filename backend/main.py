@@ -41,6 +41,7 @@ load_dotenv()
 # Suppress ChromaDB telemetry noise
 os.environ['ANONYMIZED_TELEMETRY'] = 'False'
 
+import time
 import numpy as np
 from datetime import datetime, timedelta
 from functools import wraps
@@ -897,7 +898,6 @@ def market_price_stream():
 
                 # Sleep, but break if client disconnects (Flask will close generator)
                 try:
-                    import time
                     time.sleep(interval)
                 except GeneratorExit:
                     break
@@ -952,7 +952,6 @@ def market_price_stream():
                 failure_count += 1
                 backoff = min(60, backoff * 2) if failure_count > 1 else 1
                 try:
-                    import time
                     time.sleep(min(backoff, interval))
                 except GeneratorExit:
                     break
@@ -2568,7 +2567,6 @@ def autonomous_ingestion_loop():
     logger.info("🧠 Autonomous Ingestion worker started")
     
     # Wait for system to stabilize
-    import time
     time.sleep(30)
     
     while True:
