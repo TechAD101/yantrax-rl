@@ -92,8 +92,8 @@ class DebateEngine:
                     arg['rebuttals'].append(rebuttal)
                 elif arg['confidence'] > 0.85:
                     # Supporter strong reinforcement
-                     reinforcement = f"{arg['agent']} double-confirms the {winning_temp} thesis based on Institutional Wisdom."
-                     arg['rebuttals'].append(reinforcement)
+                    reinforcement = f"{arg['agent']} double-confirms the {winning_temp} thesis based on Institutional Wisdom."
+                    arg['rebuttals'].append(reinforcement)
 
         # 3. Tally Votes
         vote_tally = {}

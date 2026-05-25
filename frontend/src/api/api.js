@@ -563,10 +563,8 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ symbol: symbol.toUpperCase(), context })
   }),
-  triggerKnowledgeIngest: () => fetchWithRetry(`${BASE_URL}/api/knowledge/ingest`, { method: 'POST' }),
   getJournalEntries: (limit = 50) => fetchWithRetry(`${BASE_URL}/api/journal?limit=${limit}`),
   searchMarket: (query, limit = 5) => fetchWithRetry(`${BASE_URL}/api/market-search?query=${encodeURIComponent(query)}&limit=${limit}`),
-  getAIFirmStatus: () => fetchWithRetry(`${BASE_URL}/api/ai-firm/status`),
   getOracleWisdom: () => fetchWithRetry(`${BASE_URL}/api/oracle/wisdom`),
   getAuditLog: (params) => fetchWithRetry(`${BASE_URL}/api/firm/audit_log`, { params }),
 };

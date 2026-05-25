@@ -24,20 +24,15 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      - name: Verify VERCEL_TOKEN secret
-        working-directory: frontend
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          if [ -z "$VERCEL_TOKEN" ]; then
-            echo "ERROR: VERCEL_TOKEN is not set. Add the secret 'VERCEL_TOKEN' to the repository settings to enable deployments to Vercel." >&2
-            exit 1
-          fi
       - name: Deploy to Vercel
         working-directory: frontend
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::warning::VERCEL_TOKEN is not set. Skipping Vercel deployment. Add the secret to repository settings to enable it."
+            exit 0
+          fi
           npm install -g vercel
           vercel --prod --confirm --token $VERCEL_TOKEN --cwd .
 
@@ -50,6 +45,10 @@ jobs:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
         run: |
+          if [ -z "$RENDER_API_KEY" ] || [ -z "$RENDER_SERVICE_ID" ]; then
+            echo "::warning::RENDER_API_KEY or RENDER_SERVICE_ID not set. Skipping Render deployment."
+            exit 0
+          fi
           echo "Triggering Render deploy for service: $RENDER_SERVICE_ID"
           curl -sS -X POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
             -H "Authorization: Bearer ${RENDER_API_KEY}" \
