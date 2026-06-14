@@ -153,6 +153,9 @@ class PerplexityIntelligenceService:
         Returns:
             API response text or None on failure
         """
+        # Performance & Cost Optimization: Disable Perplexity API completely per user request
+        logger.info("Perplexity API calls are disabled to save costs and reduce latency.")
+        return None
         if not self.api_key:
             logger.warning("Perplexity API key not configured, returning None")
             return None
@@ -678,6 +681,9 @@ Be specific with price levels, catalysts, and actionable insights."""
         Returns:
             Dict with structured search results
         """
+        # Performance & Cost Optimization: Disable Perplexity API completely per user request
+        logger.info("Perplexity API calls are disabled to save costs and reduce latency.")
+        return {"error": "API disabled to save costs", "results": [], "query": query, "timestamp": datetime.now().isoformat(), "trusted_sources": trusted_sources_only}
         if not self.api_key:
             return {"error": "API key not configured", "results": []}
         
