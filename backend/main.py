@@ -41,7 +41,12 @@ load_dotenv()
 # Suppress ChromaDB telemetry noise
 os.environ['ANONYMIZED_TELEMETRY'] = 'False'
 
-import numpy as np
+
+try:
+    import numpy as np
+except ImportError:
+    pass
+
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import Dict, Any, Optional
@@ -50,7 +55,12 @@ import asyncio
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from sqlalchemy import func, Float
-import numpy as np
+
+try:
+    import numpy as np
+except ImportError:
+    pass
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
