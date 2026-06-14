@@ -38,10 +38,6 @@ window.addEventListener('error', (evt) => {
   // eslint-disable-next-line no-console
   console.error('Uncaught error:', evt.error || evt.message || evt)
 })
-window.addEventListener('unhandledrejection', (evt) => {
-  // eslint-disable-next-line no-console
-  console.error('Unhandled promise rejection:', evt.reason || evt)
-})
 
 import ErrorBoundary from './ErrorBoundary'
 import { BASE_URL } from './api/api'

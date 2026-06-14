@@ -10,7 +10,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 # In some test environments python-dotenv may not be installed; provide a small shim so importing main doesn't fail
 import types
 if 'dotenv' not in sys.modules:
-    sys.modules['dotenv'] = types.SimpleNamespace(load_dotenv=lambda *a, **k: None)
+    sys.modules['dotenv'] = types.SimpleNamespace(
+        load_dotenv=lambda *a, **k: None,
+        dotenv_values=lambda *a, **k: {},
+    )
 
 @pytest.fixture
 def client():

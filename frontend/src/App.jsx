@@ -1,6 +1,5 @@
 // src/App.jsx
 import React, { Suspense } from "react";
-import ErrorBoundary from "./components/ErrorBoundary";
 import { Routes, Route, Navigate } from "react-router-dom";
 
 const YantraDashboard = React.lazy(() => import("./pages/YantraDashboard"));
@@ -13,21 +12,19 @@ const MemecoinHub = React.lazy(() => import("./pages/MemecoinHub"));
 
 function App() {
   return (
-      <ErrorBoundary>
-        <Suspense fallback={<div style={{padding:20,color:'#fff'}}>Loading…</div>}>
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<YantraDashboard />} />
-            <Route path="/journal" element={<Journal />} />
-            <Route path="/onboarding" element={<Onboarding />} />
-            <Route path="/moodboard" element={<Moodboard />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/strategies" element={<StrategyHub />} />
-            <Route path="/memecoins" element={<MemecoinHub />} />
-            <Route path="*" element={<YantraDashboard />} />
-          </Routes>
-        </Suspense>
-      </ErrorBoundary>
+      <Suspense fallback={<div style={{padding:20,color:'#fff'}}>Loading…</div>}>
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<YantraDashboard />} />
+          <Route path="/journal" element={<Journal />} />
+          <Route path="/onboarding" element={<Onboarding />} />
+          <Route path="/moodboard" element={<Moodboard />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/strategies" element={<StrategyHub />} />
+          <Route path="/memecoins" element={<MemecoinHub />} />
+          <Route path="*" element={<YantraDashboard />} />
+        </Routes>
+      </Suspense>
   );
 }
 
