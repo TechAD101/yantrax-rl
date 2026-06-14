@@ -915,19 +915,18 @@ Interaction Narrative: Technical strength is leading, while liquidity tightness 
         
         checks = val_result.get('pass_map', {})
         
-        setup_md = f"""### 11. TRADE SETUPS (CHRONICLER FEED)
+        lines = [f"""### 11. TRADE SETUPS (CHRONICLER FEED)
 
 **CHECKLIST VALIDATION ({val_result.get('checks_passed')}/8)**
-"""
-        for check, passed in checks.items():
-            setup_md += f"- {'✓' if passed else '✗'} {check}\n"
+"""]
+        lines.extend([f"- {'✓' if passed else '✗'} {check}\n" for check, passed in checks.items()])
             
         if val_result.get('allowed'):
-            setup_md += f"\n**STATUS: APPROVED** | Instrument: {symbol} | RR: 1.5+"
+            lines.append(f"\n**STATUS: APPROVED** | Instrument: {symbol} | RR: 1.5+")
         else:
-            setup_md += f"\n**STATUS: BLOCKED** | Reason: {', '.join(val_result.get('failures', []))}"
+            lines.append(f"\n**STATUS: BLOCKED** | Reason: {', '.join(val_result.get('failures', []))}")
             
-        return setup_md
+        return "".join(lines)
 
     def _section_12_audit_log(self, data):
         return f"""### 12. AUDIT LOG

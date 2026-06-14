@@ -5,6 +5,7 @@ pattern recognition, and strategic knowledge accumulation.
 """
 
 import json
+from collections import defaultdict
 import uuid
 import hashlib
 from datetime import datetime, timedelta
@@ -533,21 +534,23 @@ class FirmMemorySystem:
             if total_memories == 0:
                 return {'total_memories': 0, 'memory_types': {}, 'agents': {}}
             
-            # Memory type distribution
-            type_distribution: Dict[str, int] = {}
-            for memory in self.memory_cache.values():
-                type_key = memory.memory_type.value
-                type_distribution[type_key] = type_distribution.get(type_key, 0) + 1
-            
-            # Agent memory distribution
-            agent_distribution: Dict[str, int] = {}
-            for memory in self.memory_cache.values():
-                for agent in memory.associated_agents:
-                    agent_distribution[agent] = agent_distribution.get(agent, 0) + 1
-            
-            # Importance distribution
+            type_distribution: Dict[str, int] = defaultdict(int)
+            agent_distribution: Dict[str, int] = defaultdict(int)
             importance_levels = {'low': 0, 'medium': 0, 'high': 0, 'critical': 0}
+            
+            total_access_count = 0
+            max_access_count = -1
+            most_accessed_memory_id = None
+            
             for memory in self.memory_cache.values():
+                # Memory type distribution
+                type_distribution[memory.memory_type.value] += 1
+
+                # Agent memory distribution
+                for agent in memory.associated_agents:
+                    agent_distribution[agent] += 1
+
+                # Importance distribution
                 if memory.importance < 0.4:
                     importance_levels['low'] += 1
                 elif memory.importance < 0.7:
@@ -556,18 +559,24 @@ class FirmMemorySystem:
                     importance_levels['high'] += 1
                 else:
                     importance_levels['critical'] += 1
-            
-            # Access patterns
-            avg_access_count = sum(m.access_count for m in self.memory_cache.values()) / total_memories
+
+                # Access patterns
+                ac = memory.access_count
+                total_access_count += ac
+                if ac > max_access_count:
+                    max_access_count = ac
+                    most_accessed_memory_id = memory.id
+
+            avg_access_count = total_access_count / total_memories
             
             return {
                 'total_memories': total_memories,
-                'memory_types': type_distribution,
-                'agent_memories': agent_distribution,
+                'memory_types': dict(type_distribution),
+                'agent_memories': dict(agent_distribution),
                 'importance_distribution': importance_levels,
                 'access_analytics': {
                     'average_access_count': round(avg_access_count, 2),
-                    'most_accessed_memory': max(self.memory_cache.values(), key=lambda m: m.access_count).id,
+                    'most_accessed_memory': most_accessed_memory_id,
                     'access_patterns': len(self.access_patterns)
                 },
                 'system_health': {

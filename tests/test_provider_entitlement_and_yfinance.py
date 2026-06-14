@@ -1,9 +1,10 @@
 import os
+os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
 import sys
 from unittest.mock import Mock, patch
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
 import sys
 from unittest.mock import MagicMock
 if 'requests' not in sys.modules:
@@ -16,12 +17,12 @@ def test_polygon_entitlement_triggers_long_disable():
     msvc._entitlement_disable_seconds = 5
 
     mock_resp = Mock()
-    mock_resp.ok = False
+    type(mock_resp).ok = False # Fix Mock evaluation
     mock_resp.status_code = 403
     # full JSON body as seen in logs
     mock_resp.text = '{"status":"NOT_AUTHORIZED","request_id":"abc","message":"You are not entitled to this data. Please upgrade your plan"}'
 
-    with patch('requests.request', return_value=mock_resp):
+    with patch('services.market_data_service_massive.requests.request', return_value=mock_resp):
         res = msvc.fetch_quote('AAPL')
         assert res.get('price') is None
         assert res.get('error', {}).get('entitlement_required') is True
