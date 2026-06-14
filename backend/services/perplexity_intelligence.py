@@ -782,17 +782,20 @@ Be specific with price levels, catalysts, and actionable insights."""
         Returns:
             Dict mapping ticker to search results
         """
-        results = {}
-        for ticker in tickers[:5]:  # Limit to 5 tickers
+        async def fetch_news(ticker: str) -> tuple[str, List[Dict]]:
             try:
                 search_result = await self.search_financial_news(
                     f"{ticker} {query_suffix}",
                     max_results=3
                 )
-                results[ticker] = search_result.get("results", [])
+                return ticker, search_result.get("results", [])
             except Exception as e:
                 logger.warning(f"Multi-search failed for {ticker}: {e}")
-                results[ticker] = []
+                return ticker, []
+
+        tasks = [fetch_news(ticker) for ticker in tickers[:5]]  # Limit to 5 tickers
+        gathered_results = await asyncio.gather(*tasks)
+        results = dict(gathered_results)
         
         return {
             "tickers": tickers,
