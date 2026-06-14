@@ -41,3 +41,7 @@ class DegenAuditorAgent(PersonaAgent):
             reasoning="Degen Auditor flags excessive retail froth. Capital preservation activated.",
             weight=self.voting_weight
         )
+
+    def _adjust_weight_for_context(self, context: Dict[str, Any], base_weight: float) -> float:
+        """Placeholder weight adjustment"""
+        return base_weight

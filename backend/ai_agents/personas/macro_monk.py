@@ -38,3 +38,7 @@ class MacroMonkAgent(PersonaAgent):
             reasoning="Macro alignment confirmed.",
             weight=self.voting_weight
         )
+
+    def _adjust_weight_for_context(self, context: Dict[str, Any], base_weight: float) -> float:
+        """Placeholder weight adjustment"""
+        return base_weight

@@ -377,7 +377,7 @@ Always respond in valid JSON format."""
 Respond ONLY with a JSON object in this exact format:
 {{
     "opportunities": [
-        {{"ticker": "XXX", "reason": "why this is an opportunity", "catalyst": "upcoming event/driver", "risk_level": "low|medium|high"}},
+        {{"ticker": "TICKER_SYMBOL", "reason": "why this is an opportunity", "catalyst": "upcoming event/driver", "risk_level": "low|medium|high"}},
         ...
     ],
     "risks": [

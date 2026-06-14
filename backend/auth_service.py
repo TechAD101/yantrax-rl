@@ -1,4 +1,5 @@
 """Simple authentication service using bcrypt"""
+import logging
 import os
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
@@ -9,8 +10,13 @@ from db import get_session
 from models import User
 
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
-
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    SECRET_KEY = os.urandom(32).hex()
+    logging.warning(
+        "No SECRET_KEY provided; using an auto-generated fallback key. "
+        "Set the SECRET_KEY environment variable in production."
+    )
 
 def hash_password(password: str) -> str:
     """Hash password using SHA256"""
