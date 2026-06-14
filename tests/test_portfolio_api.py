@@ -7,7 +7,7 @@ import pytest
 os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
 
 # Make backend package importable like other tests
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
 
 
 
