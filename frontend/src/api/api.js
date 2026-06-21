@@ -2,7 +2,7 @@
 // Resolve backend BASE URL from Vite env var or process env fallbacks
 const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL)
   ? import.meta.env.VITE_API_URL
-  : 'https://5000-i3rn3hf9cb0he5na8ycyo-ba976247.sg1.manus.computer';
+  : 'http://localhost:5000';
 
 const BASE_URL = API_BASE_URL;
 export { BASE_URL };
@@ -204,11 +204,17 @@ export const testConnection = async () => {
 };
 
 
-export const getWarrenAnalysis = () => fetchWithRetry(`${BASE_URL}/api/ai-firm/personas/warren`);
-export const getCathieAnalysis = () => fetchWithRetry(`${BASE_URL}/api/ai-firm/personas/cathie`);
+export const getWarrenAnalysis = (symbol = 'AAPL') => fetchWithRetry(`${BASE_URL}/api/ai-firm/personas/warren`, {
+  method: 'POST',
+  body: JSON.stringify({ symbol })
+});
+export const getCathieAnalysis = (symbol = 'NVDA') => fetchWithRetry(`${BASE_URL}/api/ai-firm/personas/cathie`, {
+  method: 'POST',
+  body: JSON.stringify({ symbol })
+});
 
-export const getRiskMetrics = () => fetchWithRetry(`${BASE_URL}/risk-metrics`);
-export const getPerformance = () => fetchWithRetry(`${BASE_URL}/performance`);
+export const getRiskMetrics = () => fetchWithRetry(`${BASE_URL}/api/risk-metrics`);
+export const getPerformance = () => fetchWithRetry(`${BASE_URL}/api/performance`);
 
 
 export const createPortfolio = async (config) => {
@@ -388,6 +394,7 @@ export const api = {
   getCathieAnalysis,
   getRiskMetrics,
   getPerformance,
+  getPerformanceMetrics: getPerformance,
   getCommentary,
   runTradingCycle,
   runRLCycle,
@@ -441,7 +448,7 @@ export const api = {
   },
 
   publishStrategy: async (data) => {
-    const response = await fetch(`${BASE_URL}/api/strategies/publish`, {
+    const response = await fetch(`${BASE_URL}/api/strategies/publish-to-hub`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

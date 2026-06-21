@@ -8,7 +8,7 @@ const PerformanceTracker = () => {
   });
 
   useEffect(() => {
-    const unsubscribe = api.subscribeToUpdates('getPerformanceMetrics', (data) => {
+    const unsubscribe = api.subscribeToUpdates('getPerformance', (data) => {
       setPerformanceData({
         data,
         loading: false
@@ -26,7 +26,9 @@ const PerformanceTracker = () => {
   };
 
   const formatPercent = (value) => {
-    return `${(value * 100).toFixed(2)}%`;
+    const numeric = Number(value) || 0;
+    const percent = Math.abs(numeric) > 1 ? numeric : numeric * 100;
+    return `${percent.toFixed(2)}%`;
   };
 
   const getPerformanceColor = (value) => {

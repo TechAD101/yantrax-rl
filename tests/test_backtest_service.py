@@ -1,14 +1,6 @@
 import sys
 import os
 import datetime
-from unittest.mock import MagicMock, patch
-
-# Mock dependencies before importing backtest_service
-import sys
-sys.modules['db'] = MagicMock()
-sys.modules['models'] = MagicMock()
-sys.modules['services.knowledge_base_service'] = MagicMock()
-sys.modules['services'] = MagicMock()
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
