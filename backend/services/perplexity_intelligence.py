@@ -726,10 +726,11 @@ Be specific with price levels, catalysts, and actionable insights."""
                 
         except httpx.HTTPStatusError as e:
             logger.error(f"Search API error: {e.response.status_code}")
-            return {"error": str(e), "results": [], "query": query}
+            # Return graceful empty result instead of crashing
+            return {"error": f"API Error {e.response.status_code}", "results": [], "query": query, "status": "failed"}
         except Exception as e:
             logger.error(f"Search failed: {e}")
-            return {"error": str(e), "results": [], "query": query}
+            return {"error": str(e), "results": [], "query": query, "status": "failed"}
     
     def _extract_domain(self, url: str) -> str:
         """Extract domain from URL."""
