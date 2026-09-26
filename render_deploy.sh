@@ -21,8 +21,8 @@ fi
 echo "🏢 Starting Institutional Gunicorn server..."
 # Standardizing on Render's dynamic port
 export PORT=${PORT:-10000}
-cd backend
+# Add repository root to Python path so that `backend` package can be imported
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 echo "🚀 Deployment Port: $PORT"
 echo "✅ System Version: 5.23-STABLE"
-exec python -m gunicorn wsgi:app --bind 0.0.0.0:$PORT --log-level info --timeout 120 --workers 2
+exec python -m gunicorn backend.wsgi:app --bind 0.0.0.0:$PORT --log-level info --timeout 120 --workers 2
