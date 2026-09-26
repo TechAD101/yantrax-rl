@@ -5,8 +5,8 @@ import logging
 # Add backend to path
 sys.path.append(os.path.join(os.getcwd(), 'backend'))
 
-from ai_agents.persona_registry import get_persona_registry
-from ai_firm.debate_engine import DebateEngine
+from backend.ai_agents.persona_registry import get_persona_registry
+from backend.ai_firm.debate_engine import DebateEngine
 
 def test_v524_vision():
     logging.basicConfig(level=logging.INFO)

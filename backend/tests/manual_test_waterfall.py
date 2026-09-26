@@ -8,7 +8,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 logging.basicConfig(level=logging.INFO)
 
-from services.market_data_service_waterfall import WaterfallMarketDataService
+from backend.services.market_data_service_waterfall import WaterfallMarketDataService
 
 def test_waterfall():
     print("🌊 Initializing Waterfall Service...")

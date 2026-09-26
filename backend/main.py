@@ -57,15 +57,15 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 # ==================== MAIN SYSTEM INTEGRATION ====================
-from config import Config
-from service_registry import registry
-from ai_agents.persona_registry import get_persona_registry
+from backend.config import Config
+from backend.service_registry import registry
+from backend.ai_agents.persona_registry import get_persona_registry
 PERSONA_REGISTRY = get_persona_registry()
 
 # Database helpers
-from db import init_db, get_session
-from models import Strategy, StrategyProfile
-from models import Portfolio, PortfolioPosition
+from backend.db import init_db, get_session
+from backend.models import Strategy, StrategyProfile
+from backend.models import Portfolio, PortfolioPosition
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -110,7 +110,7 @@ TRADE_VALIDATOR = registry.get_service('trade_validator')
 
 # Initialize Advanced Market Sentiment Service
 try:
-    from services.market_sentiment_service import get_sentiment_service
+    from backend.services.market_sentiment_service import get_sentiment_service
     SENTIMENT_SERVICE = get_sentiment_service()
     SENTIMENT_READY = bool(SENTIMENT_SERVICE)
     logger.info("✅ Market Sentiment Service initialized")
@@ -121,7 +121,7 @@ except Exception as e:
 
 # Initialize Institutional Strategy Engine
 try:
-    from services.institutional_strategy_engine import get_strategy_engine
+    from backend.services.institutional_strategy_engine import get_strategy_engine
     STRATEGY_ENGINE = get_strategy_engine()
     STRATEGY_ENGINE_READY = bool(STRATEGY_ENGINE)
     logger.info("✅ Institutional Strategy Engine initialized")
@@ -136,7 +136,7 @@ market_data = None
 market_provider = None
 MARKET_PRICE_CACHE: Dict[str, Dict[str, Any]] = {}
 try:
-    from services.market_data_service_v2 import MarketDataService, MarketDataConfig
+    from backend.services.market_data_service_v2 import MarketDataService, MarketDataConfig
     config_data = Config.get_market_config()
     market_config = MarketDataConfig(**config_data)
     market_data = MarketDataService(market_config)
@@ -159,10 +159,10 @@ except Exception as e:
 AI_FIRM_READY = False
 RL_ENV_READY = False
 try:
-    from ai_firm.ceo import AutonomousCEO, CEOPersonality
-    from ai_firm.agent_manager import AgentManager
-    from rl_core.env_market_sim import MarketSimEnv
-    from services.oracle_service import OracleService
+    from backend.ai_firm.ceo import AutonomousCEO, CEOPersonality
+    from backend.ai_firm.agent_manager import AgentManager
+    from backend.rl_core.env_market_sim import MarketSimEnv
+    from backend.services.oracle_service import OracleService
     
     oracle_service = OracleService()
     agent_manager = AgentManager(oracle_service=oracle_service)
@@ -173,7 +173,7 @@ try:
     rl_env = MarketSimEnv()
     
     # Debate Engine
-    from ai_firm.debate_engine import DebateEngine
+    from backend.ai_firm.debate_engine import DebateEngine
     DEBATE_ENGINE = DebateEngine(agent_manager)
     if PERPLEXITY_READY:
         DEBATE_ENGINE.set_perplexity_service(PERPLEXITY_SERVICE)
@@ -199,7 +199,7 @@ else:
     CORS(app, origins=origins, supports_credentials=True)
 
 # Register Institutional Blueprints
-from routes.data_ingest import data_ingest_bp
+from backend.routes.data_ingest import data_ingest_bp
 app.register_blueprint(data_ingest_bp, url_prefix='/api')
 
 # Initialize DB tables (safe to call; in prod use Alembic migrations)
@@ -291,7 +291,7 @@ def unified_get_market_price(symbol: str) -> Dict[str, Any]:
     massive_key = os.getenv('MASSIVE_API_KEY') or os.getenv('POLYGON_API_KEY') or os.getenv('POLYGON_KEY')
     if massive_key:
         try:
-            from services.market_data_service_massive import MassiveMarketDataService
+            from backend.services.market_data_service_massive import MassiveMarketDataService
             msvc = MassiveMarketDataService(api_key=massive_key, base_url=os.getenv('MASSIVE_BASE_URL'))
             data = msvc.fetch_quote(symbol)
             if data and data.get('price'):
@@ -655,7 +655,7 @@ def health_check():
 def get_institutional_report():
     """Generate high-precision institutional report (Perplexity spec)"""
     symbol = request.args.get('symbol', 'AAPL').upper()
-    from ai_firm.report_generation import InstitutionalReportGenerator
+    from backend.ai_firm.report_generation import InstitutionalReportGenerator
     
     generator = InstitutionalReportGenerator()
     report = generator.generate_full_report(symbol)
@@ -950,7 +950,7 @@ def massive_quote():
             return jsonify({'status': 'error', 'message': 'MASSIVE/POLYGON API key not configured'}), 400
 
         try:
-            from services.market_data_service_massive import MassiveMarketDataService
+            from backend.services.market_data_service_massive import MassiveMarketDataService
         except ImportError:
             return jsonify({'status': 'error', 'message': 'MassiveMarketDataService not available'}), 500
         
@@ -1209,7 +1209,7 @@ def generate_institutional_report():
     """Generates the comprehensive 13-section Institutional Report."""
     symbol = request.args.get('symbol', 'AAPL').upper()
     try:
-        from ai_firm.report_generation import InstitutionalReportGenerator
+        from backend.ai_firm.report_generation import InstitutionalReportGenerator
         generator = InstitutionalReportGenerator()
         report_data = generator.generate_full_report(symbol)
         
@@ -1807,10 +1807,10 @@ def get_audit_trail():
 
 
 # ---------------- Memecoin Engine Prototype ----------------
-from memecoin_service import scan_market, get_top_memecoins, simulate_trade
-from order_manager import create_order, list_orders, get_order
-from backtest_service import backtest_strategy, list_backtest_results
-from auth_service import register_user, authenticate_user, get_user
+from backend.memecoin_service import scan_market, get_top_memecoins, simulate_trade
+from backend.order_manager import create_order, list_orders, get_order
+from backend.backtest_service import backtest_strategy, list_backtest_results
+from backend.auth_service import register_user, authenticate_user, get_user
 
 
 @app.route('/api/memecoin/scan', methods=['POST'])
@@ -2255,7 +2255,7 @@ def visual_mood_board():
     
     # Lazy Init of MoodBoardManager if needed
     if not hasattr(app, 'mood_board_manager'):
-        from ai_firm.mood_board import MoodBoardManager
+        from backend.ai_firm.mood_board import MoodBoardManager
         app.mood_board_manager = MoodBoardManager(ceo, market_provider)
         
     dashboard_data = app.mood_board_manager.get_dashboard_state()
@@ -2397,7 +2397,7 @@ def get_intelligence_status():
 def publish_strategy_hub():
     """Publish a user strategy to the marketplace"""
     if not hasattr(app, 'marketplace_service'):
-        from services.marketplace_service import MarketplaceService
+        from backend.services.marketplace_service import MarketplaceService
         app.marketplace_service = MarketplaceService()
         
     data = request.json or {}
@@ -2413,7 +2413,7 @@ def publish_strategy_alias():
 def get_top_strategies():
     """Get the leaderboard"""
     if not hasattr(app, 'marketplace_service'):
-        from services.marketplace_service import MarketplaceService
+        from backend.services.marketplace_service import MarketplaceService
         app.marketplace_service = MarketplaceService()
         
     limit = int(request.args.get('limit', 10))
@@ -2424,7 +2424,7 @@ def get_top_strategies():
 def copy_strategy():
     """Copy a strategy"""
     if not hasattr(app, 'marketplace_service'):
-        from services.marketplace_service import MarketplaceService
+        from backend.services.marketplace_service import MarketplaceService
         app.marketplace_service = MarketplaceService()
         
     data = request.json or {}
@@ -2440,7 +2440,7 @@ def copy_strategy():
 def get_active_contest():
     """Get current active contest"""
     if not hasattr(app, 'marketplace_service'):
-        from services.marketplace_service import MarketplaceService
+        from backend.services.marketplace_service import MarketplaceService
         app.marketplace_service = MarketplaceService()
         
     contest = app.marketplace_service.get_active_contest()

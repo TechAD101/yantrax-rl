@@ -8,8 +8,8 @@ import time
 import random
 from typing import List, Dict, Any
 
-from db import get_session
-from models import Memecoin
+from backend.db import get_session
+from backend.models import Memecoin
 
 
 def generate_candidate(symbol: str) -> Dict[str, Any]:

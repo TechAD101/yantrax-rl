@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.ai_firm.swarms.investment_swarm import investment_swarm
+from backend.app.ai_firm.swarms.investment_swarm import investment_swarm
 
 router = APIRouter()
 

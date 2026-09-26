@@ -116,3 +116,13 @@ class OracleService:
             wisdom=f"The Oracle is silent. Reason: {error}",
             timestamp=datetime.now().isoformat()
         )
+
+# Global service instance
+_oracle_service = None
+
+def get_oracle_service() -> OracleService:
+    """Get or create the global OracleService instance."""
+    global _oracle_service
+    if _oracle_service is None:
+        _oracle_service = OracleService()
+    return _oracle_service

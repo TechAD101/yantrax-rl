@@ -28,7 +28,7 @@ class ServiceRegistry:
         
         # Initialize Perplexity (if configured)
         try:
-            from services.perplexity_intelligence import get_perplexity_service
+            from backend.services.perplexity_intelligence import get_perplexity_service
             self.services['perplexity'] = get_perplexity_service()
             logger.info("✓ Perplexity Service registered")
         except Exception as e:
@@ -37,7 +37,7 @@ class ServiceRegistry:
 
         # Initialize Knowledge Base
         try:
-            from services.knowledge_base_service import get_knowledge_base
+            from backend.services.knowledge_base_service import get_knowledge_base
             self.services['kb'] = get_knowledge_base()
             logger.info("✓ Knowledge Base registered")
         except Exception as e:
@@ -46,7 +46,7 @@ class ServiceRegistry:
 
         # Initialize Trade Validator
         try:
-            from services.trade_validator import get_trade_validator
+            from backend.services.trade_validator import get_trade_validator
             self.services['trade_validator'] = get_trade_validator()
             logger.info("✓ Trade Validator registered")
         except Exception as e:

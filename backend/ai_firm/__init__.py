@@ -5,8 +5,8 @@ and advanced coordination capabilities.
 """
 
 # Core AI Firm Components (implemented)
-from .ceo import AutonomousCEO, CEOPersonality, CEODecision
-from .agent_manager import AgentManager, Agent, AgentDecision
+from backend.ai_firm.ceo import AutonomousCEO, CEOPersonality, CEODecision
+from backend.ai_firm.agent_manager import AgentManager, Agent, AgentDecision
 
 # Optional components (graceful import handling)
 try:

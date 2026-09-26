@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from ..base_persona import PersonaAgent, PersonaArchetype, PersonaVote, PersonaAnalysis, VoteType
+from backend.ai_agents.base_persona import PersonaAgent, PersonaArchetype, PersonaVote, PersonaAnalysis, VoteType
 
 class DegenAuditorAgent(PersonaAgent):
     """Degen Auditor persona - Risk management, checks speculative excess"""

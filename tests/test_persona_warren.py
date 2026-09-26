@@ -3,10 +3,10 @@ import os
 import unittest
 
 # Setup sys.path to include backend
-sys.path.append(os.path.join(os.getcwd(), 'backend'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from ai_agents.personas.warren import WarrenAgent
-from ai_agents.base_persona import VoteType, PersonaAnalysis, PersonaVote
+from backend.ai_agents.personas.warren import WarrenAgent
+from backend.ai_agents.base_persona import VoteType, PersonaAnalysis, PersonaVote
 
 class TestWarrenAgent(unittest.TestCase):
     def setUp(self):

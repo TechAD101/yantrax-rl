@@ -1,5 +1,5 @@
 import services.market_data_service_v2 as msvc
-from services.market_data_service_v2 import MarketDataConfig, MarketDataService
+from backend.services.market_data_service_v2 import MarketDataConfig, MarketDataService
 
 
 class DummyResp:

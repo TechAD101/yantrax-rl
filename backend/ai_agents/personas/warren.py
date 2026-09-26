@@ -11,7 +11,7 @@ from typing import Dict, Any
 from dataclasses import dataclass
 import json
 
-from ..base_persona import PersonaAgent, PersonaArchetype, VoteType, PersonaVote, PersonaAnalysis
+from backend.ai_agents.base_persona import PersonaAgent, PersonaArchetype, VoteType, PersonaVote, PersonaAnalysis
 
 @dataclass
 class WarrenPersonality:

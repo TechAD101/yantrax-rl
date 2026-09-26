@@ -15,7 +15,7 @@ import os
 # Add backend directory to path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from services.knowledge_base_service import get_knowledge_base
+from backend.services.knowledge_base_service import get_knowledge_base
 
 
 # ==================== WARREN BUFFETT WISDOM ====================

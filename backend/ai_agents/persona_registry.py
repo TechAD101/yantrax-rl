@@ -5,7 +5,7 @@ Provides persona discovery, instantiation, and management.
 """
 
 from typing import Dict, List, Optional, Any
-from ai_agents.base_persona import PersonaAgent, PersonaArchetype
+from backend.ai_agents.base_persona import PersonaAgent, PersonaArchetype
 import logging
 
 
@@ -27,12 +27,12 @@ class PersonaRegistry:
         """Initialize all available personas"""
         # 1. CORE PERSONAS (Explicitly defined)
         persona_configs = [
-            ("Warren", "ai_agents.personas.warren", "WarrenAgent"),
-            ("Cathie", "ai_agents.personas.cathie", "CathieAgent"),
-            ("The Ghost", "ai_agents.personas.the_ghost", "TheGhostAgent"),
-            ("Macro Monk", "ai_agents.personas.macro_monk", "MacroMonkAgent"),
-            ("Quant", "ai_agents.personas.quant", "QuantAgent"),
-            ("Degen Auditor", "ai_agents.personas.degen_auditor", "DegenAuditorAgent")
+            ("Warren", "backend.ai_agents.personas.warren", "WarrenAgent"),
+            ("Cathie", "backend.ai_agents.personas.cathie", "CathieAgent"),
+            ("The Ghost", "backend.ai_agents.personas.the_ghost", "TheGhostAgent"),
+            ("Macro Monk", "backend.ai_agents.personas.macro_monk", "MacroMonkAgent"),
+            ("Quant", "backend.ai_agents.personas.quant", "QuantAgent"),
+            ("Degen Auditor", "backend.ai_agents.personas.degen_auditor", "DegenAuditorAgent")
         ]
 
         for display_name, module_path, class_name in persona_configs:
@@ -47,7 +47,7 @@ class PersonaRegistry:
                 self.logger.warning(f"Failed to register {display_name} class: {e}. Falling back to placeholder.")
 
         # 2. SUPPLEMENTARY PERSONAS (Placeholders for 20+ vision)
-        from ai_agents.base_agent import BaseAgent
+        from backend.ai_agents.base_agent import BaseAgent
         supplementary_configs = [
             ("TradeExecutor", PersonaArchetype.SYSTEMATIC),
             ("NewsAggregator", PersonaArchetype.MACRO),

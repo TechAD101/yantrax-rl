@@ -15,7 +15,7 @@ class User(Base):
     email = Column(String(128), nullable=False, unique=True)
     password_hash = Column(String(256), nullable=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    
+
     __table_args__ = (
         Index('idx_user_username', 'username'),
         Index('idx_user_email', 'email'),
@@ -42,7 +42,7 @@ class JournalEntry(Base):
     balance = Column(Float, nullable=True)
     notes = Column(Text, nullable=True)
     confidence = Column(Float, nullable=True)
-    
+
     user = relationship('User', backref='journal_entries')
     portfolio = relationship('Portfolio', backref='journal_entries')
 
@@ -143,7 +143,7 @@ class Memecoin(Base):
     score = Column(Float, nullable=False, default=0.0)
     meta = Column(JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    
+
     # Relationships
     positions = relationship(
         'PortfolioPosition',
@@ -172,7 +172,7 @@ class PortfolioPosition(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     portfolio = relationship('Portfolio', back_populates='positions')
-    
+
     __table_args__ = (
         Index('idx_position_portfolio', 'portfolio_id'),
         Index('idx_position_symbol', 'symbol'),
@@ -203,9 +203,9 @@ class Order(Base):
     meta = Column(JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     executed_at = Column(DateTime, nullable=True)
-    
+
     portfolio = relationship('Portfolio', backref='orders')
-    
+
     __table_args__ = (
         Index('idx_order_portfolio', 'portfolio_id'),
         Index('idx_order_symbol', 'symbol'),
@@ -238,7 +238,7 @@ class RawMarketData(Base):
     timestamp = Column(DateTime(timezone=True), nullable=False)
     retrieved_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     meta = Column(JSON, nullable=True)
-    
+
     __table_args__ = (
         Index('idx_rmd_instrument', 'instrument'),
         Index('idx_rmd_metric', 'metric'),
@@ -270,7 +270,7 @@ class AuditLog(Base):
     fallback_level = Column(Integer, default=0)
     trust_contrib = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
-    
+
     datapoint = relationship('RawMarketData', backref='audit_logs')
 
     def to_dict(self) -> Dict[str, Any]:
@@ -284,4 +284,221 @@ class AuditLog(Base):
             'fallback_level': self.fallback_level,
             'trust_contrib': self.trust_contrib,
             'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+# -------------------- Trade History (Outcome Tracking) --------------------
+class TradeHistory(Base):
+    """Complete trade history with outcome attribution."""
+    __tablename__ = 'trade_history'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    decision_id = Column(String(64), nullable=False, index=True)
+    outcome_id = Column(String(64), nullable=False, index=True)
+    order_id = Column(Integer, ForeignKey('orders.id'), nullable=True)
+    symbol = Column(String(32), nullable=False)
+    action = Column(String(16), nullable=False)  # BUY, SELL, HOLD
+    quantity = Column(Float, nullable=False)
+    price = Column(Float, nullable=False)
+    pnl = Column(Float, nullable=True)
+    commission = Column(Float, nullable=True, default=0.0)
+    slippage = Column(Float, nullable=True, default=0.0)
+    timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)
+    meta = Column(JSON, nullable=True)  # Full attribution data
+
+    order = relationship('Order')
+
+    __table_args__ = (
+        Index('idx_trade_decision', 'decision_id'),
+        Index('idx_trade_outcome', 'outcome_id'),
+        Index('idx_trade_symbol', 'symbol'),
+        Index('idx_trade_timestamp', 'timestamp'),
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'decision_id': self.decision_id,
+            'outcome_id': self.outcome_id,
+            'order_id': self.order_id,
+            'symbol': self.symbol,
+            'action': self.action,
+            'quantity': self.quantity,
+            'price': self.price,
+            'pnl': self.pnl,
+            'commission': self.commission,
+            'slippage': self.slippage,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'meta': self.meta or {},
+        }
+
+
+# -------------------- Paper Position Model ---------------------
+class PaperPosition(Base):
+    """Paper trading position with explicit entry/exit lifecycle."""
+    __tablename__ = 'paper_positions'
+
+    id = Column(String(64), primary_key=True)  # e.g., 'pos_abc123'
+    decision_id = Column(String(64), nullable=False, index=True)  # Canonical decision_id
+    symbol = Column(String(32), nullable=False)
+    side = Column(String(16), nullable=False)  # BUY (long), SELL (short)
+    quantity = Column(Float, nullable=False)
+
+    # Entry
+    entry_order_id = Column(Integer, ForeignKey('orders.id'), nullable=True)
+    entry_fill_id = Column(String(64), nullable=True)
+    entry_price = Column(Float, nullable=False)
+    entry_timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    # Exit
+    exit_order_id = Column(Integer, ForeignKey('orders.id'), nullable=True)
+    exit_fill_id = Column(String(64), nullable=True)
+    exit_price = Column(Float, nullable=True)  # NULL until closed
+    exit_timestamp = Column(DateTime, nullable=True)  # NULL until closed
+
+    # P&L
+    realized_pnl = Column(Float, nullable=True)  # NULL until closed
+    commission = Column(Float, nullable=True, default=0.0)
+    slippage = Column(Float, nullable=True, default=0.0)
+    spread_cost = Column(Float, nullable=True, default=0.0)
+
+    # Status
+    status = Column(String(16), nullable=False, default='OPEN')  # OPEN, CLOSED
+
+    # Strategy context
+    strategy_id = Column(String(64), nullable=True)
+    regime = Column(String(32), nullable=True)
+    meta = Column(JSON, nullable=True)
+
+    # Relationships
+    entry_order = relationship('Order', foreign_keys=[entry_order_id])
+    exit_order = relationship('Order', foreign_keys=[exit_order_id])
+
+    __table_args__ = (
+        Index('idx_paper_position_symbol', 'symbol'),
+        Index('idx_paper_position_status', 'status'),
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'decision_id': self.decision_id,
+            'symbol': self.symbol,
+            'side': self.side,
+            'quantity': self.quantity,
+            'entry_order_id': self.entry_order_id,
+            'entry_fill_id': self.entry_fill_id,
+            'entry_price': self.entry_price,
+            'entry_timestamp': self.entry_timestamp.isoformat() if self.entry_timestamp is not None else None,
+            'exit_order_id': self.exit_order_id,
+            'exit_fill_id': self.exit_fill_id,
+            'exit_price': self.exit_price,
+            'exit_timestamp': self.exit_timestamp.isoformat() if self.exit_timestamp is not None else None,
+            'realized_pnl': self.realized_pnl,
+            'commission': self.commission,
+            'slippage': self.slippage,
+            'spread_cost': self.spread_cost,
+            'status': self.status,
+            'strategy_id': self.strategy_id,
+            'regime': self.regime,
+            'meta': self.meta or {},
+        }
+
+
+# -------------------- Outcome Model ---------------------
+class Outcome(Base):
+    __tablename__ = 'outcomes'
+
+    id = Column(String(64), primary_key=True)  # e.g., 'out_abc123'
+    decision_id = Column(String(64), nullable=False, index=True)  # Canonical decision_id
+    position_id = Column(String(64), ForeignKey('paper_positions.id'), nullable=True, index=True)
+    symbol = Column(String(32), nullable=False)
+    action = Column(String(16), nullable=False)  # BUY, SELL
+    quantity = Column(Float, nullable=False)
+    entry_price = Column(Float, nullable=False)
+    exit_price = Column(Float, nullable=False)
+    commission = Column(Float, nullable=True, default=0.0)
+    slippage = Column(Float, nullable=True, default=0.0)
+    spread_cost = Column(Float, nullable=True, default=0.0)
+    pnl = Column(Float, nullable=False)  # Realized P&L
+    timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)  # close timestamp
+
+    # Relationship to position
+    position = relationship('PaperPosition')
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'decision_id': self.decision_id,
+            'position_id': self.position_id,
+            'symbol': self.symbol,
+            'action': self.action,
+            'quantity': self.quantity,
+            'entry_price': self.entry_price,
+            'exit_price': self.exit_price,
+            'commission': self.commission,
+            'slippage': self.slippage,
+            'spread_cost': self.spread_cost,
+            'pnl': self.pnl,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+        }
+
+
+# -------------------- Attribution Model -----------------
+class Attribution(Base):
+    __tablename__ = 'attributions'
+
+    id = Column(String(64), primary_key=True)  # e.g., 'attr_abc123'
+    outcome_id = Column(String(64), ForeignKey('outcomes.id'), nullable=False, index=True)
+    component = Column(String(32), nullable=False)  # e.g., 'strategy', 'agent_warren'
+    value = Column(Float, nullable=False)  # attributed P&L
+    percentage = Column(Float, nullable=False)  # percentage of total P&L
+    confidence = Column(Float, nullable=False)  # confidence in attribution
+    details = Column(JSON, nullable=True)  # attribution metadata
+    timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    # Relationship to outcome
+    outcome = relationship('Outcome')
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'outcome_id': self.outcome_id,
+            'component': self.component,
+            'value': self.value,
+            'percentage': self.percentage,
+            'confidence': self.confidence,
+            'details': self.details or {},
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None
+        }
+
+
+# -------------------- LearningEvent Model ---------------
+class LearningEvent(Base):
+    __tablename__ = 'learning_events'
+
+    id = Column(String(64), primary_key=True)  # e.g., 'learn_abc123'
+    outcome_id = Column(String(64), ForeignKey('outcomes.id'), nullable=False, index=True)
+    event_type = Column(String(32), nullable=False)  # e.g., 'confidence_update'
+    target_type = Column(String(32), nullable=True)  # e.g., 'agent', 'strategy', 'market_regime'
+    target_id = Column(String(64), nullable=True)  # e.g., 'warren', 'institutional', 'bull_market'
+    old_value = Column(String(256), nullable=True)  # stored as string for flexibility
+    new_value = Column(String(256), nullable=True)  # stored as string for flexibility
+    event_metadata = Column(JSON, nullable=True)  # additional metadata (renamed from metadata to avoid SQLAlchemy reserved name)
+    timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    # Relationship to outcome
+    outcome = relationship('Outcome')
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'outcome_id': self.outcome_id,
+            'event_type': self.event_type,
+            'target_type': self.target_type,
+            'target_id': self.target_id,
+            'old_value': self.old_value,
+            'new_value': self.new_value,
+            'metadata': self.event_metadata or {},
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None
         }

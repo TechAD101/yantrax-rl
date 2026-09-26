@@ -10,7 +10,7 @@ from datetime import datetime
 import logging
 import asyncio
 
-from rl_core.env_market_sim import MarketSimEnv
+from backend.rl_core.env_market_sim import MarketSimEnv
 
 logger = logging.getLogger(__name__)
 

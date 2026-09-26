@@ -3,7 +3,7 @@
 import random
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any
-from services.market_data_service import get_latest_price
+from backend.services.market_data_service import get_latest_price
 
 # ML/AI Service Imports
 try:

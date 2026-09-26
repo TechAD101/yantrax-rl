@@ -3,8 +3,8 @@ import random
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
-from db import get_session
-from models import Strategy
+from backend.db import get_session
+from backend.models import Strategy
 
 # Optional KB service - graceful fallback if chromadb not available
 try:

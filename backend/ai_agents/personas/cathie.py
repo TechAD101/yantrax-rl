@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Dict, Any
 from dataclasses import dataclass
 
-from ..base_persona import PersonaAgent, PersonaArchetype, VoteType, PersonaVote, PersonaAnalysis
+from backend.ai_agents.base_persona import PersonaAgent, PersonaArchetype, VoteType, PersonaVote, PersonaAnalysis
 
 @dataclass
 class CathiePersonality:

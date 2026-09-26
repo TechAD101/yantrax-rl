@@ -2,7 +2,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
-from services.logger_service import log_message
+from backend.services.logger_service import log_message
 
 def send_notification(subject, message, to_email):
     """Send email notifications using SMTP (e.g., Gmail)."""

@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from ..base_persona import PersonaAgent, PersonaArchetype, PersonaVote, PersonaAnalysis, VoteType
+from backend.ai_agents.base_persona import PersonaAgent, PersonaArchetype, PersonaVote, PersonaAnalysis, VoteType
 
 class MacroMonkAgent(PersonaAgent):
     """Macro Monk persona - Geopolitical and war economics focus"""

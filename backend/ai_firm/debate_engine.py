@@ -16,7 +16,7 @@ class DebateEngine:
         self.debate_cache = {} # ticker -> {'result': dict, 'expiry': datetime}
         self.cache_ttl_seconds = 30
         
-        from ai_agents.persona_registry import get_persona_registry
+        from backend.ai_agents.persona_registry import get_persona_registry
         self.persona_registry = get_persona_registry()
         self.personas = self.persona_registry.get_all_personas()
         

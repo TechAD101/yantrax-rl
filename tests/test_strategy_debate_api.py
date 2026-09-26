@@ -5,9 +5,9 @@ import pytest
 
 # Use in-memory DB for safe tests
 os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from db import init_db
+from backend.db import init_db
 
 
 @pytest.fixture(scope='module', autouse=True)
@@ -18,7 +18,7 @@ def setup_db():
 
 @pytest.fixture
 def client():
-    import main
+    import backend.main as main
     main.app.config['TESTING'] = True
     with main.app.test_client() as client:
         yield client

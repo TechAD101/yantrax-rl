@@ -1,11 +1,14 @@
 import os
 os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
 import sys
+import pytest
 
+# Use in-memory DB for safe tests
 os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from db import init_db
+from backend.db import init_db, get_session
+from backend.models import Memecoin
 
 
 def setup_module(module):
@@ -46,9 +49,9 @@ def test_simulate_trade():
     assert 'quantity' in res
 
 def test_get_top_memecoins_direct():
-    from memecoin_service import get_top_memecoins
-    from db import get_session
-    from models import Memecoin
+    from backend.memecoin_service import get_top_memecoins
+    from backend.db import get_session
+    from backend.models import Memecoin
 
     session = get_session()
     # Insert test data

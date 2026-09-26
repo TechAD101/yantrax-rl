@@ -8,8 +8,8 @@ import uuid
 import numpy as np
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from services.knowledge_base_service import get_knowledge_base
-from services.oracle_service import OracleService, OracleInsight
+from backend.services.knowledge_base_service import get_knowledge_base
+from backend.services.oracle_service import OracleService, OracleInsight
 
 class Agent:
     """Lightweight Agent representation used by the package API.
@@ -184,97 +184,101 @@ class AgentManager:
         return agents
     
     def conduct_agent_voting(self, context: Dict[str, Any], expert_opinions: Dict[str, str] = None) -> Dict[str, Any]:
-        """Conduct weighted voting across all agents
-        
-        Args:
-            context: Market data and context
-            expert_opinions: Optional dict of {agent_name: signal} from complex personas (e.g. Warren)
-        """
-        vote_tally = {}
-        total_weight = 0
-        participating_agents = []
-        
-        # Include all enhanced agents in voting
-        for agent_name, agent_data in self.enhanced_agents.items():
-            # Generate signal based on agent specialty and confidence
-            if expert_opinions and agent_name in expert_opinions:
-                signal = expert_opinions[agent_name]
-            else:
-                signal = self._generate_agent_signal(agent_name, agent_data, context)
-            weight = self._get_vote_weight(agent_data['role']) * agent_data['confidence']
-            
-            if signal not in vote_tally:
-                vote_tally[signal] = 0
-                
-            vote_tally[signal] += weight
-            total_weight += weight
-            
-            participating_agents.append({
-                'name': agent_name,
-                'signal': signal,
-                'confidence': agent_data['confidence'],
-                'weight': weight,
-                'department': agent_data['department']
-            })
-        
-        # Determine winning signal
-        divine_doubt_triggered = False
-        oracle_wisdom = None
-        
-        if vote_tally:
-            winning_signal = max(vote_tally.items(), key=lambda x: x[1])[0]
-            consensus_strength = vote_tally[winning_signal] / total_weight if total_weight > 0 else 0
-            
-            # DIVINE DOUBT PROTOCOL
-            # If consensus is too high (>90%), The Ghost injects doubt
-            if consensus_strength > 0.9 and 'the_ghost' in self.enhanced_agents:
-                self.logger.info("👻 Divine Doubt triggered! Consensus too high (%s)", consensus_strength)
-                # Pivot: Force a re-evaluation
-                winning_signal = "HOLD_FOR_CLARITY"
-                consensus_strength *= 0.7  # Dilute confidence
-                divine_doubt_triggered = True
+            """Conduct weighted voting across all agents
 
-            # ORACLE WHISPER (Gemini Integration)
-            if self.oracle:
-                import asyncio
-                # Run the async oracle call synchronously for this internal logic
-                # In a high-throughput env, this should be awaited properly, but here we inject wisdom
-                try:
-                    symbol = context.get('symbol', 'MARKET')
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                         # If we are already in an event loop, we might need a different strategy or just await it higher up
-                         # For now, we'll assume this can be awaited or run
-                         pass
-                    else:
-                        oracle_insight = asyncio.run(self.oracle.get_divine_whisper(symbol, context, consensus_strength))
-                        if oracle_insight:
-                            oracle_wisdom = {
-                                'perspective': oracle_insight.perspective,
-                                'wisdom': oracle_insight.wisdom,
-                                'paradox': oracle_insight.paradox,
-                                'direction': oracle_insight.direction
-                            }
-                except Exception as e:
-                    self.logger.error(f"Oracle integration error: {e}")
-        else:
-            winning_signal = 'HOLD'
-            consensus_strength = 0.5
-        
-        voting_result = {
-            'winning_signal': winning_signal,
-            'consensus_strength': round(consensus_strength, 3),
-            'vote_distribution': {k: round(v/total_weight, 3) for k, v in vote_tally.items()} if total_weight > 0 else {},
-            'participating_agents': len(participating_agents),
-            'total_weight': round(total_weight, 2),
-            'session_id': str(uuid.uuid4()),
-            'timestamp': datetime.now().isoformat(),
-            'divine_doubt_applied': divine_doubt_triggered,
-            'oracle_wisdom': oracle_wisdom
-        }
-        
-        self.voting_sessions.append(voting_result)
-        return voting_result
+            Args:
+                context: Market data and context
+                expert_opinions: Optional dict of {agent_name: signal} from complex personas (e.g. Warren)
+            """
+            vote_tally = {}
+            total_weight = 0
+            participating_agents = []
+
+            # Include all enhanced agents in voting
+            for agent_name, agent_data in self.enhanced_agents.items():
+                # Generate signal based on agent specialty and confidence
+                if expert_opinions and agent_name in expert_opinions:
+                    signal = expert_opinions[agent_name]
+                else:
+                    signal = self._generate_agent_signal(agent_name, agent_data, context)
+                weight = self._get_vote_weight(agent_data['role']) * agent_data['confidence']
+
+                if signal not in vote_tally:
+                    vote_tally[signal] = 0
+
+                vote_tally[signal] += weight
+                total_weight += weight
+
+                participating_agents.append({
+                    'name': agent_name,
+                    'signal': signal,
+                    'confidence': agent_data['confidence'],
+                    'weight': weight,
+                    'department': agent_data['department'],
+                    'role': agent_data['role'],
+                    'specialty': agent_data['specialty'],
+                    'persona': agent_data.get('persona', False)
+                })
+
+            # Determine winning signal
+            divine_doubt_triggered = False
+            oracle_wisdom = None
+
+            if vote_tally:
+                winning_signal = max(vote_tally.items(), key=lambda x: x[1])[0]
+                consensus_strength = vote_tally[winning_signal] / total_weight if total_weight > 0 else 0
+
+                # DIVINE DOUBT PROTOCOL
+                # If consensus is too high (>90%), The Ghost injects doubt
+                if consensus_strength > 0.9 and 'the_ghost' in self.enhanced_agents:
+                    self.logger.info("👻 Divine Doubt triggered! Consensus too high (%s)", consensus_strength)
+                    # Pivot: Force a re-evaluation
+                    winning_signal = "HOLD_FOR_CLARITY"
+                    consensus_strength *= 0.7  # Dilute confidence
+                    divine_doubt_triggered = True
+
+                # ORACLE WHISPER (Gemini Integration)
+                if self.oracle:
+                    import asyncio
+                    # Run the async oracle call synchronously for this internal logic
+                    # In a high-throughput env, this should be awaited properly, but here we inject wisdom
+                    try:
+                        symbol = context.get('symbol', 'MARKET')
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                             # If we are already in an event loop, we might need a different strategy or just await it higher up
+                             # For now, we'll assume this can be awaited or run
+                             pass
+                        else:
+                            oracle_insight = asyncio.run(self.oracle.get_divine_whisper(symbol, context, consensus_strength))
+                            if oracle_insight:
+                                oracle_wisdom = {
+                                    'perspective': oracle_insight.perspective,
+                                    'wisdom': oracle_insight.wisdom,
+                                    'paradox': oracle_insight.paradox,
+                                    'direction': oracle_insight.direction
+                                }
+                    except Exception as e:
+                        self.logger.error(f"Oracle integration error: {e}")
+            else:
+                winning_signal = 'HOLD'
+                consensus_strength = 0.5
+
+            voting_result = {
+                'winning_signal': winning_signal,
+                'consensus_strength': round(consensus_strength, 3),
+                'vote_distribution': {k: round(v/total_weight, 3) for k, v in vote_tally.items()} if total_weight > 0 else {},
+                'participating_agents': len(participating_agents),
+                'total_weight': round(total_weight, 2),
+                'session_id': str(uuid.uuid4()),
+                'timestamp': datetime.now().isoformat(),
+                'divine_doubt_applied': divine_doubt_triggered,
+                'oracle_wisdom': oracle_wisdom,
+                'agent_votes': participating_agents,  # Include individual agent votes
+            }
+
+            self.voting_sessions.append(voting_result)
+            return voting_result
     
     def _generate_agent_signal(self, agent_name: str, agent_data: Dict, context: Dict = None) -> str:
         """Generate trading signal based on agent specialty and real data + KB context"""
@@ -406,6 +410,8 @@ class AgentManager:
     
     def _get_vote_weight(self, role: str) -> float:
         """Get voting weight based on agent role"""
+        if role is None:
+            return 0.5
         role_weights = {
             'director': 1.0,
             'senior': 0.8,

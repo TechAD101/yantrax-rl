@@ -6,8 +6,8 @@ from typing import Optional, Dict, Any
 import hashlib
 import hmac
 
-from db import get_session
-from models import User
+from backend.db import get_session
+from backend.models import User
 
 
 SECRET_KEY = os.getenv('SECRET_KEY')

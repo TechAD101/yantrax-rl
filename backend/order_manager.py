@@ -1,9 +1,9 @@
 from datetime import datetime
 from typing import Dict, Any, List
 
-from db import get_session
-from models import Order
-from memecoin_service import simulate_trade
+from backend.db import get_session
+from backend.models import Order
+from backend.memecoin_service import simulate_trade
 
 
 def create_order(symbol: str, usd: float) -> Dict[str, Any]:

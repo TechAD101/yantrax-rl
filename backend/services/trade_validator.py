@@ -2,8 +2,8 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import logging
 import uuid
-from services.market_data_service_waterfall import get_waterfall_service
-from services.knowledge_base import get_knowledge_base
+from backend.services.market_data_service_waterfall import get_waterfall_service
+from backend.services.knowledge_base import get_knowledge_base
 
 """
 Trade Validation Engine

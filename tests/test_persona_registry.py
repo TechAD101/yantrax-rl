@@ -4,10 +4,10 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 
 # Make sure backend is in sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from ai_agents.persona_registry import PersonaRegistry, get_persona_registry
-from ai_agents.base_persona import PersonaArchetype, VoteType, PersonaVote
+from backend.ai_agents.persona_registry import PersonaRegistry, get_persona_registry
+from backend.ai_agents.base_persona import PersonaArchetype, VoteType, PersonaVote
 
 def test_registry_initialization():
     registry = PersonaRegistry()
