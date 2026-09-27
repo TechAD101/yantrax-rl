@@ -24,39 +24,58 @@ class KnowledgeBaseService:
     - strategy_performance: Historical trade outcomes and learnings
     - market_insights: Market patterns, regimes, and playbooks
     """
-    
-    def __init__(self, persist_directory: str = "./chroma_db"):
+
+    def __init__(self, persist_directory: str = "./chroma_db", lazy_init: bool = False):
         """
         Initialize ChromaDB client and collections
         
         Args:
             persist_directory: Local directory for ChromaDB persistence
+            lazy_init: If True, defer ChromaDB client/collection initialization until first use
         """
         self.logger = logging.getLogger(__name__)
         self.persist_directory = persist_directory
-        
+        self._lazy_init = lazy_init
+        self._initialized = False
+        self.client = None
+        self.collections = {}
+
         # Create persist directory if it doesn't exist
         os.makedirs(persist_directory, exist_ok=True)
+
+        if not lazy_init:
+            self._initialize()
+
+    def _initialize(self):
+        """Initialize ChromaDB client and collections. Safe to call multiple times."""
+        if self._initialized:
+            return
         
         # Initialize ChromaDB client with telemetry disabled
         try:
             from chromadb.config import Settings
             self.client = chromadb.PersistentClient(
-                path=persist_directory,
+                path=self.persist_directory,
                 settings=Settings(anonymized_telemetry=False)
             )
-            self.logger.info(f"✓ ChromaDB client initialized at {persist_directory} (Telemetry Disabled)")
+            self.logger.info(f"✓ ChromaDB client initialized at {self.persist_directory} (Telemetry Disabled)")
         except Exception as e:
             self.logger.error(f"Failed to initialize ChromaDB: {e}")
             raise
-        
-        self.collections = {}
+
         self._initialize_collections()
-        
+
         # Seed if empty
         if self.collections['investor_wisdom'].count() == 0:
             self._seed_wisdom()
-    
+
+        self._initialized = True
+
+    def _ensure_initialized(self):
+        """Ensure ChromaDB is initialized before operations."""
+        if not self._initialized:
+            self._initialize()
+
     def _seed_wisdom(self):
         """Seed the KB with foundational investment lore"""
         wisdom = [
@@ -139,7 +158,7 @@ class KnowledgeBaseService:
                 "archetype": ["ghost"]
             }
         ]
-        
+
         for item in wisdom:
             self.store_wisdom(
                 content=item["content"],
@@ -157,29 +176,29 @@ class KnowledgeBaseService:
                 metadata={"description": "Legendary investor quotes and wisdom"}
             )
             self.logger.info("✓ investor_wisdom collection ready")
-            
+
             self.collections['strategy_performance'] = self.client.get_or_create_collection(
                 name="strategy_performance",
                 metadata={"description": "Historical strategy outcomes and learnings"}
             )
             self.logger.info("✓ strategy_performance collection ready")
-            
+
             self.collections['market_insights'] = self.client.get_or_create_collection(
                 name="market_insights",
                 metadata={"description": "Market patterns, regimes, and playbooks"}
             )
             self.logger.info("✓ market_insights collection ready")
-            
+
         except Exception as e:
             self.logger.error(f"Failed to initialize collections: {e}")
             raise
-    
-    def store_wisdom(self, content: str, source: str, tags: List[str], 
+
+    def store_wisdom(self, content: str, source: str, tags: List[str],
                     archetype: List[str], confidence: float = 0.9,
                     **metadata) -> str:
         """
         Store wisdom item in investor_wisdom collection
-        
+
         Args:
             content: The wisdom/quote text
             source: Source attribution (e.g., "Warren Buffett")
@@ -187,13 +206,14 @@ class KnowledgeBaseService:
             archetype: Relevant persona archetypes (e.g., ["warren", "quant"])
             confidence: Confidence score (0-1)
             **metadata: Additional metadata (book, chapter, etc.)
-        
+
         Returns:
             Document ID
         """
+        self._ensure_initialized()
         collection = self.collections['investor_wisdom']
         doc_id = f"wisdom_{collection.count() + 1:04d}"
-        
+
         try:
             collection.add(
                 documents=[content],
@@ -212,30 +232,31 @@ class KnowledgeBaseService:
         except Exception as e:
             self.logger.error(f"Failed to store wisdom: {e}")
             raise
-    
-    def store_strategy_result(self, strategy_name: str, outcome: str, 
+
+    def store_strategy_result(self, strategy_name: str, outcome: str,
                              context: Dict[str, Any], lessons: str,
                              **metadata) -> str:
         """
         Store strategy performance result
-        
+
         Args:
             strategy_name: Name of strategy (e.g., "momentum_scalp")
             outcome: Result (e.g., "success", "failure", "learning")
             context: Market context dict
             lessons: Key learnings from this execution
             **metadata: Additional metadata
-        
+
         Returns:
             Document ID
         """
+        self._ensure_initialized()
         collection = self.collections['strategy_performance']
         doc_id = f"strategy_{collection.count() + 1:04d}"
-        
+
         try:
             # Create searchable content
             content = f"Strategy: {strategy_name}. Outcome: {outcome}. Lessons: {lessons}"
-            
+
             collection.add(
                 documents=[content],
                 metadatas=[{
@@ -253,38 +274,39 @@ class KnowledgeBaseService:
         except Exception as e:
             self.logger.error(f"Failed to store strategy result: {e}")
             raise
-    
+
     def query_wisdom(self, topic: str, archetype_filter: Optional[str] = None,
                     max_results: int = 5) -> List[Dict[str, Any]]:
         """
         Query wisdom using semantic search
-        
+
         Args:
             topic: Search query (e.g., "How to handle market crash")
             archetype_filter: Filter by persona archetype (e.g., "warren")
             max_results: Maximum number of results
-        
+
         Returns:
             List of wisdom items with relevance scores
         """
+        self._ensure_initialized()
         collection = self.collections['investor_wisdom']
-        
+
         if collection.count() == 0:
             self.logger.warning("investor_wisdom collection is empty")
             return []
-        
+
         try:
             # Build where filter for archetype
             where_filter = None
             if archetype_filter:
                 where_filter = {"archetype": {"$contains": archetype_filter}}
-            
+
             results = collection.query(
                 query_texts=[topic],
                 n_results=min(max_results, collection.count()),
                 where=where_filter
             )
-            
+
             # Format results
             wisdom_results = []
             if results['documents'] and len(results['documents'][0]) > 0:
@@ -299,45 +321,46 @@ class KnowledgeBaseService:
                         'confidence': metadata.get('confidence', 0.9),
                         'id': results['ids'][0][i]
                     })
-            
+
             self.logger.info(f"✓ Found {len(wisdom_results)} wisdom items for: {topic[:50]}")
             return wisdom_results
-            
+
         except Exception as e:
             self.logger.error(f"Failed to query wisdom: {e}")
             return []
-    
-    def query_strategy_performance(self, strategy_name: str, 
+
+    def query_strategy_performance(self, strategy_name: str,
                                    market_condition: Optional[str] = None,
                                    max_results: int = 10) -> List[Dict[str, Any]]:
         """
         Query historical strategy performance
-        
+
         Args:
             strategy_name: Strategy to query
             market_condition: Optional market trend filter
             max_results: Maximum results
-        
+
         Returns:
             List of historical performance records
         """
+        self._ensure_initialized()
         collection = self.collections['strategy_performance']
-        
+
         if collection.count() == 0:
             self.logger.warning("strategy_performance collection is empty")
             return []
-        
+
         try:
             where_filter = {"strategy_name": strategy_name}
             if market_condition:
                 where_filter["market_trend"] = market_condition
-            
+
             results = collection.query(
                 query_texts=[f"Performance of {strategy_name}"],
                 n_results=min(max_results, collection.count()),
                 where=where_filter
             )
-            
+
             # Format results
             performance_results = []
             if results['documents'] and len(results['documents'][0]) > 0:
@@ -351,37 +374,38 @@ class KnowledgeBaseService:
                         'timestamp': metadata.get('timestamp'),
                         'id': results['ids'][0][i]
                     })
-            
+
             return performance_results
-            
+
         except Exception as e:
             self.logger.error(f"Failed to query strategy performance: {e}")
             return []
-    
-    def get_persona_context(self, persona_name: str, symbol: str, 
+
+    def get_persona_context(self, persona_name: str, symbol: str,
                            market_context: Dict[str, Any]) -> Dict[str, Any]:
         """
         Get relevant knowledge context for a persona's analysis
-        
+
         Args:
             persona_name: Persona archetype (e.g., "warren")
             symbol: Stock symbol
             market_context: Current market conditions
-        
+
         Returns:
             Context dict with relevant wisdom and insights
         """
+        self._ensure_initialized()
         # Build search query
         market_trend = market_context.get('market_trend', '')
         query = f"{symbol} investing strategy {market_trend} market"
-        
+
         # Query wisdom for this persona
         wisdom = self.query_wisdom(
             topic=query,
             archetype_filter=persona_name,
             max_results=3
         )
-        
+
         return {
             'persona': persona_name,
             'symbol': symbol,
@@ -389,36 +413,37 @@ class KnowledgeBaseService:
             'context_enriched': len(wisdom) > 0,
             'wisdom_count': len(wisdom)
         }
-    
+
     async def autonomous_wisdom_ingestion(self, perplexity_service) -> Dict[str, Any]:
         """
         Autonomously fetch and ingest new market wisdom using Perplexity AI.
-        
+
         Fetches current market regimes, legendary analyst takes, and regime-specific playbooks.
         """
+        self._ensure_initialized()
         if not perplexity_service:
             return {"success": False, "error": "Perplexity service not provided"}
-            
+
         topics = [
             "What is the current global market regime and what is the best investment playbook for it?",
             "Recent contrarian investment insights from legendary hedge fund managers",
             "Hidden risks in the current technology and AI sector according to top analysts",
             "Ancient philosophical wisdom applied to modern algorithmic trading"
         ]
-        
+
         ingested_count = 0
         results = []
-        
+
         for topic in topics:
             try:
                 # Use Perplexity Search for real-time/deep insights
                 search_data = await perplexity_service.search_financial_news(topic, max_results=3)
-                
+
                 if search_data.get('results'):
                     for news_item in search_data['results']:
                         content = f"{news_item['title']}: {news_item['summary'][:500]}"
                         source = news_item.get('source', 'Perplexity Insight')
-                        
+
                         # Store in KB
                         doc_id = self.store_wisdom(
                             content=content,
@@ -432,7 +457,7 @@ class KnowledgeBaseService:
                         results.append(doc_id)
             except Exception as e:
                 self.logger.error(f"Autonomous ingestion error for topic '{topic}': {e}")
-                
+
         self.logger.info(f"🧠 Autonomous Ingestion complete. Added {ingested_count} items to memory.")
         return {
             "success": True,
@@ -443,6 +468,7 @@ class KnowledgeBaseService:
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get knowledge base statistics"""
+        self._ensure_initialized()
         return {
             'investor_wisdom_count': self.collections['investor_wisdom'].count(),
             'strategy_performance_count': self.collections['strategy_performance'].count(),
@@ -453,9 +479,10 @@ class KnowledgeBaseService:
                 self.collections['market_insights'].count()
             ])
         }
-    
+
     def reset_collection(self, collection_name: str):
         """Reset a specific collection (for testing/maintenance)"""
+        self._ensure_initialized()
         if collection_name in self.collections:
             self.client.delete_collection(collection_name)
             self._initialize_collections()
@@ -466,9 +493,12 @@ class KnowledgeBaseService:
 _knowledge_base = None
 
 
-def get_knowledge_base(persist_directory: str = "./chroma_db") -> KnowledgeBaseService:
+def get_knowledge_base(persist_directory: str = "./chroma_db", lazy_init: bool = False) -> KnowledgeBaseService:
     """Get or create the global KnowledgeBaseService singleton"""
     global _knowledge_base
     if _knowledge_base is None:
-        _knowledge_base = KnowledgeBaseService(persist_directory)
+        _knowledge_base = KnowledgeBaseService(persist_directory, lazy_init=lazy_init)
+    elif lazy_init and not _knowledge_base._initialized:
+        # If existing instance was lazy and not initialized, initialize it now
+        _knowledge_base._initialize()
     return _knowledge_base
