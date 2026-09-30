@@ -12,7 +12,7 @@ Supports:
 
 Design:
   - Pure Python + numpy/pandas — no external data calls during backtest
-  - Uses historical data from FMP (cached) or synthetic data if unavailable
+  - Uses deterministic synthetic data until a supported historical-data adapter is wired
   - Returns structured results for frontend charts
 """
 
@@ -37,41 +37,13 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────
 
 def _fetch_historical_prices(symbol: str, days: int = 365) -> List[Dict[str, Any]]:
-    """Fetch OHLCV from FMP. Falls back to synthetic data."""
-    try:
-        import requests
-        fmp_key = os.getenv("FMP_API_KEY", "")
-        if not fmp_key:
-            raise ValueError("No FMP key")
-        url = (
-            f"https://financialmodelingprep.com/api/v3/historical-price-full/"
-            f"{symbol.upper()}?timeseries={days}&apikey={fmp_key}"
-        )
-        resp = requests.get(url, timeout=8)
-        if resp.ok:
-            data = resp.json().get("historical", [])
-            if data:
-                # FMP returns newest first — reverse to chronological
-                data = list(reversed(data))
-                return [
-                    {
-                        "date":   d["date"],
-                        "open":   float(d.get("open", 0)),
-                        "high":   float(d.get("high", 0)),
-                        "low":    float(d.get("low", 0)),
-                        "close":  float(d.get("close", 0)),
-                        "volume": int(d.get("volume", 0)),
-                    }
-                    for d in data
-                ]
-    except Exception as e:
-        logger.warning(f"FMP historical fetch failed for {symbol}: {e}")
+    """Generate deterministic synthetic OHLCV for backtesting.
 
-    # Synthetic fallback — geometric Brownian motion
-    logger.info(f"Using synthetic price data for {symbol}")
+    Real historical market data will be provided by the supported market-data
+    integration once the historical-data adapter is wired into this service.
+    """
+    logger.info("Using synthetic price data for %s", symbol)
     return _generate_synthetic_prices(symbol, days)
-
-
 def _generate_synthetic_prices(symbol: str, days: int) -> List[Dict[str, Any]]:
     """Generate GBM price series for backtesting when real data is unavailable."""
     random.seed(hash(symbol) % 9999)
@@ -375,7 +347,7 @@ def run_backtest(
         "commission_paid": round(
             sum(t.get("commission", 0) for t in trades), 2
         ),
-        "data_source": "fmp" if "synthetic" not in symbol.lower() else "synthetic",
+        "data_source": "synthetic",
         "timestamp": datetime.now().isoformat(),
     }
 
