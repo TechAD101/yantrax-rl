@@ -152,7 +152,31 @@ class DecisionPipeline:
             # STAGE 6: CEO GOVERNANCE
             # ──────────────────────────────────────────────────────
             ctx = await self._stage_ceo_governance(ctx)
-            
+
+            # Establish the governed trading action before risk/sizing.
+            # CEO workflow categories such as "trading" must not be mistaken
+            # for directional BUY/SELL instructions.
+            if ctx.ceo_decision and ctx.ceo_decision.action in (
+                TradingAction.BUY,
+                TradingAction.SELL,
+                TradingAction.HOLD,
+            ):
+                ctx.final_action = ctx.ceo_decision.action
+            elif ctx.candidate_strategy:
+                ctx.final_action = ctx.candidate_strategy.action
+            else:
+                ctx.final_action = TradingAction.HOLD
+
+            ctx.add_provenance("governed_action", {
+                "action": ctx.final_action.value,
+                "source": "ceo" if ctx.ceo_decision and ctx.ceo_decision.action in (
+                    TradingAction.BUY,
+                    TradingAction.SELL,
+                    TradingAction.HOLD,
+                ) else "candidate_strategy",
+                "ceo_decision_type": ctx.ceo_decision.decision_type if ctx.ceo_decision else None,
+            })
+
             # ──────────────────────────────────────────────────────
             # STAGE 7: PRELIMINARY RISK GOVERNANCE
             # ──────────────────────────────────────────────────────
@@ -631,7 +655,7 @@ class DecisionPipeline:
         # The CEO stage is the authoritative governance decision. Carry that
         # action into the sizing stage so a governed BUY/SELL is not left with
         # the context's default zero-sized position.
-        sizing_action = ctx.ceo_decision.action if ctx.ceo_decision else ctx.candidate_strategy.action
+        sizing_action = ctx.final_action or ctx.candidate_strategy.action
         if sizing_action in (TradingAction.HOLD, TradingAction.ABSTAIN):
             return ctx
 
