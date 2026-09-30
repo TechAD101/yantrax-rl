@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────
-# Data fetch helper (FMP historical)
+# Data fetch helper
 # ─────────────────────────────────────────────────────────────
 
 def _fetch_historical_prices(symbol: str, days: int = 365) -> List[Dict[str, Any]]:
