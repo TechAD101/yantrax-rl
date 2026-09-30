@@ -371,8 +371,15 @@ class InstitutionalStrategyEngine:
             MarketRegime.LIQUIDITY_CRUNCH: 0.8
         }.get(regime, 1.0)
         
-        # Weighted combination
-        confidence = (tech_score * 0.4 + sentiment * 0.3 + fundamental * 0.3) * regime_multiplier
+        # Weighted combination. In a confirmed directional regime, the regime itself
+        # is a material evidence source and should contribute to confidence rather than
+        # being used only as a multiplier.
+        if regime == MarketRegime.BULL_MARKET:
+            confidence = (tech_score * 0.30 + sentiment * 0.30 + fundamental * 0.20 + 0.20) * 1.0
+        elif regime == MarketRegime.BEAR_MARKET:
+            confidence = (tech_score * 0.30 + sentiment * 0.30 + fundamental * 0.20 + 0.20) * 1.0
+        else:
+            confidence = (tech_score * 0.4 + sentiment * 0.3 + fundamental * 0.3) * regime_multiplier
         
         return np.clip(confidence, 0.0, 1.0)
     
