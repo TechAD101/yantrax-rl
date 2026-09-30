@@ -229,12 +229,11 @@ class AgentManager:
                 consensus_strength = vote_tally[winning_signal] / total_weight if total_weight > 0 else 0
 
                 # DIVINE DOUBT PROTOCOL
-                # If consensus is too high (>90%), The Ghost injects doubt
+                # High consensus is a governance signal, not a trade-direction rewrite.
+                # Preserve the winning signal; downstream governance can inspect
+                # divine_doubt_applied without silently converting BUY/SELL to HOLD.
                 if consensus_strength > 0.9 and 'the_ghost' in self.enhanced_agents:
-                    self.logger.info("👻 Divine Doubt triggered! Consensus too high (%s)", consensus_strength)
-                    # Pivot: Force a re-evaluation
-                    winning_signal = "HOLD_FOR_CLARITY"
-                    consensus_strength *= 0.7  # Dilute confidence
+                    self.logger.info("👻 Divine Doubt triggered! Consensus high (%s)", consensus_strength)
                     divine_doubt_triggered = True
 
                 # ORACLE WHISPER (Gemini Integration)

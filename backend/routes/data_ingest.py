@@ -10,23 +10,27 @@ logger = logging.getLogger(__name__)
 
 data_ingest_bp = Blueprint('data_ingest', __name__)
 
+ALLOWED_MARKET_SOURCES = {"alpaca", "fyers"}
+
 def verify_market_source(instrument: str, metric: str, sources_data: dict, db: Session):
     """
-    sources_data contains the supported provider value (currently Alpaca).
-    Returns validation status, fallback level, and trust contribution
+    Validate market-data provenance against Yantra X's supported entry points.
+    Only Alpaca and FYERS are accepted; legacy/unknown providers are rejected.
     """
     fallback_level = 0
     verification_status = 'ok'
     trust_contrib = 1.0
+
+    unknown_sources = {str(source).lower() for source in sources_data} - ALLOWED_MARKET_SOURCES
+    if unknown_sources:
+        return "unsupported_source", 5, 0.0
 
     values = [float(v) for v in sources_data.values() if v is not None]
     
     if len(values) == 0:
         return 'missing', 5, 0.0
 
-    if len(values) == 0:
-        fallback_level = 5
-    
+
     median_val = np.median(values)
     
     max_variance = 0
@@ -44,7 +48,7 @@ def verify_market_source(instrument: str, metric: str, sources_data: dict, db: S
 def ingest_data():
     """
     Accepts an instrument, metric, provider-value mapping, and optional timestamp.
-    The configured market-data provider is Alpaca; additional providers are not supported.
+    Only Alpaca and FYERS are accepted market-data entry points; exactly one must be supplied per datapoint.
     """
     data = request.json
     instrument = data.get('instrument')
@@ -53,15 +57,31 @@ def ingest_data():
     
     if not instrument or not metric or not sources_data:
         return jsonify({'error': 'bad_request', 'message': 'Missing fields'}), 400
+
+    unknown_sources = {str(source).lower() for source in sources_data} - ALLOWED_MARKET_SOURCES
+    if unknown_sources:
+        return jsonify({
+            'error': 'unsupported_source',
+            'message': f'Only Alpaca and FYERS are supported market-data sources',
+            'sources': sorted(unknown_sources),
+        }), 400
         
     db = get_session()
     try:
         # 1. Validate the configured market-data source
         status, level, trust = verify_market_source(instrument, metric, sources_data, db)
         
-        # 2. Use the supported source value
-        values = [float(v) for v in sources_data.values() if v is not None]
-        final_value = values[0] if values else None
+            # 2. Use the canonical value. A single source is required so provider
+        # precedence is explicit and no legacy/implicit fallback is possible.
+        if len(sources_data) != 1:
+            return jsonify({
+                'error': 'single_source_required',
+                'message': 'Provide exactly one supported market-data source per datapoint',
+            }), 400
+        source_name, source_value = next(iter(sources_data.items()))
+        if source_value is None:
+            return jsonify({'error': 'missing_value', 'message': 'Source value cannot be null'}), 400
+        final_value = float(source_value)
         
         # 3. Store raw datapoint
         timestamp_str = data.get('timestamp')
