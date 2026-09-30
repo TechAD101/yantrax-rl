@@ -512,9 +512,8 @@ class DecisionPipeline:
         return ctx
     
     async def _stage_ceo_governance(self, ctx: DecisionContext) -> DecisionContext:
-        """Run CEO governance decision."""
+        """Run CEO governance without conflating workflow type and trade direction."""
         try:
-            # Build context for CEO
             ceo_context = {
                 'type': 'strategic_trading_decision',
                 'symbol': ctx.symbol,
@@ -529,23 +528,24 @@ class DecisionPipeline:
                 'portfolio_state': ctx.portfolio_state.to_dict() if ctx.portfolio_state else {},
                 'timestamp': datetime.now().isoformat(),
             }
-            
-            # CEO decision (async)
+
             ceo_decision = await self.ceo.make_strategic_decision(ceo_context)
-            
-            # Map CEO decision to canonical format
-            action_map = {
-                'BUY': TradingAction.BUY,
-                'SELL': TradingAction.SELL,
-                'HOLD': TradingAction.HOLD,
-                'defensive_lockdown': TradingAction.HOLD,
-            }
-            
+
+            # The current CEO API returns a workflow decision_type. Direction
+            # remains the candidate strategy action unless the CEO explicitly
+            # returns a directional type or defensive lockdown.
+            if ceo_decision.decision_type in ('BUY', 'SELL', 'HOLD'):
+                action = TradingAction(ceo_decision.decision_type)
+            elif ceo_decision.decision_type == 'defensive_lockdown':
+                action = TradingAction.HOLD
+            else:
+                action = ctx.candidate_strategy.action if ctx.candidate_strategy else TradingAction.HOLD
+
             ctx.ceo_decision = CEODecision(
                 decision_id=ceo_decision.id,
                 timestamp=ceo_decision.timestamp,
                 decision_type=ceo_decision.decision_type,
-                action=action_map.get(ceo_decision.decision_type, TradingAction.HOLD),
+                action=action,
                 confidence=ceo_decision.confidence,
                 reasoning=ceo_decision.reasoning,
                 expected_impact=ceo_decision.expected_impact,
@@ -554,15 +554,14 @@ class DecisionPipeline:
                 pain_level=self.ceo._calculate_pain_level(ceo_context),
                 market_mood=self.ceo._determine_market_mood(),
             )
-            
+
             ctx.add_provenance("ceo_governance", {
                 "action": ctx.ceo_decision.action.value,
+                "decision_type": ctx.ceo_decision.decision_type,
                 "confidence": ctx.ceo_decision.confidence,
                 "pain_level": ctx.ceo_decision.pain_level,
-                "ghost_nudge": ctx.ceo_decision.ghost_nudge is not None,
-                "philosophy_veto": ctx.ceo_decision.philosophy_veto,
             })
-            
+
         except Exception as e:
             logger.error(f"CEO governance failed: {e}")
             ctx.ceo_decision = CEODecision(
@@ -578,9 +577,9 @@ class DecisionPipeline:
                 pain_level=0,
                 market_mood="unknown",
             )
-        
+
         return ctx
-    
+
     async def _stage_preliminary_risk(self, ctx: DecisionContext) -> DecisionContext:
         """Run preliminary risk checks (before sizing)."""
         # Build risk state from emotional safeguards
