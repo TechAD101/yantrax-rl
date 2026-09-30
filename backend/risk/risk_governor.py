@@ -487,7 +487,8 @@ class RiskGovernor:
         if not ctx.market_snapshot or not ctx.final_position_size or not ctx.portfolio_state:
             return True, "Insufficient data for stress test", {}
         
-        position_value = ctx.final_position_size * ctx.market_snapshot.price
+        # final_position_size is already dollar notional.
+        position_value = ctx.final_position_size
         portfolio_value = ctx.portfolio_state.total_value
         
         # Stress scenarios
