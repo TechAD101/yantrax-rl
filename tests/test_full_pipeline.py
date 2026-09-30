@@ -62,6 +62,31 @@ class TestMarketData:
         return [{'close': 100.0 + i * 1.0} for i in range(days)]
 
 
+class TestStrategySignalContract(unittest.TestCase):
+    """Regression tests for coherent regime-driven directional signals."""
+
+    def test_bull_regime_with_strong_evidence_produces_buy(self):
+        from backend.services.institutional_strategy_engine import InstitutionalStrategyEngine, MarketRegime
+
+        engine = InstitutionalStrategyEngine()
+        technical = {'signals': {
+            'ema_crossover': 'neutral',
+            'rsi': 'neutral',
+            'bollinger': 'neutral',
+            'macd': 'neutral',
+        }}
+
+        action, reasoning = engine._determine_action(
+            technical=technical,
+            sentiment=0.75,
+            fundamental=0.80,
+            regime=MarketRegime.BULL_MARKET,
+        )
+
+        self.assertEqual(action, 'BUY')
+        self.assertIn('Bull regime', reasoning)
+
+
 class TestFullPipeline(unittest.TestCase):
     """Test the full paper-trade lifecycle from market snapshot to learning."""
 
