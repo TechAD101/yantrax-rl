@@ -86,7 +86,7 @@ def test_fyers_order_payload_and_live_guard():
         "stopPrice": 0,
         "validity": "DAY",
         "disclosedQty": 0,
-        "offlineOrder": "False",
+        "offlineOrder": False,
         "stopLoss": 0,
         "takeProfit": 0,
     }
