@@ -691,7 +691,7 @@ class DecisionPipeline:
     def _finalize_decision(self, ctx: DecisionContext) -> DecisionContext:
         """Determine final action based on all inputs."""
         # Start with CEO decision as baseline
-        if ctx.ceo_decision:
+        if ctx.ceo_decision and ctx.ceo_decision.decision_type in ("BUY", "SELL", "HOLD"):
             ctx.final_action = ctx.ceo_decision.action
             ctx.final_confidence = ctx.ceo_decision.confidence
         elif ctx.candidate_strategy:
