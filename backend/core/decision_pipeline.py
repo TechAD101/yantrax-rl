@@ -540,6 +540,7 @@ class DecisionPipeline:
                 'SELL': TradingAction.SELL,
                 'HOLD': TradingAction.HOLD,
                 'defensive_lockdown': TradingAction.HOLD,
+                'trading': TradingAction.BUY if (ctx.candidate_strategy and ctx.candidate_strategy.action == TradingAction.BUY) else TradingAction.SELL if (ctx.candidate_strategy and ctx.candidate_strategy.action == TradingAction.SELL) else TradingAction.HOLD,
             }
             
             ctx.ceo_decision = CEODecision(
