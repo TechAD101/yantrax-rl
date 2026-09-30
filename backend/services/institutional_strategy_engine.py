@@ -371,15 +371,8 @@ class InstitutionalStrategyEngine:
             MarketRegime.LIQUIDITY_CRUNCH: 0.8
         }.get(regime, 1.0)
         
-        # Weighted combination. In a confirmed directional regime, the regime itself
-        # is a material evidence source and should contribute to confidence rather than
-        # being used only as a multiplier.
-        if regime == MarketRegime.BULL_MARKET:
-            confidence = (tech_score * 0.30 + sentiment * 0.30 + fundamental * 0.20 + 0.20) * 1.0
-        elif regime == MarketRegime.BEAR_MARKET:
-            confidence = (tech_score * 0.30 + sentiment * 0.30 + fundamental * 0.20 + 0.20) * 1.0
-        else:
-            confidence = (tech_score * 0.4 + sentiment * 0.3 + fundamental * 0.3) * regime_multiplier
+        # Weighted combination
+        confidence = (tech_score * 0.4 + sentiment * 0.3 + fundamental * 0.3) * regime_multiplier
         
         return np.clip(confidence, 0.0, 1.0)
     
@@ -396,13 +389,8 @@ class InstitutionalStrategyEngine:
         bullish_count = sum(1 for s in tech_signals.values() if s in ['bullish', 'oversold'])
         bearish_count = sum(1 for s in tech_signals.values() if s in ['bearish', 'overbought'])
         
-        # Strong regime + sentiment + fundamentals are a valid directional signal even
-        # when no single technical indicator has just crossed its threshold.
-        if sentiment > 0.6 and fundamental > 0.6 and regime == MarketRegime.BULL_MARKET and bullish_count >= bearish_count:
-            return "BUY", f"Bull regime with strong sentiment/fundamentals: {bullish_count} vs {bearish_count} technical signals"
-        elif sentiment < 0.4 and fundamental < 0.4 and regime == MarketRegime.BEAR_MARKET and bearish_count >= bullish_count:
-            return "SELL", f"Bear regime with weak sentiment/fundamentals: {bearish_count} vs {bullish_count} technical signals"
-        elif sentiment > 0.6 and fundamental > 0.6 and bullish_count > bearish_count:
+        # Overall trend
+        if sentiment > 0.6 and fundamental > 0.6 and bullish_count > bearish_count:
             return "BUY", f"Bullish consensus: {bullish_count} vs {bearish_count} signals, strong sentiment and fundamentals"
         elif sentiment < 0.4 and fundamental < 0.4 and bearish_count > bullish_count:
             return "SELL", f"Bearish consensus: {bearish_count} vs {bullish_count} signals, weak sentiment and fundamentals"
