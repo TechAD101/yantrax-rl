@@ -55,6 +55,7 @@ class DecisionPipeline:
         ceo: Optional[AutonomousCEO] = None,
         ghost_layer: Optional[GhostLayer] = None,
         oracle: Optional[OracleService] = None,
+        sentiment_service: Optional[Any] = None,
         portfolio_id: int = 1,
     ):
         # Core services
@@ -65,6 +66,7 @@ class DecisionPipeline:
         self.ceo = ceo
         self.ghost_layer = ghost_layer
         self.oracle = oracle
+        self._sentiment_service = sentiment_service
         self.portfolio_id = portfolio_id
         
         # Pipeline components
@@ -1246,8 +1248,8 @@ class DecisionPipeline:
     
     @property
     def sentiment_service(self):
-        """Lazy sentiment service getter."""
-        return get_sentiment_service()
+        """Return the injected sentiment service or lazily create the shared service."""
+        return self._sentiment_service or get_sentiment_service()
 
 
 # Convenience function for direct pipeline execution
