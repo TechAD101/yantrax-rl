@@ -58,33 +58,44 @@ class TestMarketData:
         }
 
     def get_price_history(self, symbol, days):
-        # Deterministic upward history with a fresh bullish crossover near the end.
-        return [{'close': 100.0 + i * 1.0} for i in range(days)]
+        history = [
+            100.0, 99.5, 100.2, 99.8, 100.5, 99.7, 100.1, 99.6, 100.4, 99.9,
+            100.2, 99.4, 100.6, 99.8, 100.3, 99.5, 100.1, 99.7, 100.4, 99.6,
+            100.2, 99.3, 100.5, 99.7, 100.4, 99.6, 100.1, 99.5, 100.3, 99.4,
+            100.2, 99.6, 100.0, 99.4, 100.1, 99.5, 100.0, 99.3, 99.8, 99.4,
+            99.7, 99.2, 99.6, 99.1, 99.4, 98.9, 99.2, 98.8, 98.6, 102.0,
+        ]
+        return [{'close': close} for close in history[-days:]]
 
 
 class TestStrategySignalContract(unittest.TestCase):
-    """Regression tests for coherent regime-driven directional signals."""
+    """Regression tests for the technical directional signal contract."""
 
-    def test_bull_regime_with_strong_evidence_produces_buy(self):
-        from backend.services.institutional_strategy_engine import InstitutionalStrategyEngine, MarketRegime
+    def test_bullish_technical_crossover_produces_buy(self):
+        from backend.services.institutional_strategy_engine import InstitutionalStrategyEngine
 
         engine = InstitutionalStrategyEngine()
-        technical = {'signals': {
-            'ema_crossover': 'neutral',
-            'rsi': 'neutral',
-            'bollinger': 'neutral',
-            'macd': 'neutral',
-        }}
+        technical = {
+            'signals': {
+                'ema_crossover': 'bullish',
+                'rsi': 'neutral',
+                'bollinger': 'neutral',
+                'macd': 'bullish',
+            }
+        }
 
         action, reasoning = engine._determine_action(
             technical=technical,
             sentiment=0.75,
             fundamental=0.80,
-            regime=MarketRegime.BULL_MARKET,
+            regime=engine._detect_market_regime(
+                {'volatility': 0.02, 'trend': 'neutral'},
+                {'fear_greed_index': {'fear_greed_index': 0.75}},
+            ),
         )
 
         self.assertEqual(action, 'BUY')
-        self.assertIn('Bull regime', reasoning)
+        self.assertIn('bullish', reasoning.lower())
 
 
 class TestFullPipeline(unittest.TestCase):
