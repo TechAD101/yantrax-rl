@@ -840,7 +840,7 @@ def detailed_health():
             'status': 'healthy',
             'services': {
                 'api': 'operational',
-                'market_data': 'v2' if MARKET_SERVICE_READY else 'fallback',
+                'market_data': 'alpaca' if MARKET_SERVICE_READY else 'fallback',
                 'ai_firm': 'operational' if AI_FIRM_READY else 'fallback',
                 'rl_core': 'operational' if RL_ENV_READY else 'not_loaded'
             },
