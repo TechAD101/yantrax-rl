@@ -214,18 +214,28 @@ class DecisionPipeline:
         """Fetch and build canonical market snapshot."""
         symbol = ctx.symbol
         
-        # Get price data
-        if self.market_data:
-            try:
-                price_data = self.market_data.get_stock_price(symbol)
-            except Exception as e:
-                logger.warning(f"Market data error for {symbol}: {e}")
-                price_data = {'price': 0, 'source': 'error', 'error': str(e)}
-        else:
-            # Fallback to global market_provider
-            from backend.main import market_provider
-            price_data = market_provider.get_price(symbol) if market_provider else {'price': 0, 'source': 'unavailable'}
-        
+        # The canonical pipeline requires an explicit market-data provider.
+        # No global, dummy, cached, or synthetic provider may be substituted here.
+        if not self.market_data:
+            logger.error("No market-data provider configured for canonical decision pipeline")
+            ctx.final_action = TradingAction.ABSTAIN
+            ctx.add_provenance("market_snapshot_error", {
+                "error": "market_data_provider_not_configured",
+                "action": TradingAction.ABSTAIN.value,
+            })
+            return ctx
+
+        try:
+            price_data = self.market_data.get_stock_price(symbol)
+        except Exception as e:
+            logger.error(f"Market data error for {symbol}: {e}")
+            ctx.final_action = TradingAction.ABSTAIN
+            ctx.add_provenance("market_snapshot_error", {
+                "error": str(e),
+                "action": TradingAction.ABSTAIN.value,
+            })
+            return ctx
+
         # Get fundamentals
         fundamentals = {}
         if self.market_data and hasattr(self.market_data, 'get_fundamentals'):
