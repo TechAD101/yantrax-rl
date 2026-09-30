@@ -16,7 +16,6 @@ from .perplexity_intelligence import PerplexityIntelligenceService as Perplexity
 
 __all__ = [
     'MarketDataService',
-    'get_waterfall_service',
     'MarketSentimentService',
     'get_sentiment_service',
     'InstitutionalStrategyEngine',
