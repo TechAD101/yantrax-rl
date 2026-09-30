@@ -55,6 +55,7 @@ class DecisionPipeline:
         ceo: Optional[AutonomousCEO] = None,
         ghost_layer: Optional[GhostLayer] = None,
         oracle: Optional[OracleService] = None,
+        sentiment_service: Optional[Any] = None,
         portfolio_id: int = 1,
     ):
         # Core services
@@ -65,12 +66,14 @@ class DecisionPipeline:
         self.ceo = ceo
         self.ghost_layer = ghost_layer
         self.oracle = oracle
+        self.sentiment_service = sentiment_service or get_sentiment_service()
         self.portfolio_id = portfolio_id
         
         # Pipeline components
         self.evidence_synthesizer = EvidenceSynthesizer(
             strategy_engine=self.strategy_engine,
             market_data=self.market_data,
+            sentiment_service=self.sentiment_service,
         )
         self.risk_governor = RiskGovernor()
         self.position_sizer = PositionSizer(strategy_engine=self.strategy_engine)
@@ -290,13 +293,22 @@ class DecisionPipeline:
                 except Exception:
                     pass
             
-            # Get sentiment
+            # Reuse the canonical sentiment evidence produced in stage 2.
+            # A decision must not change because stage 3 independently samples a
+            # second sentiment snapshot.
             sentiment = {}
-            if self.sentiment_service:
-                try:
-                    sentiment = self.sentiment_service.get_comprehensive_sentiment(ctx.symbol).get('components', {})
-                except Exception:
-                    pass
+            if ctx.evidence and ctx.evidence.sentiment:
+                sentiment = {
+                    'fear_greed': {
+                        'fear_greed_index': ctx.evidence.sentiment.fear_greed_index,
+                    },
+                    'options_flow': {
+                        'flow_score': ctx.evidence.sentiment.options_flow_score,
+                    },
+                    'social_sentiment': {
+                        'overall_sentiment': ctx.evidence.sentiment.social_sentiment_score,
+                    },
+                }
             
             # Generate institutional signal
             signal = self.strategy_engine.generate_institutional_signal(
