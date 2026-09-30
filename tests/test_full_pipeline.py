@@ -19,7 +19,7 @@ class TestMarketData:
         return {
             'symbol': symbol.upper(),
             'price': 150.0,
-            'change_percent': 0.5,
+            'change_percent': 2.0,
             'volume': 1000000,
             'volatility': 0.02,
             'source': 'test_fixture',
