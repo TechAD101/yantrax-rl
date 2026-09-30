@@ -94,7 +94,6 @@ class DecisionPipeline:
         # Initialize CEO if not provided
         if not self.ceo:
             self.ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
-            self.ceo.logger = logger
             self.ceo.agent_manager = self.agent_manager
             self.ceo.debate_engine = self.debate_engine
             self.ceo.ghost_layer = self.ghost_layer or GhostLayer()
@@ -152,25 +151,7 @@ class DecisionPipeline:
             # STAGE 6: CEO GOVERNANCE
             # ──────────────────────────────────────────────────────
             ctx = await self._stage_ceo_governance(ctx)
-
-            # Direction is owned by the strategy candidate; CEO decision_type
-            # is governance/workflow metadata unless it is explicitly directional.
-            if ctx.ceo_decision and ctx.ceo_decision.decision_type in ("BUY", "SELL", "HOLD"):
-                ctx.final_action = ctx.ceo_decision.action
-                action_source = "ceo"
-            elif ctx.candidate_strategy:
-                ctx.final_action = ctx.candidate_strategy.action
-                action_source = "candidate_strategy"
-            else:
-                ctx.final_action = TradingAction.HOLD
-                action_source = "default"
-
-            ctx.add_provenance("governed_action", {
-                "action": ctx.final_action.value,
-                "source": action_source,
-                "ceo_decision_type": ctx.ceo_decision.decision_type if ctx.ceo_decision else None,
-            })
-
+            
             # ──────────────────────────────────────────────────────
             # STAGE 7: PRELIMINARY RISK GOVERNANCE
             # ──────────────────────────────────────────────────────
@@ -290,9 +271,7 @@ class DecisionPipeline:
             # Get portfolio state
             portfolio_state = await self._get_portfolio_state()
             
-            # Build market data for strategy engine. The pipeline's canonical
-            # snapshot is authoritative for current state; price history is only
-            # additional context for technical calculations.
+            # Build market data for strategy engine
             price_history = self._get_price_history(ctx.symbol)
             enhanced_market_data = {
                 'price': ctx.market_snapshot.price,
@@ -303,38 +282,28 @@ class DecisionPipeline:
                 'volume_trend': 'stable',
             }
             
-            # Reuse the evidence package produced by the authoritative evidence stage.
-            # This avoids a second, potentially different provider/service call here and
-            # keeps strategy selection deterministic relative to the snapshot.
+            # Get fundamentals
             fundamentals = {}
-            if ctx.evidence and ctx.evidence.fundamental:
-                fundamentals = ctx.evidence.fundamental.to_dict()
-            if not fundamentals and self.market_data and hasattr(self.market_data, 'get_fundamentals'):
+            if self.market_data and hasattr(self.market_data, 'get_fundamentals'):
                 try:
                     fundamentals = self.market_data.get_fundamentals(ctx.symbol) or {}
                 except Exception:
                     pass
             
+            # Get sentiment
             sentiment = {}
-            if ctx.evidence and ctx.evidence.sentiment:
-                sentiment = {
-                    'fear_greed': {
-                        'fear_greed_index': ctx.evidence.sentiment.fear_greed_index,
-                    },
-                    'options_flow': {
-                        'flow_score': ctx.evidence.sentiment.options_flow_score,
-                    },
-                    'social_sentiment': {
-                        'overall_sentiment': ctx.evidence.sentiment.social_sentiment_score,
-                    },
-                }
+            if self.sentiment_service:
+                try:
+                    sentiment = self.sentiment_service.get_comprehensive_sentiment(ctx.symbol).get('components', {})
+                except Exception:
+                    pass
             
             # Generate institutional signal
             signal = self.strategy_engine.generate_institutional_signal(
                 ctx.symbol, enhanced_market_data, fundamentals, sentiment, portfolio_state
             )
             
-            # Map the strategy engine's directional signal to the canonical action.
+            # Map to canonical candidate strategy
             action_map = {
                 'BUY': TradingAction.BUY,
                 'SELL': TradingAction.SELL,
@@ -531,19 +500,11 @@ class DecisionPipeline:
         return ctx
     
     async def _stage_ceo_governance(self, ctx: DecisionContext) -> DecisionContext:
-        """Run CEO governance while preserving the directional trade candidate."""
+        """Run CEO governance decision."""
         try:
-            # The CEO's current public API returns a governance workflow type
-            # (for example, "trading" or "defensive_lockdown"), not a BUY/SELL
-            # command. Direction therefore remains explicit in the strategy candidate.
-            candidate_action = (
-                ctx.candidate_strategy.action
-                if ctx.candidate_strategy
-                else TradingAction.HOLD
-            )
-
+            # Build context for CEO
             ceo_context = {
-                'type': 'trading',
+                'type': 'strategic_trading_decision',
                 'symbol': ctx.symbol,
                 'ticker': ctx.symbol,
                 'market_trend': ctx.market_snapshot.trend if ctx.market_snapshot else 'neutral',
@@ -556,20 +517,23 @@ class DecisionPipeline:
                 'portfolio_state': ctx.portfolio_state.to_dict() if ctx.portfolio_state else {},
                 'timestamp': datetime.now().isoformat(),
             }
-
+            
+            # CEO decision (async)
             ceo_decision = await self.ceo.make_strategic_decision(ceo_context)
-
-            # Governance type is recorded separately from the trade direction.
-            # A non-directional workflow type must never manufacture a BUY/SELL.
-            governance_action = TradingAction.HOLD
-            if ceo_decision.decision_type in ('BUY', 'SELL', 'HOLD'):
-                governance_action = TradingAction(ceo_decision.decision_type)
-
+            
+            # Map CEO decision to canonical format
+            action_map = {
+                'BUY': TradingAction.BUY,
+                'SELL': TradingAction.SELL,
+                'HOLD': TradingAction.HOLD,
+                'defensive_lockdown': TradingAction.HOLD,
+            }
+            
             ctx.ceo_decision = CEODecision(
                 decision_id=ceo_decision.id,
                 timestamp=ceo_decision.timestamp,
                 decision_type=ceo_decision.decision_type,
-                action=candidate_action if ceo_decision.decision_type == 'trading' else governance_action,
+                action=action_map.get(ceo_decision.decision_type, TradingAction.HOLD),
                 confidence=ceo_decision.confidence,
                 reasoning=ceo_decision.reasoning,
                 expected_impact=ceo_decision.expected_impact,
@@ -578,15 +542,15 @@ class DecisionPipeline:
                 pain_level=self.ceo._calculate_pain_level(ceo_context),
                 market_mood=self.ceo._determine_market_mood(),
             )
-
+            
             ctx.add_provenance("ceo_governance", {
                 "action": ctx.ceo_decision.action.value,
-                "decision_type": ctx.ceo_decision.decision_type,
-                "candidate_action": candidate_action.value,
                 "confidence": ctx.ceo_decision.confidence,
                 "pain_level": ctx.ceo_decision.pain_level,
+                "ghost_nudge": ctx.ceo_decision.ghost_nudge is not None,
+                "philosophy_veto": ctx.ceo_decision.philosophy_veto,
             })
-
+            
         except Exception as e:
             logger.error(f"CEO governance failed: {e}")
             ctx.ceo_decision = CEODecision(
@@ -602,9 +566,9 @@ class DecisionPipeline:
                 pain_level=0,
                 market_mood="unknown",
             )
-
+        
         return ctx
-
+    
     async def _stage_preliminary_risk(self, ctx: DecisionContext) -> DecisionContext:
         """Run preliminary risk checks (before sizing)."""
         # Build risk state from emotional safeguards
@@ -642,28 +606,18 @@ class DecisionPipeline:
         return ctx
     
     async def _stage_position_sizing(self, ctx: DecisionContext) -> DecisionContext:
-        """Calculate position size for the governed trade action."""
-        if not ctx.candidate_strategy:
+        """Calculate position size using PositionSizer."""
+        if not ctx.candidate_strategy or ctx.candidate_strategy.action == TradingAction.HOLD:
             return ctx
-
-        # The CEO stage is the authoritative governance decision. Carry that
-        # action into the sizing stage so a governed BUY/SELL is not left with
-        # the context's default zero-sized position.
-        sizing_action = ctx.final_action or ctx.candidate_strategy.action
-        if sizing_action in (TradingAction.HOLD, TradingAction.ABSTAIN):
-            return ctx
-
-        if sizing_action != ctx.candidate_strategy.action:
-            ctx.candidate_strategy.action = sizing_action
-
+        
         sizing_result = self.position_sizer.calculate(ctx)
-
+        
         ctx.final_position_size = sizing_result.position_size
         ctx.final_stop_loss = sizing_result.stop_loss
         ctx.final_take_profit = sizing_result.take_profit
-
+        
         ctx.add_provenance("position_sizing", sizing_result.to_dict())
-
+        
         return ctx
     
     async def _stage_final_risk(self, ctx: DecisionContext) -> DecisionContext:
@@ -691,7 +645,7 @@ class DecisionPipeline:
     def _finalize_decision(self, ctx: DecisionContext) -> DecisionContext:
         """Determine final action based on all inputs."""
         # Start with CEO decision as baseline
-        if ctx.ceo_decision and ctx.ceo_decision.decision_type in ("BUY", "SELL", "HOLD"):
+        if ctx.ceo_decision:
             ctx.final_action = ctx.ceo_decision.action
             ctx.final_confidence = ctx.ceo_decision.confidence
         elif ctx.candidate_strategy:
