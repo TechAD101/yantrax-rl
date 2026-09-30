@@ -10,9 +10,7 @@ port = os.getenv("PORT", "10000")
 bind = f"0.0.0.0:{port}"
 
 # Worker Configuration
-# We use 'gthread' (Threaded Workers) because 'gevent' is incompatible with some
-# blocking libraries we use (like yfinance/pandas) in this specific setup.
-# 'gthread' allows concurrency without the complexity of async monkey-patching.
+# Threaded workers support the backend's blocking I/O and streaming endpoints.
 worker_class = "gthread"
 
 # Concurrency
