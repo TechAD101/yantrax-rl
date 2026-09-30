@@ -93,9 +93,7 @@ class EvidenceSynthesizer:
             except Exception:
                 pass
 
-        # Fallback: generate synthetic from current price
-        base_price = 100  # Will be overridden
-        return [base_price * (1 + np.sin(i/10) * 0.02 + np.random.normal(0, 0.01)) for i in range(days)]
+        raise ValueError(f"Real price history unavailable for {symbol}")
 
     def _get_fundamentals(self, symbol: str) -> Dict[str, Any]:
         """Get fundamental data."""
