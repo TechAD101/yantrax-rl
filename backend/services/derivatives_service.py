@@ -8,10 +8,7 @@ class DerivativesService:
     """
     Provides institutional-grade derivatives analytics.
     Calculates Gamma Exposure (GEX), Put-Call Ratios (PCR), and IV Percentiles.
-    
-    NOTE: In the absence of a live Options API (e.g., ThetaData, Polygon), 
-    this service uses a high-fidelity simulation model based on spot price volatility.
-    """
+        """
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)

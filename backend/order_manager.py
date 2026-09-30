@@ -2,23 +2,25 @@ from datetime import datetime
 from typing import Dict, Any, List
 
 from backend.db import get_session
-from backend.models import Order
+from backend.models import Order, Portfolio
 from backend.memecoin_service import simulate_trade
 
 
 def create_order(symbol: str, usd: float) -> Dict[str, Any]:
     session = get_session()
     try:
-        # simulate execution (paper)
         exec_res = simulate_trade(symbol, usd)
         price = exec_res.get('price')
         quantity = exec_res.get('quantity')
 
-        # Ensure a portfolio exists
-        from models import Portfolio
         portfolio = session.query(Portfolio).filter_by(name="Default Paper Portfolio").first()
         if not portfolio:
-            portfolio = Portfolio(name="Default Paper Portfolio", owner_id=1, risk_profile="moderate", current_value=100000.0)
+            portfolio = Portfolio(
+                name="Default Paper Portfolio",
+                owner_id=1,
+                risk_profile="moderate",
+                current_value=100000.0,
+            )
             session.add(portfolio)
             session.commit()
             session.refresh(portfolio)
@@ -31,7 +33,7 @@ def create_order(symbol: str, usd: float) -> Dict[str, Any]:
             price=price,
             status='filled',
             executed_at=datetime.utcnow(),
-            meta={'simulated': True}
+            meta={'simulated': True},
         )
         session.add(o)
         session.commit()

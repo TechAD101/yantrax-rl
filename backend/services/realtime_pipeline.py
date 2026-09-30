@@ -1,14 +1,11 @@
 """
 YantraX Real-time Market Data Pipeline v1.0
 ============================================
-Unified, low-latency market data pipeline with multi-provider waterfall,
-intelligent caching, and rate-limit awareness.
+Unified, low-latency Alpaca market data pipeline with caching and rate-limit awareness.
 
-Sources (in waterfall order):
-  1. Alpaca Markets (live quotes — primary)
-  2. Financial Modeling Prep / FMP (backup quotes + fundamentals)
-  3. Alpha Vantage (tertiary)
-  4. In-memory cache (last-known-good)
+Source:
+  1. Alpaca Markets (live quotes)
+  2. In-memory cache (last-known-good)
 
 Design principles:
   - Never block: every call returns within timeout or falls back
@@ -62,7 +59,7 @@ class _TTLCache:
 # ─────────────────────────────────────────────────────────────
 class RealtimeMarketPipeline:
     """
-    Real-time market data pipeline with waterfall failover and smart caching.
+    Real-time market data pipeline using Alpaca and smart caching.
     All methods are synchronous and safe to call from Flask routes.
     """
 
@@ -79,14 +76,10 @@ class RealtimeMarketPipeline:
         self._config = {
             "alpaca_key":     os.getenv("ALPACA_API_KEY", ""),
             "alpaca_secret":  os.getenv("ALPACA_SECRET_KEY", ""),
-            "fmp_key":        os.getenv("FMP_API_KEY", ""),
-            "av_key":         os.getenv("ALPHA_VANTAGE_KEY", ""),
         }
         self._timeout = int(os.getenv("MARKET_DATA_REQUEST_TIMEOUT", "5"))
         self._alpaca_base  = "https://data.alpaca.markets/v2"
         self._alpaca_cbase = "https://api.alpaca.markets/v2"
-        self._fmp_base     = "https://financialmodelingprep.com/api/v3"
-        self._av_base      = "https://www.alphavantage.co/query"
 
         logger.info("🚀 RealtimeMarketPipeline initialized")
 
@@ -102,12 +95,7 @@ class RealtimeMarketPipeline:
             cached["_cached"] = True
             return cached
 
-        result = (
-            self._alpaca_quote(symbol)
-            or self._fmp_quote(symbol)
-            or self._av_quote(symbol)
-            or self._stale_fallback(symbol)
-        )
+        result = self._alpaca_quote(symbol) or self._stale_fallback(symbol)
         if result and not result.get("error"):
             self._cache.set(key, result, self.QUOTE_TTL)
         return result
@@ -129,15 +117,13 @@ class RealtimeMarketPipeline:
         if batch:
             result = batch
         else:
-            # Fallback: individual FMP quotes
             for sym in symbols:
-                q = self.get_quote(sym)
-                result[sym] = q
+                result[sym] = self.get_quote(sym)
 
         out = {
             "quotes": result,
             "symbols": symbols,
-            "provider": "alpaca" if batch else "fmp",
+            "provider": "alpaca",
             "timestamp": datetime.now().isoformat(),
             "count": len(result),
         }
@@ -145,40 +131,12 @@ class RealtimeMarketPipeline:
         return out
 
     def get_sector_performance(self) -> Dict[str, Any]:
-        """Sector heatmap data (cached 1h, from FMP)"""
-        key = "sectors"
-        cached = self._cache.get(key)
-        if cached:
-            return cached
-
-        try:
-            url = f"{self._fmp_base}/sector-performance?apikey={self._config['fmp_key']}"
-            resp = requests.get(url, timeout=self._timeout)
-            if resp.ok:
-                data = resp.json()
-                out = {
-                    "sectors": [
-                        {
-                            "name": s.get("sector", "Unknown"),
-                            "change_pct": float(s.get("changesPercentage", "0").replace("%", "") or 0),
-                        }
-                        for s in data
-                    ],
-                    "timestamp": datetime.now().isoformat(),
-                }
-                self._cache.set(key, out, self.SECTOR_TTL)
-                return out
-        except Exception as e:
-            logger.warning(f"Sector performance fetch failed: {e}")
-
-        # Fallback: static sectors with 0% change
+        """Return a neutral sector scaffold until a supported sector feed is added."""
         return {
-            "sectors": [
-                {"name": s, "change_pct": 0.0}
-                for s in ["Technology", "Healthcare", "Financials", "Energy", "Consumer", "Utilities"]
-            ],
+            "sectors": [],
             "timestamp": datetime.now().isoformat(),
             "_fallback": True,
+            "provider": "alpaca",
         }
 
     def get_market_summary(self) -> Dict[str, Any]:
@@ -213,41 +171,11 @@ class RealtimeMarketPipeline:
         }
 
     def get_fundamentals(self, symbol: str) -> Dict[str, Any]:
-        """Key fundamental metrics for a symbol (FMP, cached 5m)"""
-        key = f"fundamentals:{symbol.upper()}"
-        cached = self._cache.get(key)
-        if cached:
-            return cached
-
-        try:
-            url = (
-                f"{self._fmp_base}/profile/{symbol.upper()}"
-                f"?apikey={self._config['fmp_key']}"
-            )
-            resp = requests.get(url, timeout=self._timeout)
-            if resp.ok:
-                data = resp.json()
-                if data and isinstance(data, list):
-                    p = data[0]
-                    out = {
-                        "symbol": symbol.upper(),
-                        "name": p.get("companyName", "Unknown"),
-                        "sector": p.get("sector", "Unknown"),
-                        "industry": p.get("industry", "Unknown"),
-                        "market_cap": p.get("mktCap", 0),
-                        "pe_ratio": p.get("pe", 0),
-                        "beta": p.get("beta", 1.0),
-                        "52w_high": p.get("range", "").split("-")[-1] if p.get("range") else None,
-                        "52w_low":  p.get("range", "").split("-")[0]  if p.get("range") else None,
-                        "description": p.get("description", "")[:300],
-                        "timestamp": datetime.now().isoformat(),
-                    }
-                    self._cache.set(key, out, self.FUNDAMENTAL_TTL)
-                    return out
-        except Exception as e:
-            logger.warning(f"Fundamentals fetch failed for {symbol}: {e}")
-
-        return {"symbol": symbol, "error": "Fundamentals unavailable", "timestamp": datetime.now().isoformat()}
+        return {
+            "symbol": symbol.upper(),
+            "error": "Fundamentals unavailable from configured market-data provider",
+            "timestamp": datetime.now().isoformat(),
+        }
 
     # ─────────────────────────────────────────────────────────────
     # Provider Implementations
@@ -290,38 +218,6 @@ class RealtimeMarketPipeline:
             logger.debug(f"Alpaca snapshot failed: {e}")
         return None
 
-    def _fmp_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
-        if not self._config["fmp_key"]:
-            return None
-        try:
-            url = f"{self._fmp_base}/quote/{symbol.upper()}?apikey={self._config['fmp_key']}"
-            resp = requests.get(url, timeout=self._timeout)
-            if resp.ok:
-                data = resp.json()
-                if data and isinstance(data, list):
-                    return self._normalise_fmp_quote(data[0])
-        except Exception as e:
-            logger.debug(f"FMP quote failed for {symbol}: {e}")
-        return None
-
-    def _av_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
-        if not self._config["av_key"]:
-            return None
-        try:
-            params = {
-                "function": "GLOBAL_QUOTE",
-                "symbol": symbol.upper(),
-                "apikey": self._config["av_key"],
-            }
-            resp = requests.get(self._av_base, params=params, timeout=self._timeout)
-            if resp.ok:
-                data = resp.json().get("Global Quote", {})
-                if data:
-                    return self._normalise_av_quote(data)
-        except Exception as e:
-            logger.debug(f"Alpha Vantage quote failed for {symbol}: {e}")
-        return None
-
     def _stale_fallback(self, symbol: str) -> Dict[str, Any]:
         """Return last cached value (even if expired) or error scaffold"""
         # Try to get stale value directly from cache internal store
@@ -335,7 +231,7 @@ class RealtimeMarketPipeline:
             "price": None,
             "change": None,
             "change_pct": None,
-            "error": "All providers failed",
+            "error": "Alpaca provider failed",
             "timestamp": datetime.now().isoformat(),
         }
 
@@ -379,41 +275,7 @@ class RealtimeMarketPipeline:
             "timestamp": datetime.now().isoformat(),
         }
 
-    def _normalise_fmp_quote(self, q: Dict) -> Dict[str, Any]:
-        return {
-            "symbol": q.get("symbol", "").upper(),
-            "price": round(float(q.get("price", 0) or 0), 4),
-            "change": round(float(q.get("change", 0) or 0), 4),
-            "change_pct": round(float(q.get("changesPercentage", 0) or 0), 4),
-            "volume": q.get("volume"),
-            "open":  q.get("open"),
-            "high":  q.get("dayHigh"),
-            "low":   q.get("dayLow"),
-            "prev_close": q.get("previousClose"),
-            "market_cap": q.get("marketCap"),
-            "pe_ratio": q.get("pe"),
-            "provider": "fmp",
-            "timestamp": datetime.now().isoformat(),
-        }
 
-    def _normalise_av_quote(self, q: Dict) -> Dict[str, Any]:
-        price     = float(q.get("05. price", 0) or 0)
-        prev      = float(q.get("08. previous close", 0) or 0)
-        change    = float(q.get("09. change", 0) or 0)
-        change_p  = float((q.get("10. change percent", "0%") or "0%").replace("%", ""))
-        return {
-            "symbol": q.get("01. symbol", "").upper(),
-            "price": round(price, 4),
-            "change": round(change, 4),
-            "change_pct": round(change_p, 4),
-            "volume": q.get("06. volume"),
-            "open":  q.get("02. open"),
-            "high":  q.get("03. high"),
-            "low":   q.get("04. low"),
-            "prev_close": round(prev, 4),
-            "provider": "alphavantage",
-            "timestamp": datetime.now().isoformat(),
-        }
 
 
 # ─────────────────────────────────────────────────────────────

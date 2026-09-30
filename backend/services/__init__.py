@@ -1,6 +1,10 @@
 # Services Package
-from .market_data_service_v2 import MarketDataService
-from .market_data_service_waterfall import get_waterfall_service
+try:
+    from .market_data_service import get_market_data
+except ImportError:
+    get_market_data = None
+
+MarketDataService = None
 from .market_sentiment_service import MarketSentimentService, get_sentiment_service
 from .institutional_strategy_engine import InstitutionalStrategyEngine, get_strategy_engine as get_institutional_strategy_engine
 from .trade_validator import TradeValidator, get_trade_validator
@@ -12,7 +16,6 @@ from .perplexity_intelligence import PerplexityIntelligenceService as Perplexity
 
 __all__ = [
     'MarketDataService',
-    'get_waterfall_service',
     'MarketSentimentService',
     'get_sentiment_service',
     'InstitutionalStrategyEngine',

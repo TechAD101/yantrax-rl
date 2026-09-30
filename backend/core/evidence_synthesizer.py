@@ -16,7 +16,7 @@ from backend.services.institutional_strategy_engine import (
     InstitutionalStrategyEngine, MarketRegime as StrategyMarketRegime
 )
 from backend.services.market_sentiment_service import get_sentiment_service
-from backend.services.market_data_service_v2 import MarketDataService
+MarketDataService = Any
 
 
 class EvidenceSynthesizer:

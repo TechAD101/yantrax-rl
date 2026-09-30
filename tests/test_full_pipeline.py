@@ -1,4 +1,5 @@
 import os
+import os
 import sys
 import unittest
 from datetime import datetime
@@ -12,6 +13,26 @@ from backend.attribution.attribution_engine import AttributionEngine
 from backend.models import Outcome, Attribution, LearningEvent, JournalEntry
 from backend.db import init_db, get_session
 from backend.service_registry import registry
+
+
+class TestMarketData:
+    def get_stock_price(self, symbol):
+        return {
+            'symbol': symbol.upper(),
+            'price': 150.0,
+            'change_percent': 0.5,
+            'volume': 1000000,
+            'volatility': 0.02,
+            'source': 'test_fixture',
+            'verified': True,
+        }
+
+    def get_fundamentals(self, symbol):
+        return {}
+
+    def get_price_history(self, symbol, days):
+        return [{'close': 150.0} for _ in range(days)]
+
 
 
 class TestFullPipeline(unittest.TestCase):
@@ -31,7 +52,7 @@ class TestFullPipeline(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.pipeline = DecisionPipeline()
+        self.pipeline = DecisionPipeline(market_data=TestMarketData())
         self.session = get_session()
         # Clear any existing data
         self.session.query(LearningEvent).delete()
