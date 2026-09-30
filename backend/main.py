@@ -617,7 +617,7 @@ def health_check():
     return jsonify({
         'status': 'operational',
         'version': '5.21-MVP-Routes-Active',
-        'data_source': 'Waterfall (YFinance/FMP/Alpaca)',
+        'data_source': 'Alpaca',
         'ai_firm': 'active' if AI_FIRM_READY else 'degraded',
         'ghost_layer': {
             'status': 'akasha_node_online',
