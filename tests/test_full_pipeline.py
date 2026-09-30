@@ -102,6 +102,45 @@ class TestPipelineProviderContract(unittest.TestCase):
         self.assertIn('market_snapshot_error', ctx.provenance)
 
         
+class TestSizingFailureContract(unittest.TestCase):
+    def test_sizing_engine_failure_is_not_silently_fallback(self):
+        from backend.risk.position_sizer import PositionSizer, SizingMethod
+        from backend.core.decision_context import PortfolioState, MarketSnapshot, CandidateStrategy
+        from datetime import datetime
+        from unittest.mock import Mock
+
+        class FailingStrategyEngine:
+            def _calculate_position_size(self, **kwargs):
+                raise ValueError("sizing dependency failed")
+
+        pipeline_ctx = DecisionContext(symbol="AAPL")
+        pipeline_ctx.candidate_strategy = CandidateStrategy(
+            action=TradingAction.BUY,
+            confidence=0.8,
+            reasoning="test",
+            position_size=1000.0,
+            stop_loss=140.0,
+            take_profit=165.0,
+            risk_score=0.2,
+        )
+        pipeline_ctx.market_snapshot = MarketSnapshot(
+            symbol="AAPL",
+            price=150.0,
+            timestamp=datetime.now(),
+            volatility=0.02,
+            source="test_fixture",
+            verified=True,
+        )
+        pipeline_ctx.portfolio_state = PortfolioState(total_value=100000.0, positions={})
+
+        sizer = PositionSizer(
+            strategy_engine=FailingStrategyEngine(),
+            default_method=SizingMethod.STRATEGY_ENGINE,
+        )
+        with self.assertRaises(RuntimeError):
+            sizer.calculate(pipeline_ctx)
+
+        
 class TestFullPipeline(unittest.TestCase):
     """Test the full paper-trade lifecycle from market snapshot to learning."""
 
