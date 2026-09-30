@@ -30,7 +30,7 @@ from backend.services.institutional_strategy_engine import (
     InstitutionalStrategyEngine, get_strategy_engine
 )
 from backend.services.market_sentiment_service import get_sentiment_service
-from backend.services.market_data_service_v2 import MarketDataService
+MarketDataService = Any
 from backend.services.oracle_service import OracleService
 from backend.order_manager import create_order
 from backend.db import get_session
