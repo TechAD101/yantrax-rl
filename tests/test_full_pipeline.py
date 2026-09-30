@@ -58,13 +58,8 @@ class TestMarketData:
         }
 
     def get_price_history(self, symbol, days):
-        history = [
-            100.0, 99.5, 100.2, 99.8, 100.5, 99.7, 100.1, 99.6, 100.4, 99.9,
-            100.2, 99.4, 100.6, 99.8, 100.3, 99.5, 100.1, 99.7, 100.4, 99.6,
-            100.2, 99.3, 100.5, 99.7, 100.4, 99.6, 100.1, 99.5, 100.3, 99.4,
-            100.2, 99.6, 100.0, 99.4, 100.1, 99.5, 100.0, 99.3, 99.8, 99.4,
-            99.7, 99.2, 99.6, 99.1, 99.4, 98.9, 99.2, 98.8, 98.6, 102.0,
-        ]
+        # Deterministic bullish trend with a genuine EMA relationship.
+        history = [100.0 + (i * 0.8) for i in range(60)]
         return [{'close': close} for close in history[-days:]]
 
 
