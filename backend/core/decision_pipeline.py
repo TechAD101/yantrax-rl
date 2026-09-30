@@ -73,6 +73,7 @@ class DecisionPipeline:
         self.evidence_synthesizer = EvidenceSynthesizer(
             strategy_engine=self.strategy_engine,
             market_data=self.market_data,
+            sentiment_service=self._sentiment_service,
         )
         self.risk_governor = RiskGovernor()
         self.position_sizer = PositionSizer(strategy_engine=self.strategy_engine)
@@ -523,19 +524,22 @@ class DecisionPipeline:
             # CEO decision (async)
             ceo_decision = await self.ceo.make_strategic_decision(ceo_context)
             
-            # Map CEO decision to canonical format
-            action_map = {
-                'BUY': TradingAction.BUY,
-                'SELL': TradingAction.SELL,
-                'HOLD': TradingAction.HOLD,
-                'defensive_lockdown': TradingAction.HOLD,
-            }
-            
+            # CEO decision_type is a workflow classification, not trade direction.
+            # Preserve the explicit candidate strategy action; governance vetoes remain
+            # separate and are enforced by risk/finalization stages.
+            strategy_action = ceo_decision.context.get('strategy_action')
+            if strategy_action in [a.value for a in TradingAction]:
+                ceo_action = TradingAction(strategy_action)
+            elif ceo_decision.decision_type == 'defensive_lockdown':
+                ceo_action = TradingAction.HOLD
+            else:
+                ceo_action = ctx.candidate_strategy.action if ctx.candidate_strategy else TradingAction.HOLD
+
             ctx.ceo_decision = CEODecision(
                 decision_id=ceo_decision.id,
                 timestamp=ceo_decision.timestamp,
                 decision_type=ceo_decision.decision_type,
-                action=action_map.get(ceo_decision.decision_type, TradingAction.HOLD),
+                action=ceo_action,
                 confidence=ceo_decision.confidence,
                 reasoning=ceo_decision.reasoning,
                 expected_impact=ceo_decision.expected_impact,
@@ -547,6 +551,7 @@ class DecisionPipeline:
             
             ctx.add_provenance("ceo_governance", {
                 "action": ctx.ceo_decision.action.value,
+                "action_source": "strategy_action" if strategy_action in [a.value for a in TradingAction] else "candidate_strategy",
                 "confidence": ctx.ceo_decision.confidence,
                 "pain_level": ctx.ceo_decision.pain_level,
                 "ghost_nudge": ctx.ceo_decision.ghost_nudge is not None,
