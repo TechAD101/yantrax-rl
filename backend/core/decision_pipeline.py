@@ -1198,17 +1198,7 @@ class DecisionPipeline:
             except Exception:
                 pass
         
-        # Fallback: use current price with synthetic variation
-        if self.market_data:
-            try:
-                price_data = self.market_data.get_stock_price(symbol)
-                base = price_data.get('price', 100)
-            except Exception:
-                base = 100
-        else:
-            base = 100
-        
-        return [base * (1 + (i % 10 - 5) * 0.01) for i in range(days)]
+        raise ValueError(f"Real price history unavailable for {symbol}")
     
     async def _get_portfolio_state(self) -> PortfolioState:
         """Get current portfolio state from database."""
