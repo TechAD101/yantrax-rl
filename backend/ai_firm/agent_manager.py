@@ -8,7 +8,6 @@ import uuid
 import numpy as np
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from backend.services.knowledge_base_service import get_knowledge_base
 from backend.services.oracle_service import OracleService, OracleInsight
 
 
@@ -49,12 +48,11 @@ class AgentManager:
         self.enhanced_agents = self._initialize_20_plus_agents()
         self.voting_sessions = []
         self.logger = logging.getLogger(__name__)
-        self.kb = get_knowledge_base()
         self.oracle = oracle_service
+        self.kb = None
 
     def _initialize_20_plus_agents(self) -> Dict[str, Dict]:
-        agents = {}
-        agents.update({
+        return {
             "warren": {"confidence": 0.88, "performance": 24.5, "specialty": "Value Analysis", "department": "market_intelligence", "role": "director", "persona": True},
             "cathie": {"confidence": 0.82, "performance": 21.8, "specialty": "Innovation Scouting", "department": "market_intelligence", "role": "senior", "persona": True},
             "quant": {"confidence": 0.90, "performance": 26.3, "specialty": "Statistical Modeling", "department": "market_intelligence", "role": "senior", "persona": False},
@@ -79,8 +77,19 @@ class AgentManager:
             "market_observer": {"confidence": 0.80, "performance": 20.5, "specialty": "Market Microstructure", "department": "market_intelligence", "role": "analyst", "persona": False},
             "compliance_officer": {"confidence": 0.82, "performance": 21.3, "specialty": "Regulatory Compliance", "department": "communications", "role": "director", "persona": False},
             "communications_lead": {"confidence": 0.78, "performance": 18.9, "specialty": "Stakeholder Relations", "department": "communications", "role": "senior", "persona": False},
-        })
-        return agents
+        }
+
+    def _ensure_kb(self):
+        """Load KB lazily and isolate its optional failure from agent voting."""
+        if self.kb is not None:
+            return self.kb
+        try:
+            from backend.services.knowledge_base_service import get_knowledge_base
+            self.kb = get_knowledge_base()
+        except Exception as exc:
+            self.logger.warning("Knowledge base initialization unavailable; voting will continue without KB enrichment: %s", exc)
+            self.kb = False
+        return self.kb
 
     def conduct_agent_voting(self, context: Dict[str, Any], expert_opinions: Dict[str, str] = None) -> Dict[str, Any]:
         vote_tally = {}
@@ -88,10 +97,7 @@ class AgentManager:
         participating_agents = []
 
         for agent_name, agent_data in self.enhanced_agents.items():
-            if expert_opinions and agent_name in expert_opinions:
-                signal = expert_opinions[agent_name]
-            else:
-                signal = self._generate_agent_signal(agent_name, agent_data, context)
+            signal = expert_opinions[agent_name] if expert_opinions and agent_name in expert_opinions else self._generate_agent_signal(agent_name, agent_data, context)
             weight = self._get_vote_weight(agent_data["role"]) * agent_data["confidence"]
             vote_tally[signal] = vote_tally.get(signal, 0) + weight
             total_weight += weight
@@ -108,43 +114,38 @@ class AgentManager:
 
         divine_doubt_triggered = False
         oracle_wisdom = None
-        if vote_tally:
-            winning_signal = max(vote_tally.items(), key=lambda x: x[1])[0]
-            consensus_strength = vote_tally[winning_signal] / total_weight if total_weight > 0 else 0
-            if consensus_strength > 0.9 and "the_ghost" in self.enhanced_agents:
-                self.logger.info("Divine Doubt triggered: consensus too high (%s)", consensus_strength)
-                winning_signal = "HOLD_FOR_CLARITY"
-                consensus_strength *= 0.7
-                divine_doubt_triggered = True
+        winning_signal = max(vote_tally.items(), key=lambda x: x[1])[0] if vote_tally else "HOLD"
+        consensus_strength = (vote_tally[winning_signal] / total_weight) if vote_tally and total_weight > 0 else 0.5
 
-            if self.oracle:
+        if vote_tally and consensus_strength > 0.9 and "the_ghost" in self.enhanced_agents:
+            self.logger.info("Divine Doubt triggered: consensus too high (%s)", consensus_strength)
+            winning_signal = "HOLD_FOR_CLARITY"
+            consensus_strength *= 0.7
+            divine_doubt_triggered = True
+
+        if self.oracle:
+            try:
+                import asyncio
+                symbol = context.get("symbol", "MARKET")
                 try:
-                    import asyncio
-                    symbol = context.get("symbol", "MARKET")
-                    try:
-                        asyncio.get_running_loop()
-                        self.logger.debug("Oracle call skipped inside running event loop")
-                    except RuntimeError:
-                        oracle_insight = asyncio.run(
-                            self.oracle.get_divine_whisper(symbol, context, consensus_strength)
-                        )
-                        if oracle_insight:
-                            oracle_wisdom = {
-                                "perspective": oracle_insight.perspective,
-                                "wisdom": oracle_insight.wisdom,
-                                "paradox": oracle_insight.paradox,
-                                "direction": oracle_insight.direction,
-                            }
-                except Exception as e:
-                    self.logger.error("Oracle integration error: %s", e)
-        else:
-            winning_signal = "HOLD"
-            consensus_strength = 0.5
+                    asyncio.get_running_loop()
+                    self.logger.debug("Oracle call skipped inside running event loop")
+                except RuntimeError:
+                    oracle_insight = asyncio.run(self.oracle.get_divine_whisper(symbol, context, consensus_strength))
+                    if oracle_insight:
+                        oracle_wisdom = {
+                            "perspective": oracle_insight.perspective,
+                            "wisdom": oracle_insight.wisdom,
+                            "paradox": oracle_insight.paradox,
+                            "direction": oracle_insight.direction,
+                        }
+            except Exception as exc:
+                self.logger.error("Oracle integration error: %s", exc)
 
-        voting_result = {
+        result = {
             "winning_signal": winning_signal,
             "consensus_strength": round(consensus_strength, 3),
-            "vote_distribution": {k: round(v / total_weight, 3) for k, v in vote_tally.items()} if total_weight > 0 else {},
+            "vote_distribution": {k: round(v / total_weight, 3) for k, v in vote_tally.items()} if total_weight else {},
             "participating_agents": len(participating_agents),
             "total_weight": round(total_weight, 2),
             "session_id": str(uuid.uuid4()),
@@ -153,8 +154,8 @@ class AgentManager:
             "oracle_wisdom": oracle_wisdom,
             "agent_votes": participating_agents,
         }
-        self.voting_sessions.append(voting_result)
-        return voting_result
+        self.voting_sessions.append(result)
+        return result
 
     def _generate_agent_signal(self, agent_name: str, agent_data: Dict, context: Dict = None) -> str:
         confidence = agent_data["confidence"]
@@ -167,66 +168,44 @@ class AgentManager:
         rsi = context.get("rsi", 50) if context else 50
         trend = context.get("market_trend", "neutral") if context else "neutral"
 
-        # KB enrichment is optional. A KB outage must not destroy the decision pipeline.
-        wisdom_items = []
-        try:
-            if self.kb is not None and hasattr(self.kb, "query_wisdom"):
+        kb = self._ensure_kb()
+        if kb and kb is not False:
+            try:
                 query = f"{specialty} in {market_condition} market"
-                wisdom_items = self.kb.query_wisdom(
-                    topic=query,
-                    archetype_filter=agent_name,
-                    max_results=1,
-                ) or []
-        except Exception as e:
-            self.logger.warning("Knowledge base unavailable for %s; continuing without enrichment: %s", agent_name, e)
-
-        if wisdom_items:
-            wisdom = wisdom_items[0]
-            if wisdom.get("relevance_score", 0) > 0.8:
-                confidence = min(0.98, confidence + 0.05)
+                wisdom_items = kb.query_wisdom(topic=query, archetype_filter=agent_name, max_results=1) or []
+                if wisdom_items and wisdom_items[0].get("relevance_score", 0) > 0.8:
+                    confidence = min(0.98, confidence + 0.05)
+            except Exception as exc:
+                self.logger.warning("Knowledge base query unavailable for %s; continuing without enrichment: %s", agent_name, exc)
 
         if agent_name == "warren" or "Value" in specialty:
-            if 0 < pe_ratio < 22 and roe > 0.18 and debt_to_equity < 1.0:
-                return "BUY"
-            if pe_ratio > 40 or debt_to_equity > 3.0:
-                return "SELL"
+            if 0 < pe_ratio < 22 and roe > 0.18 and debt_to_equity < 1.0: return "BUY"
+            if pe_ratio > 40 or debt_to_equity > 3.0: return "SELL"
             return "HOLD"
         elif agent_name == "cathie" or "Innovation" in specialty:
-            if rsi > 60 and trend == "bullish":
-                return "HIGH_CONVICTION_BUY" if confidence > 0.85 else "BUY"
-            if rsi < 30:
-                return "HOLD"
+            if rsi > 60 and trend == "bullish": return "HIGH_CONVICTION_BUY" if confidence > 0.85 else "BUY"
+            if rsi < 30: return "HOLD"
             return "HOLD"
         elif agent_name == "macro_monk":
-            if debt_to_equity < 0.5 and trend == "bullish":
-                return "BUY"
-            if debt_to_equity > 5.0:
-                return "SELL"
+            if debt_to_equity < 0.5 and trend == "bullish": return "BUY"
+            if debt_to_equity > 5.0: return "SELL"
             return "HOLD"
         elif agent_name == "degen_auditor":
-            if debt_to_equity > 4.0 or pe_ratio > 100:
-                return "REJECT"
+            if debt_to_equity > 4.0 or pe_ratio > 100: return "REJECT"
             return "APPROVED"
         elif agent_name == "the_ghost":
-            if rsi > 85:
-                return "SELL"
-            if rsi < 15:
-                return "BUY"
+            if rsi > 85: return "SELL"
+            if rsi < 15: return "BUY"
             return "WHISPER_HOLD"
         elif "Statistical" in specialty or "Quant" in agent_name:
-            if trend == "bullish" and rsi < 70:
-                return "BUY"
-            if trend == "bearish" or rsi > 80:
-                return "SELL"
+            if trend == "bullish" and rsi < 70: return "BUY"
+            if trend == "bearish" or rsi > 80: return "SELL"
             return "HOLD"
         elif "Risk" in specialty or "VaR" in specialty:
-            if debt_to_equity > 2.5 or trend == "bearish":
-                return "REJECT"
+            if debt_to_equity > 2.5 or trend == "bearish": return "REJECT"
             return "APPROVED" if confidence > 0.8 else "CAUTION"
-        if trend == "bullish":
-            return "BUY"
-        if trend == "bearish":
-            return "SELL"
+        if trend == "bullish": return "BUY"
+        if trend == "bearish": return "SELL"
         return "HOLD"
 
     def coordinate_decision_making(self, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -234,8 +213,6 @@ class AgentManager:
         mapped = dict(result)
         if "winning_signal" in result and "winning_recommendation" not in result:
             mapped["winning_recommendation"] = result["winning_signal"]
-        if "winning_recommendation" in result and "winning_signal" not in result:
-            mapped["winning_signal"] = result["winning_recommendation"]
         if "participating_agents" in result and "total_votes" not in result:
             mapped["total_votes"] = result["participating_agents"]
         return mapped
@@ -285,8 +262,5 @@ class AgentManager:
             "recent_voting_sessions": len(self.voting_sessions),
             "personas_active": len([a for a in self.enhanced_agents.values() if a.get("persona", False)]),
             "all_agents": all_agents_list,
-            "sample_agents": {
-                dept: agents[0] if isinstance(agents, list) and agents else None
-                for dept, agents in departments_simple.items()
-            },
+            "sample_agents": {dept: agents[0] if isinstance(agents, list) and agents else None for dept, agents in departments_simple.items()},
         }
