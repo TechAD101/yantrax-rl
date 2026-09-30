@@ -94,6 +94,7 @@ class DecisionPipeline:
         # Initialize CEO if not provided
         if not self.ceo:
             self.ceo = AutonomousCEO(personality=CEOPersonality.BALANCED)
+            self.ceo.logger = logger
             self.ceo.agent_manager = self.agent_manager
             self.ceo.debate_engine = self.debate_engine
             self.ceo.ghost_layer = self.ghost_layer or GhostLayer()
@@ -516,7 +517,7 @@ class DecisionPipeline:
         try:
             # Build context for CEO
             ceo_context = {
-                'type': 'strategic_trading_decision',
+                'type': 'trading',
                 'symbol': ctx.symbol,
                 'ticker': ctx.symbol,
                 'market_trend': ctx.market_snapshot.trend if ctx.market_snapshot else 'neutral',
