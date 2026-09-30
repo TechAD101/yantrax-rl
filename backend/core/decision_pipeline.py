@@ -537,9 +537,17 @@ class DecisionPipeline:
         return ctx
     
     async def _stage_ceo_governance(self, ctx: DecisionContext) -> DecisionContext:
-        """Run CEO governance decision."""
+        """Run CEO governance while preserving the directional trade candidate."""
         try:
-            # Build context for CEO
+            # The CEO's current public API returns a governance workflow type
+            # (for example, "trading" or "defensive_lockdown"), not a BUY/SELL
+            # command. Direction therefore remains explicit in the strategy candidate.
+            candidate_action = (
+                ctx.candidate_strategy.action
+                if ctx.candidate_strategy
+                else TradingAction.HOLD
+            )
+
             ceo_context = {
                 'type': 'trading',
                 'symbol': ctx.symbol,
@@ -554,28 +562,20 @@ class DecisionPipeline:
                 'portfolio_state': ctx.portfolio_state.to_dict() if ctx.portfolio_state else {},
                 'timestamp': datetime.now().isoformat(),
             }
-            
-            # CEO decision (async)
+
             ceo_decision = await self.ceo.make_strategic_decision(ceo_context)
-            
-            # CEO decision_type is a workflow category, not a trading direction.
-            # The canonical trading direction remains the strategy candidate unless
-            # the CEO explicitly returns BUY/SELL/HOLD as its decision type.
-            action_map = {
-                'BUY': TradingAction.BUY,
-                'SELL': TradingAction.SELL,
-                'HOLD': TradingAction.HOLD,
-                'defensive_lockdown': TradingAction.HOLD,
-            }
-            governed_action = action_map.get(ceo_decision.decision_type)
-            if governed_action is None:
-                governed_action = ctx.candidate_strategy.action if ctx.candidate_strategy else TradingAction.HOLD
-            
+
+            # Governance type is recorded separately from the trade direction.
+            # A non-directional workflow type must never manufacture a BUY/SELL.
+            governance_action = TradingAction.HOLD
+            if ceo_decision.decision_type in ('BUY', 'SELL', 'HOLD'):
+                governance_action = TradingAction(ceo_decision.decision_type)
+
             ctx.ceo_decision = CEODecision(
                 decision_id=ceo_decision.id,
                 timestamp=ceo_decision.timestamp,
                 decision_type=ceo_decision.decision_type,
-                action=governed_action,
+                action=candidate_action if ceo_decision.decision_type == 'trading' else governance_action,
                 confidence=ceo_decision.confidence,
                 reasoning=ceo_decision.reasoning,
                 expected_impact=ceo_decision.expected_impact,
@@ -584,15 +584,15 @@ class DecisionPipeline:
                 pain_level=self.ceo._calculate_pain_level(ceo_context),
                 market_mood=self.ceo._determine_market_mood(),
             )
-            
+
             ctx.add_provenance("ceo_governance", {
                 "action": ctx.ceo_decision.action.value,
+                "decision_type": ctx.ceo_decision.decision_type,
+                "candidate_action": candidate_action.value,
                 "confidence": ctx.ceo_decision.confidence,
                 "pain_level": ctx.ceo_decision.pain_level,
-                "ghost_nudge": ctx.ceo_decision.ghost_nudge is not None,
-                "philosophy_veto": ctx.ceo_decision.philosophy_veto,
             })
-            
+
         except Exception as e:
             logger.error(f"CEO governance failed: {e}")
             ctx.ceo_decision = CEODecision(
@@ -608,9 +608,9 @@ class DecisionPipeline:
                 pain_level=0,
                 market_mood="unknown",
             )
-        
+
         return ctx
-    
+
     async def _stage_preliminary_risk(self, ctx: DecisionContext) -> DecisionContext:
         """Run preliminary risk checks (before sizing)."""
         # Build risk state from emotional safeguards
