@@ -66,7 +66,8 @@ class DecisionPipeline:
         self.ceo = ceo
         self.ghost_layer = ghost_layer
         self.oracle = oracle
-        self.sentiment_service = sentiment_service or get_sentiment_service()
+        # Keep the public sentiment_service property backward-compatible while allowing tests and callers to inject a deterministic service.
+        self._sentiment_service = sentiment_service
         self.portfolio_id = portfolio_id
         
         # Pipeline components
@@ -396,20 +397,20 @@ class DecisionPipeline:
 
                 # Normalize winning signal to canonical TradingAction
                 raw_winning = voting_result['winning_signal']
-                canonical_signal = self._normalize_signal_to_trading_action(raw_winning)
+                winning_action = self._normalize_signal_to_trading_action(raw_winning)
 
                 # Build individual AgentVote objects from agent_votes
                 agent_votes = []
                 for av in voting_result.get('agent_votes', []):
                     signal = av['signal']
-                    canonical_signal = self._normalize_signal_to_trading_action(signal)
+                    agent_action = self._normalize_signal_to_trading_action(signal)
                     # Map role to weight
                     weight = av['weight']
                     agent_votes.append(AgentVote(
                         agent_name=av['name'],
                         department=av['department'],
                         role=av['role'],
-                        signal=canonical_signal,
+                        signal=agent_action,
                         confidence=av['confidence'],
                         weight=weight,
                         reasoning=f"Signal: {signal}, Specialty: {av.get('specialty', '')}",
@@ -419,7 +420,7 @@ class DecisionPipeline:
 
                 # Convert to canonical VotingResult
                 ctx.voting_result = VotingResult(
-                    winning_signal=canonical_signal,
+                    winning_signal=winning_action,
                     consensus_strength=voting_result['consensus_strength'],
                     vote_distribution=voting_result['vote_distribution'],
                     participating_agents=voting_result['participating_agents'],
@@ -1257,8 +1258,8 @@ class DecisionPipeline:
     
     @property
     def sentiment_service(self):
-        """Lazy sentiment service getter."""
-        return get_sentiment_service()
+        """Return the injected sentiment service or lazily create the shared service."""
+        return self._sentiment_service or get_sentiment_service()
 
 
 # Convenience function for direct pipeline execution
