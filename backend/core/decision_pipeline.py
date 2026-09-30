@@ -620,18 +620,28 @@ class DecisionPipeline:
         return ctx
     
     async def _stage_position_sizing(self, ctx: DecisionContext) -> DecisionContext:
-        """Calculate position size using PositionSizer."""
-        if not ctx.candidate_strategy or ctx.candidate_strategy.action == TradingAction.HOLD:
+        """Calculate position size for the governed trade action."""
+        if not ctx.candidate_strategy:
             return ctx
-        
+
+        # The CEO stage is the authoritative governance decision. Carry that
+        # action into the sizing stage so a governed BUY/SELL is not left with
+        # the context's default zero-sized position.
+        sizing_action = ctx.ceo_decision.action if ctx.ceo_decision else ctx.candidate_strategy.action
+        if sizing_action in (TradingAction.HOLD, TradingAction.ABSTAIN):
+            return ctx
+
+        if sizing_action != ctx.candidate_strategy.action:
+            ctx.candidate_strategy.action = sizing_action
+
         sizing_result = self.position_sizer.calculate(ctx)
-        
+
         ctx.final_position_size = sizing_result.position_size
         ctx.final_stop_loss = sizing_result.stop_loss
         ctx.final_take_profit = sizing_result.take_profit
-        
+
         ctx.add_provenance("position_sizing", sizing_result.to_dict())
-        
+
         return ctx
     
     async def _stage_final_risk(self, ctx: DecisionContext) -> DecisionContext:
