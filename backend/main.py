@@ -1,4 +1,4 @@
-    SENTIMENT_READY = False
+SENTIMENT_READY = False
 
 # Initialize Institutional Strategy Engine
 try:
