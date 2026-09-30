@@ -65,11 +65,13 @@ class KnowledgeBaseService:
 
         self._initialize_collections()
 
+        # Mark the service initialized before seeding. _seed_wisdom() intentionally
+        # uses the public store_wisdom() API, which performs its own initialization guard.
+        self._initialized = True
+
         # Seed if empty
         if self.collections['investor_wisdom'].count() == 0:
             self._seed_wisdom()
-
-        self._initialized = True
 
     def _ensure_initialized(self):
         """Ensure ChromaDB is initialized before operations."""
