@@ -271,7 +271,9 @@ class DecisionPipeline:
             # Get portfolio state
             portfolio_state = await self._get_portfolio_state()
             
-            # Build market data for strategy engine
+            # Build market data for strategy engine. The pipeline's canonical
+            # snapshot is authoritative for current state; price history is only
+            # additional context for technical calculations.
             price_history = self._get_price_history(ctx.symbol)
             enhanced_market_data = {
                 'price': ctx.market_snapshot.price,
@@ -313,7 +315,7 @@ class DecisionPipeline:
                 ctx.symbol, enhanced_market_data, fundamentals, sentiment, portfolio_state
             )
             
-            # Map to canonical candidate strategy
+            # Map the strategy engine's directional signal to the canonical action.
             action_map = {
                 'BUY': TradingAction.BUY,
                 'SELL': TradingAction.SELL,
