@@ -534,20 +534,24 @@ class DecisionPipeline:
             # CEO decision (async)
             ceo_decision = await self.ceo.make_strategic_decision(ceo_context)
             
-            # Map CEO decision to canonical format
+            # CEO decision_type is a workflow category, not a trading direction.
+            # The canonical trading direction remains the strategy candidate unless
+            # the CEO explicitly returns BUY/SELL/HOLD as its decision type.
             action_map = {
                 'BUY': TradingAction.BUY,
                 'SELL': TradingAction.SELL,
                 'HOLD': TradingAction.HOLD,
                 'defensive_lockdown': TradingAction.HOLD,
-                'trading': TradingAction.BUY if (ctx.candidate_strategy and ctx.candidate_strategy.action == TradingAction.BUY) else TradingAction.SELL if (ctx.candidate_strategy and ctx.candidate_strategy.action == TradingAction.SELL) else TradingAction.HOLD,
             }
+            governed_action = action_map.get(ceo_decision.decision_type)
+            if governed_action is None:
+                governed_action = ctx.candidate_strategy.action if ctx.candidate_strategy else TradingAction.HOLD
             
             ctx.ceo_decision = CEODecision(
                 decision_id=ceo_decision.id,
                 timestamp=ceo_decision.timestamp,
                 decision_type=ceo_decision.decision_type,
-                action=action_map.get(ceo_decision.decision_type, TradingAction.HOLD),
+                action=governed_action,
                 confidence=ceo_decision.confidence,
                 reasoning=ceo_decision.reasoning,
                 expected_impact=ceo_decision.expected_impact,
