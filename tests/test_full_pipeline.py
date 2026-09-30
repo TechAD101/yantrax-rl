@@ -93,6 +93,15 @@ class TestStrategySignalContract(unittest.TestCase):
         self.assertIn('bullish', reasoning.lower())
 
 
+class TestPipelineProviderContract(unittest.TestCase):
+    def test_missing_market_provider_abstains(self):
+        import asyncio
+        pipeline = DecisionPipeline(market_data=None, sentiment_service=TestSentimentService())
+        ctx = asyncio.run(pipeline.execute_decision('AAPL'))
+        self.assertEqual(ctx.final_action, TradingAction.ABSTAIN)
+        self.assertIn('market_snapshot_error', ctx.provenance)
+
+        
 class TestFullPipeline(unittest.TestCase):
     """Test the full paper-trade lifecycle from market snapshot to learning."""
 
