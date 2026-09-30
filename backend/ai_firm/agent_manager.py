@@ -80,14 +80,17 @@ class AgentManager:
         }
 
     def _ensure_kb(self):
-        """Load KB lazily and isolate its optional failure from agent voting."""
+        """Load the KB handle lazily without initializing ChromaDB in the voting path."""
         if self.kb is not None:
             return self.kb
         try:
             from backend.services.knowledge_base_service import get_knowledge_base
-            self.kb = get_knowledge_base()
+            self.kb = get_knowledge_base(lazy_init=True)
         except Exception as exc:
-            self.logger.warning("Knowledge base initialization unavailable; voting will continue without KB enrichment: %s", exc)
+            self.logger.warning(
+                "Knowledge base handle unavailable; voting will continue without KB enrichment: %s",
+                exc,
+            )
             self.kb = False
         return self.kb
 
@@ -169,14 +172,20 @@ class AgentManager:
         trend = context.get("market_trend", "neutral") if context else "neutral"
 
         kb = self._ensure_kb()
-        if kb and kb is not False:
+        # KB enrichment is optional. Only query when a caller has already initialized
+        # the heavy ChromaDB backend; never make agent voting pay the initialization cost.
+        if kb and kb is not False and getattr(kb, "_initialized", False):
             try:
                 query = f"{specialty} in {market_condition} market"
                 wisdom_items = kb.query_wisdom(topic=query, archetype_filter=agent_name, max_results=1) or []
                 if wisdom_items and wisdom_items[0].get("relevance_score", 0) > 0.8:
                     confidence = min(0.98, confidence + 0.05)
             except Exception as exc:
-                self.logger.warning("Knowledge base query unavailable for %s; continuing without enrichment: %s", agent_name, exc)
+                self.logger.warning(
+                    "Knowledge base query unavailable for %s; continuing without enrichment: %s",
+                    agent_name,
+                    exc,
+                )
 
         if agent_name == "warren" or "Value" in specialty:
             if 0 < pe_ratio < 22 and roe > 0.18 and debt_to_equity < 1.0: return "BUY"
