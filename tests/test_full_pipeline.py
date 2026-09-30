@@ -27,10 +27,18 @@ class TestMarketData:
         }
 
     def get_fundamentals(self, symbol):
-        return {}
+        return {
+            'pe_ratio': 18.0,
+            'return_on_equity': 0.25,
+            'debt_to_equity': 0.3,
+            'revenue_growth': 0.12,
+            'earnings_growth': 0.15,
+            'profit_margin': 0.22,
+        }
 
     def get_price_history(self, symbol, days):
-        return [{'close': 150.0} for _ in range(days)]
+        # Deterministic upward history with a fresh bullish crossover near the end.
+        return [{'close': 100.0 + i * 1.0} for i in range(days)]
 
 
 class TestFullPipeline(unittest.TestCase):
