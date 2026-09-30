@@ -39,6 +39,7 @@ scikit-learn==1.3.2
 
 # AI SDKs
 alpaca-py==0.43.2
+fyers-apiv3
 google-generativeai==0.4.0
 
 
