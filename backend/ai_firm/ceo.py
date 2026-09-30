@@ -11,6 +11,7 @@ from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
 import hashlib
+import logging
 from .debate_engine import DebateEngine
 from .agent_manager import AgentManager
 from .ghost_layer import GhostLayer
