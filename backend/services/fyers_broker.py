@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
+from urllib.parse import urlencode
 
 from backend.config import Config
 
@@ -35,7 +36,7 @@ class FyersOrderRequest:
     stop_price: float = 0
     validity: str = "DAY"
     disclosed_qty: int = 0
-    offline_order: str = "False"
+    offline_order: bool = False
     stop_loss: float = 0
     take_profit: float = 0
 
@@ -57,7 +58,7 @@ class FyersOrderRequest:
             "stopPrice": self.stop_price,
             "validity": self.validity,
             "disclosedQty": self.disclosed_qty,
-            "offlineOrder": self.offline_order,
+            "offlineOrder": bool(self.offline_order),
             "stopLoss": self.stop_loss,
             "takeProfit": self.take_profit,
         }
@@ -113,11 +114,13 @@ class FyersBroker:
             raise FyersConfigurationError(
                 "FYERS_APP_ID and FYERS_REDIRECT_URI are required to build the login URL"
             )
-        return (
-            "https://api-t1.fyers.in/api/v3/generate-authcode?"
-            f"client_id={self.client_id}&redirect_uri={self.redirect_uri}"
-            "&response_type=code&state=" + state
-        )
+        params = {
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
+            "response_type": "code",
+            "state": state,
+        }
+        return "https://api-t1.fyers.in/api/v3/generate-authcode?" + urlencode(params)
 
     def build_app_id_hash(self) -> str:
         if not self.client_id or not self.secret_id:
