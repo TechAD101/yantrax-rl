@@ -332,7 +332,7 @@ class RiskGovernor:
         if portfolio_value <= 0:
             return False, "Invalid portfolio value", {}
         
-        position_value = ctx.final_position_size
+        position_value = ctx.final_position_size * ctx.market_snapshot.price
         position_pct = position_value / portfolio_value
         
         if position_pct > self.max_position_pct:
@@ -363,13 +363,14 @@ class RiskGovernor:
                 existing_qty = pos.get('quantity', 0)
                 break
         
-        # final_position_size is dollar notional; existing_qty is shares.
-        existing_value = existing_qty * ctx.market_snapshot.price
-        proposed_value = ctx.final_position_size if ctx.final_position_size else 0
-        position_value = existing_value + proposed_value
+        # Add proposed position
+        proposed_qty = ctx.final_position_size if ctx.final_position_size else 0
+        total_qty = existing_qty + proposed_qty
         
-        if position_value <= 0:
+        if total_qty <= 0:
             return True, "No position", {}
+        
+        position_value = total_qty * ctx.market_snapshot.price
         concentration_pct = position_value / portfolio_value
         
         if concentration_pct > self.max_concentration_pct:
@@ -460,7 +461,7 @@ class RiskGovernor:
         volatility = ctx.market_snapshot.volatility or 0.02
         
         # Estimate slippage: spread/2 + volatility * position_impact
-        position_value = ctx.final_position_size
+        position_value = ctx.final_position_size * ctx.market_snapshot.price
         portfolio_value = ctx.portfolio_state.total_value if ctx.portfolio_state else 100000
         position_pct = position_value / portfolio_value if portfolio_value > 0 else 0
         
