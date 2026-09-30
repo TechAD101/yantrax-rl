@@ -684,8 +684,8 @@ class InstitutionalReportGenerator:
     
     def __init__(self, market_data_service=None, trade_validator=None, ghost_layer=None):
         from backend.services.trade_validator import get_trade_validator
-        from services.derivatives_service import DerivativesService
-        from services.microstructure_service import MicrostructureService
+        from backend.services.derivatives_service import DerivativesService
+        from backend.services.microstructure_service import MicrostructureService
         
         self.market_data = market_data_service
         self.validator = trade_validator or get_trade_validator()
