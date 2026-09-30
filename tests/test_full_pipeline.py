@@ -14,6 +14,27 @@ from backend.db import init_db, get_session
 from backend.service_registry import registry
 
 
+class TestSentimentService:
+    def get_comprehensive_sentiment(self, symbol):
+        return {
+            'symbol': symbol,
+            'composite_sentiment': 0.75,
+            'recommendation': 'BUY',
+            'confidence': 0.8,
+            'components': {
+                'fear_greed': {
+                    'fear_greed_index': 0.75,
+                },
+                'options_flow': {
+                    'flow_score': 0.75,
+                },
+                'social_sentiment': {
+                    'overall_sentiment': 0.75,
+                },
+            },
+        }
+
+
 class TestMarketData:
     def get_stock_price(self, symbol):
         return {
@@ -55,7 +76,10 @@ class TestFullPipeline(unittest.TestCase):
         Base.metadata.create_all(engine)
 
     def setUp(self):
-        self.pipeline = DecisionPipeline(market_data=TestMarketData())
+        self.pipeline = DecisionPipeline(
+            market_data=TestMarketData(),
+            sentiment_service=TestSentimentService(),
+        )
         self.session = get_session()
         self.session.query(LearningEvent).delete()
         self.session.query(Attribution).delete()
