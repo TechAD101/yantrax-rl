@@ -67,9 +67,13 @@ class AutonomousCEO:
         if pain_level > 85:
             self.logger.warning("🚨 EMERGENCY: PAIN LEVEL CRITICAL (%s%%). ENTERING MOUNA MODE.", pain_level)
             return self._generate_panic_decision(context, pain_level)
-        ticker = context.get('ticker', 'UNKNOWN')
-        debate_result = await self.debate_engine.conduct_debate(ticker, context)
-        
+        # The canonical DecisionPipeline already ran the debate stage. Reuse that
+        # result when supplied instead of executing a second, potentially divergent debate.
+        debate_result = context.get('debate_result')
+        if not debate_result:
+            ticker = context.get('ticker', 'UNKNOWN')
+            debate_result = await self.debate_engine.conduct_debate(ticker, context)
+
         # 2. Analyze context with memory
         memory_insights = self.memory_system.recall_relevant_memories(context)
         
