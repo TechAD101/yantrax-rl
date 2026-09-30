@@ -99,11 +99,17 @@ class AutonomousCEO:
              reasoning += " | ⛔ VETOED BY PHILOSOPHY (Adharma detected)."
         
         # 5. Create decision
+        # Keep the workflow classification separate from any trade direction.
+        # The strategy action is supplied in the context and remains explicit.
+        decision_context = dict(context)
+        candidate = context.get('candidate_strategy') or {}
+        decision_context['strategy_action'] = candidate.get('action')
+
         decision = CEODecision(
             id=str(uuid.uuid4()),
             timestamp=datetime.now(),
             decision_type=context.get('type', 'strategic'),
-            context=context,
+            context=decision_context,
             reasoning=reasoning,
             confidence=round(final_confidence, 2),
             expected_impact=self._assess_impact(context, final_confidence),
