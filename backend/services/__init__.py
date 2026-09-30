@@ -1,5 +1,9 @@
 # Services Package
-from .market_data_service import get_market_data
+try:
+    from .market_data_service import get_market_data
+except ImportError:
+    get_market_data = None
+
 MarketDataService = None
 from .market_sentiment_service import MarketSentimentService, get_sentiment_service
 from .institutional_strategy_engine import InstitutionalStrategyEngine, get_strategy_engine as get_institutional_strategy_engine
