@@ -48,7 +48,7 @@ def verify_market_source(instrument: str, metric: str, sources_data: dict, db: S
 def ingest_data():
     """
     Accepts an instrument, metric, provider-value mapping, and optional timestamp.
-    The configured market-data provider is Alpaca; additional providers are not supported.
+    Only Alpaca and FYERS are accepted market-data entry points; exactly one must be supplied per datapoint.
     """
     data = request.json
     instrument = data.get('instrument')
@@ -71,9 +71,17 @@ def ingest_data():
         # 1. Validate the configured market-data source
         status, level, trust = verify_market_source(instrument, metric, sources_data, db)
         
-        # 2. Use the supported source value
-        values = [float(v) for v in sources_data.values() if v is not None]
-        final_value = values[0] if values else None
+            # 2. Use the canonical value. A single source is required so provider
+        # precedence is explicit and no legacy/implicit fallback is possible.
+        if len(sources_data) != 1:
+            return jsonify({
+                'error': 'single_source_required',
+                'message': 'Provide exactly one supported market-data source per datapoint',
+            }), 400
+        source_name, source_value = next(iter(sources_data.items()))
+        if source_value is None:
+            return jsonify({'error': 'missing_value', 'message': 'Source value cannot be null'}), 400
+        final_value = float(source_value)
         
         # 3. Store raw datapoint
         timestamp_str = data.get('timestamp')
