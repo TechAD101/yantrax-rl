@@ -99,19 +99,11 @@ class AutonomousCEO:
              reasoning += " | ⛔ VETOED BY PHILOSOPHY (Adharma detected)."
         
         # 5. Create decision
-        # decision_type is a workflow classification. Preserve the already
-        # computed strategy direction as explicit governance metadata instead of
-        # overloading decision_type with BUY/SELL semantics.
-        decision_context = dict(context)
-        candidate = context.get('candidate_strategy') or {}
-        candidate_action = candidate.get('action')
-        decision_context['strategy_action'] = candidate_action
-
         decision = CEODecision(
             id=str(uuid.uuid4()),
             timestamp=datetime.now(),
             decision_type=context.get('type', 'strategic'),
-            context=decision_context,
+            context=context,
             reasoning=reasoning,
             confidence=round(final_confidence, 2),
             expected_impact=self._assess_impact(context, final_confidence),
