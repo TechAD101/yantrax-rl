@@ -649,7 +649,7 @@ def get_institutional_report():
 
 @app.route('/market-price', methods=['GET'])
 def get_market_price():
-    """Get current market price via Waterfall"""
+    """Get current market price via Alpaca market data service."""
     symbol = request.args.get('symbol', 'AAPL').upper()
     return jsonify(market_provider.get_price(symbol)), 200
 
@@ -770,7 +770,7 @@ def market_price_stream():
             except GeneratorExit:
                 break
             except Exception as e:
-                # Log the provider error (e.g., 403 NOT_AUTHORIZED from Polygon)
+                # Log provider errors without assuming a specific legacy provider.
                 logger.error(f"market-price-stream provider error for {symbol}: {e}", exc_info=True)
 
                 # Try to extract an HTTP-like status code from the error text if present
@@ -1962,7 +1962,7 @@ def get_commentary():
     if AI_FIRM_READY:
         # Real or simulated commentary from agents
         # Use getattr to avoid AttributeError if active_provider is missing
-        provider_name = getattr(market_provider, 'active_provider', 'Waterfall')
+        provider_name = getattr(market_provider, 'active_provider', 'Alpaca')
         
         return jsonify([
             {
