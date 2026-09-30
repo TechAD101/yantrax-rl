@@ -271,7 +271,9 @@ class DecisionPipeline:
             # Get portfolio state
             portfolio_state = await self._get_portfolio_state()
             
-            # Build market data for strategy engine
+            # Build market data for strategy engine. The pipeline's canonical
+            # snapshot is authoritative for current state; price history is only
+            # additional context for technical calculations.
             price_history = self._get_price_history(ctx.symbol)
             enhanced_market_data = {
                 'price': ctx.market_snapshot.price,
@@ -282,28 +284,38 @@ class DecisionPipeline:
                 'volume_trend': 'stable',
             }
             
-            # Get fundamentals
+            # Reuse the evidence package produced by the authoritative evidence stage.
+            # This avoids a second, potentially different provider/service call here and
+            # keeps strategy selection deterministic relative to the snapshot.
             fundamentals = {}
-            if self.market_data and hasattr(self.market_data, 'get_fundamentals'):
+            if ctx.evidence and ctx.evidence.fundamental:
+                fundamentals = ctx.evidence.fundamental.to_dict()
+            if not fundamentals and self.market_data and hasattr(self.market_data, 'get_fundamentals'):
                 try:
                     fundamentals = self.market_data.get_fundamentals(ctx.symbol) or {}
                 except Exception:
                     pass
             
-            # Get sentiment
             sentiment = {}
-            if self.sentiment_service:
-                try:
-                    sentiment = self.sentiment_service.get_comprehensive_sentiment(ctx.symbol).get('components', {})
-                except Exception:
-                    pass
+            if ctx.evidence and ctx.evidence.sentiment:
+                sentiment = {
+                    'fear_greed': {
+                        'fear_greed_index': ctx.evidence.sentiment.fear_greed_index,
+                    },
+                    'options_flow': {
+                        'flow_score': ctx.evidence.sentiment.options_flow_score,
+                    },
+                    'social_sentiment': {
+                        'overall_sentiment': ctx.evidence.sentiment.social_sentiment_score,
+                    },
+                }
             
             # Generate institutional signal
             signal = self.strategy_engine.generate_institutional_signal(
                 ctx.symbol, enhanced_market_data, fundamentals, sentiment, portfolio_state
             )
             
-            # Map to canonical candidate strategy
+            # Map the strategy engine's directional signal to the canonical action.
             action_map = {
                 'BUY': TradingAction.BUY,
                 'SELL': TradingAction.SELL,
