@@ -266,47 +266,22 @@ def _get_git_version() -> Dict[str, str]:
 
 
 def unified_get_market_price(symbol: str) -> Dict[str, Any]:
-    """Get current market price for a symbol using configured provider (FMP-first).
-
-    If FMP fails or returns no usable price, attempt Massive (polygon) as a fallback
-    if `MASSIVE_API_KEY` is configured.
-    """
+    """Get the current market price from the configured market-data service."""
     symbol = symbol.upper()
-
-    # 1) Attempt primary FMP provider (via MarketDataService)
     if symbol in MARKET_PRICE_CACHE:
         return MARKET_PRICE_CACHE[symbol]
-
     if MARKET_SERVICE_READY and market_data:
         try:
             res = market_data.get_stock_price(symbol)
             if res and res.get('price') and res.get('price') > 0:
                 MARKET_PRICE_CACHE[symbol] = res
                 return res
-            logger.warning(f"FMP returned no usable price for {symbol}: {res}")
+            logger.warning(f"Market data returned no usable price for {symbol}: {res}")
         except Exception as e:
-            logger.error(f"MarketDataService lookup failed for {symbol}: {e}")
-
-    # 2) Fallback: Massive / Polygon if configured
-    massive_key = os.getenv('MASSIVE_API_KEY') or os.getenv('POLYGON_API_KEY') or os.getenv('POLYGON_KEY')
-    if massive_key:
-        try:
-            from backend.services.market_data_service_massive import MassiveMarketDataService
-            msvc = MassiveMarketDataService(api_key=massive_key, base_url=os.getenv('MASSIVE_BASE_URL'))
-            data = msvc.fetch_quote(symbol)
-            if data and data.get('price'):
-                MARKET_PRICE_CACHE[symbol] = data
-                logger.info(f"✅ MASSIVE provider success for {symbol}: {data.get('price')}")
-                return data
-            else:
-                logger.warning(f"MASSIVE returned no usable price for {symbol}: {data}")
-        except Exception as e:
-            logger.error(f"MASSIVE provider lookup failed for {symbol}: {e}")
-
-    # 3) No providers available or call failed
+            logger.error(f"Market data lookup failed for {symbol}: {e}")
     return {
         'error': 'no_market_data',
-        'message': 'No market data providers available or all providers failed',
+        'message': 'No market data available',
         'symbol': symbol,
         'timestamp': datetime.now().isoformat()
     }
@@ -722,94 +697,6 @@ def test_alpaca():
             'timestamp': datetime.now().isoformat()
         })
 
-@app.route('/test-fmp', methods=['GET'])
-@handle_errors
-def test_fmp():
-    """Force test FinancialModelingPrep (FMP) API directly"""
-    symbol = request.args.get('symbol', 'AAPL').upper()
-
-    logger.info(f"\n🧪 FORCE TEST: FMP API for {symbol}")
-
-    fmp_key = os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY')
-
-    if not fmp_key:
-        logger.error("❌ FMP credentials missing!")
-        return jsonify({
-            'status': 'error',
-            'message': 'FMP credentials not configured',
-            'fmp_key_set': False,
-            'tried_envs': ['FMP_API_KEY', 'FMP_KEY']
-        })
-
-    try:
-        import requests  # type: ignore[import]
-
-        logger.info(f"  FMP Key (first 10): {fmp_key[:10] if fmp_key else 'NONE'}")
-        logger.info("  Making request to FMP (quote endpoint)...")
-
-        params = {'apikey': fmp_key}
-
-        # Try v3 quote endpoint first
-        url_v3 = f"https://financialmodelingprep.com/api/v3/quote/{symbol}"
-        logger.info(f"  Trying v3 URL: {url_v3}")
-        response = requests.get(url_v3, params=params, timeout=10)
-        logger.info(f"  Status: {response.status_code}")
-        logger.info(f"  Response: {response.text[:200]}")
-
-        # If 403 with Legacy Endpoint message, try v4
-        if response.status_code == 403 and 'Legacy Endpoint' in (response.text or ''):
-            url_v4 = f"https://financialmodelingprep.com/api/v4/quote/{symbol}"
-            logger.warning(f"  FMP v3 legacy detected; trying v4 URL: {url_v4}")
-            response = requests.get(url_v4, params=params, timeout=10)
-            logger.info(f"  v4 Status: {response.status_code}")
-            logger.info(f"  v4 Response: {response.text[:200]}")
-
-        # If still not ok, try quote-short
-        if not response.ok:
-            url_qs = f"https://financialmodelingprep.com/api/v3/quote-short/{symbol}"
-            logger.info(f"  Trying quote-short URL: {url_qs}")
-            response = requests.get(url_qs, params=params, timeout=10)
-            logger.info(f"  quote-short Status: {response.status_code}")
-            logger.info(f"  quote-short Response: {response.text[:200]}")
-
-        # As a final single-symbol fallback, try real-time price
-        if not response.ok:
-            url_rt = f"https://financialmodelingprep.com/api/v3/stock/real-time-price/{symbol}"
-            logger.info(f"  Trying real-time URL: {url_rt}")
-            response = requests.get(url_rt, params=params, timeout=10)
-            logger.info(f"  real-time Status: {response.status_code}")
-            logger.info(f"  real-time Response: {response.text[:200]}")
-
-        # If FMP returned non-2xx, treat as error so callers get a clear failure
-        if not response.ok:
-            try:
-                payload = response.json()
-            except Exception:
-                payload = {'error': 'invalid_response', 'text': response.text}
-            return jsonify({
-                'status': 'error',
-                'symbol': symbol,
-                'response_status': response.status_code,
-                'response': payload,
-                'timestamp': datetime.now().isoformat()
-            }), response.status_code
-
-        return jsonify({
-            'status': 'success',
-            'symbol': symbol,
-            'response_status': response.status_code,
-            'response': response.json(),
-            'timestamp': datetime.now().isoformat()
-        })
-    except Exception as e:
-        logger.error(f"❌ FMP test failed: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e),
-            'symbol': symbol,
-            'timestamp': datetime.now().isoformat()
-        }), 500
-
 @app.route('/market-price-stream', methods=['GET'])
 def market_price_stream():
     """Server-Sent Events stream of market prices for a symbol.
@@ -928,39 +815,6 @@ def market_price_stream():
                 # continue streaming instead of breaking so clients remain connected
 
     return Response(event_generator(), mimetype='text/event-stream')
-
-@app.route('/massive-quote', methods=['GET'])
-@handle_errors
-def massive_quote():
-    """Fetch a real-time quote from Massive Market Data service for a single symbol.
-
-    Query params:
-      - symbol: required (e.g., AAPL, BTC, EURUSD, SPX)
-    """
-    symbol = (request.args.get('symbol') or '').strip().upper()
-    if not symbol:
-        return jsonify({'status': 'error', 'message': 'symbol query parameter is required'}), 400
-
-    try:
-        # Allow using POLYGON_* env var aliases or explicit MASSIVE_API_KEY
-        massive_key = os.getenv('MASSIVE_API_KEY') or os.getenv('POLYGON_API_KEY') or os.getenv('POLYGON_KEY')
-        base_url = os.getenv('MASSIVE_BASE_URL')
-        if not massive_key:
-            logger.error('MASSIVE/POLYGON API key not configured')
-            return jsonify({'status': 'error', 'message': 'MASSIVE/POLYGON API key not configured'}), 400
-
-        try:
-            from backend.services.market_data_service_massive import MassiveMarketDataService
-        except ImportError:
-            return jsonify({'status': 'error', 'message': 'MassiveMarketDataService not available'}), 500
-        
-        logger.info(f"Using Massive provider key (first 8 chars): {massive_key[:8]}")
-        msvc = MassiveMarketDataService(api_key=massive_key, base_url=base_url)
-        data = msvc.fetch_quote(symbol)
-        return jsonify({'status': 'success', 'symbol': symbol, 'data': data, 'timestamp': datetime.now().isoformat()})
-    except Exception as e:
-        logger.error(f"❌ /massive-quote failed for {symbol}: {e}")
-        return jsonify({'status': 'error', 'message': str(e), 'symbol': symbol, 'timestamp': datetime.now().isoformat()}), 500
 
 @app.route('/ping', methods=['GET'])
 def ping():
