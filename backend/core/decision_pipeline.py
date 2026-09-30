@@ -153,27 +153,21 @@ class DecisionPipeline:
             # ──────────────────────────────────────────────────────
             ctx = await self._stage_ceo_governance(ctx)
 
-            # Establish the governed trading action before risk/sizing.
-            # CEO workflow categories such as "trading" must not be mistaken
-            # for directional BUY/SELL instructions.
-            if ctx.ceo_decision and ctx.ceo_decision.action in (
-                TradingAction.BUY,
-                TradingAction.SELL,
-                TradingAction.HOLD,
-            ):
+            # Direction is owned by the strategy candidate; CEO decision_type
+            # is governance/workflow metadata unless it is explicitly directional.
+            if ctx.ceo_decision and ctx.ceo_decision.decision_type in ("BUY", "SELL", "HOLD"):
                 ctx.final_action = ctx.ceo_decision.action
+                action_source = "ceo"
             elif ctx.candidate_strategy:
                 ctx.final_action = ctx.candidate_strategy.action
+                action_source = "candidate_strategy"
             else:
                 ctx.final_action = TradingAction.HOLD
+                action_source = "default"
 
             ctx.add_provenance("governed_action", {
                 "action": ctx.final_action.value,
-                "source": "ceo" if ctx.ceo_decision and ctx.ceo_decision.action in (
-                    TradingAction.BUY,
-                    TradingAction.SELL,
-                    TradingAction.HOLD,
-                ) else "candidate_strategy",
+                "source": action_source,
                 "ceo_decision_type": ctx.ceo_decision.decision_type if ctx.ceo_decision else None,
             })
 
