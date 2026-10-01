@@ -135,6 +135,8 @@ class FundamentalEvidence:
     profit_margin: Optional[float] = None
     dividend_yield: Optional[float] = None
     fundamental_score: float = 0.5
+    verified: bool = True
+    source: str = "provider"
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -147,6 +149,8 @@ class FundamentalEvidence:
             "profit_margin": self.profit_margin,
             "dividend_yield": self.dividend_yield,
             "fundamental_score": self.fundamental_score,
+            "verified": self.verified,
+            "source": self.source,
         }
 
 
@@ -161,6 +165,8 @@ class SentimentEvidence:
     social_sentiment_signal: str = "neutral"
     composite_sentiment: float = 0.5
     composite_signal: str = "neutral"
+    verified: bool = True
+    source: str = "provider"
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -172,6 +178,8 @@ class SentimentEvidence:
             "social_sentiment_signal": self.social_sentiment_signal,
             "composite_sentiment": self.composite_sentiment,
             "composite_signal": self.composite_signal,
+            "verified": self.verified,
+            "source": self.source,
         }
 
 

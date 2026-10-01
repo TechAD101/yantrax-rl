@@ -126,6 +126,12 @@ class DecisionPipeline:
             # STAGE 1: MARKET SNAPSHOT
             # ──────────────────────────────────────────────────────
             ctx = await self._stage_market_snapshot(ctx)
+
+            # Fail closed on unverified or missing market data.
+            if 'unverified_market_data' in ctx.provenance or (
+                ctx.final_action == TradingAction.ABSTAIN and ctx.market_snapshot is None
+            ):
+                return ctx
             if not ctx.market_snapshot:
                 ctx.final_action = TradingAction.ABSTAIN
                 return ctx
@@ -260,6 +266,17 @@ class DecisionPipeline:
             "source": ctx.market_snapshot.source,
             "verified": ctx.market_snapshot.verified,
         })
+
+        # Evidence integrity gate: unverified market data must not drive
+        # canonical trading decisions. Fail closed, explicitly.
+        if not ctx.market_snapshot.verified:
+            logger.warning(f"Unverified market data for {symbol} (source={ctx.market_snapshot.source}) - failing closed")
+            ctx.final_action = TradingAction.ABSTAIN
+            ctx.add_provenance("unverified_market_data", {
+                "source": ctx.market_snapshot.source,
+                "action": TradingAction.ABSTAIN.value,
+            })
+            return ctx
         
         return ctx
     

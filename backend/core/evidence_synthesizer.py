@@ -15,7 +15,8 @@ from backend.core.decision_context import (
 from backend.services.institutional_strategy_engine import (
     InstitutionalStrategyEngine, MarketRegime as StrategyMarketRegime
 )
-from backend.services.market_sentiment_service import get_sentiment_service
+# NOTE: The legacy random-driven MarketSentimentService is deliberately NOT
+# imported here — synthetic sentiment must never default onto the canonical path.
 MarketDataService = Any
 
 
@@ -35,7 +36,10 @@ class EvidenceSynthesizer:
     ):
         self.strategy_engine = strategy_engine
         self.market_data = market_data
-        self.sentiment_service = sentiment_service or get_sentiment_service()
+        # Explicit, injected sentiment provider only. No global fallback: the
+        # default MarketSentimentService generates random synthetic values and
+        # must never masquerade as market evidence on the canonical path.
+        self.sentiment_service = sentiment_service
 
     def synthesize(self, symbol: str, market_snapshot: MarketSnapshot) -> EvidencePackage:
         """
@@ -151,66 +155,89 @@ class EvidenceSynthesizer:
             return MarketRegime.SIDEWAYS
 
     def _analyze_technical(self, market_data: Dict[str, Any]) -> TechnicalEvidence:
-        """Extract technical evidence using Strategy Engine."""
-        if self.strategy_engine:
-            try:
-                tech = self.strategy_engine._perform_technical_analysis(market_data)
-                signals = tech.get('signals', {})
+        """Extract technical evidence using Strategy Engine.
 
-                return TechnicalEvidence(
-                    ema_fast=tech.get('ema_9'),
-                    ema_slow=tech.get('ema_21'),
-                    ema_crossover=signals.get('ema_crossover', 'neutral'),
-                    rsi=tech.get('rsi'),
-                    rsi_signal=signals.get('rsi', 'neutral'),
-                    bb_upper=tech.get('bb_upper'),
-                    bb_middle=tech.get('bb_middle'),
-                    bb_lower=tech.get('bb_lower'),
-                    bb_signal=signals.get('bollinger', 'neutral'),
-                    macd=tech.get('macd'),
-                    macd_signal_type=signals.get('macd', 'neutral'),
-                    volume_trend=tech.get('volume_trend', 'neutral'),
-                    momentum_score=signals.get('momentum_score'),
-                )
-            except Exception:
-                pass
+        Strategy exceptions are visible, not silently converted to neutral
+        placeholder signals.
+        """
+        if not self.strategy_engine:
+            raise ValueError("No strategy engine configured for technical analysis")
+        tech = self.strategy_engine._perform_technical_analysis(market_data)
+        signals = tech.get('signals', {})
 
-        return TechnicalEvidence()
+        return TechnicalEvidence(
+            ema_fast=tech.get('ema_9'),
+            ema_slow=tech.get('ema_21'),
+            ema_crossover=signals.get('ema_crossover', 'neutral'),
+            rsi=tech.get('rsi'),
+            rsi_signal=signals.get('rsi', 'neutral'),
+            bb_upper=tech.get('bb_upper'),
+            bb_middle=tech.get('bb_middle'),
+            bb_lower=tech.get('bb_lower'),
+            bb_signal=signals.get('bollinger', 'neutral'),
+            macd=tech.get('macd'),
+            macd_signal_type=signals.get('macd', 'neutral'),
+            volume_trend=tech.get('volume_trend', 'neutral'),
+            momentum_score=signals.get('momentum_score'),
+        )
 
     def _analyze_fundamental(self, fundamentals: Dict[str, Any]) -> FundamentalEvidence:
-        """Extract fundamental evidence using Strategy Engine."""
-        if self.strategy_engine and fundamentals:
-            try:
-                score = self.strategy_engine._calculate_fundamental_score(fundamentals)
-                return FundamentalEvidence(
-                    pe_ratio=fundamentals.get('pe_ratio'),
-                    return_on_equity=fundamentals.get('return_on_equity'),
-                    debt_to_equity=fundamentals.get('debt_to_equity'),
-                    revenue_growth=fundamentals.get('revenue_growth'),
-                    earnings_growth=fundamentals.get('earnings_growth'),
-                    free_cash_flow=fundamentals.get('free_cash_flow'),
-                    profit_margin=fundamentals.get('profit_margin'),
-                    dividend_yield=fundamentals.get('dividend_yield'),
-                    fundamental_score=score,
-                )
-            except Exception:
-                pass
+        """Extract fundamental evidence from provider data.
 
-        # Provide sensible defaults for missing fundamentals
+        Never fabricate values: missing fundamentals stay unverified with a
+        neutral score, clearly labeled — not plausible-looking defaults.
+        """
+        if fundamentals and self.strategy_engine:
+            score = self.strategy_engine._calculate_fundamental_score(fundamentals)
+            return FundamentalEvidence(
+                pe_ratio=fundamentals.get('pe_ratio'),
+                return_on_equity=fundamentals.get('return_on_equity'),
+                debt_to_equity=fundamentals.get('debt_to_equity'),
+                revenue_growth=fundamentals.get('revenue_growth'),
+                earnings_growth=fundamentals.get('earnings_growth'),
+                free_cash_flow=fundamentals.get('free_cash_flow'),
+                profit_margin=fundamentals.get('profit_margin'),
+                dividend_yield=fundamentals.get('dividend_yield'),
+                fundamental_score=score,
+                verified=True,
+                source='provider',
+            )
+
+        # Unverified neutral placeholders — explicitly labeled, never fake data
         return FundamentalEvidence(
-            pe_ratio=fundamentals.get('pe_ratio', 20.0),
-            return_on_equity=fundamentals.get('return_on_equity', 0.15),
-            debt_to_equity=fundamentals.get('debt_to_equity', 0.5),
-            revenue_growth=fundamentals.get('revenue_growth', 0.1),
-            earnings_growth=fundamentals.get('earnings_growth', 0.1),
-            free_cash_flow=fundamentals.get('free_cash_flow', 1e9),
-            profit_margin=fundamentals.get('profit_margin', 0.2),
-            dividend_yield=fundamentals.get('dividend_yield', 0.01),
+            pe_ratio=None,
+            return_on_equity=None,
+            debt_to_equity=None,
+            revenue_growth=None,
+            earnings_growth=None,
+            free_cash_flow=None,
+            profit_margin=None,
+            dividend_yield=None,
             fundamental_score=0.5,
+            verified=False,
+            source='unavailable',
         )
 
     def _analyze_sentiment(self, sentiment_data: Dict[str, Any]) -> SentimentEvidence:
-        """Extract sentiment evidence using Sentiment Service."""
+        """Extract sentiment evidence from the injected sentiment provider.
+
+        With no verified sentiment provider, return explicitly unverified
+        neutral sentiment — never random-derived scores.
+        """
+        if not sentiment_data or not self.sentiment_service:
+            return SentimentEvidence(
+                fear_greed_index=0.5,
+                fear_greed_signal="NEUTRAL",
+                options_flow_score=0.5,
+                options_flow_signal="NEUTRAL_FLOW",
+                social_sentiment_score=0.5,
+                social_sentiment_signal="NEUTRAL",
+                composite_sentiment=0.5,
+                composite_signal="HOLD",
+                verified=False,
+                source="unavailable",
+            )
+
         components = sentiment_data.get('components', {})
         fg = components.get('fear_greed', {})
         of = components.get('options_flow', {})
@@ -238,6 +265,12 @@ class EvidenceSynthesizer:
         composite = sentiment_data.get('composite_sentiment', 0.5)
         comp_signal = sentiment_data.get('recommendation', 'HOLD')
 
+        # Mark verification: synthetic sources are labeled so they can never
+        # masquerade as market evidence downstream.
+        src = str(sentiment_data.get('source', 'provider')).lower()
+        synthetic_markers = ('sim', 'mock', 'random', 'synthetic', 'fixture', 'test')
+        verified = not any(m in src for m in synthetic_markers)
+
         return SentimentEvidence(
             fear_greed_index=fg_idx,
             fear_greed_signal=fg_signal,
@@ -247,6 +280,8 @@ class EvidenceSynthesizer:
             social_sentiment_signal=ss_signal,
             composite_sentiment=composite,
             composite_signal=comp_signal,
+            verified=verified,
+            source=sentiment_data.get('source', 'provider'),
         )
 
 
@@ -287,6 +322,22 @@ def build_market_snapshot(
         trend=trend,
         liquidity=volume,
         source=price_data.get('source', 'unknown'),
-        verified=price_data.get('verified', False),
+        verified=price_data.get('verified', _price_source_is_verified(price_data)),
         data_age_seconds=price_data.get('data_age_seconds'),
     )
+
+
+_SYNTHETIC_SOURCE_MARKERS = ('sim', 'mock', 'random', 'synthetic', 'fallback', 'error', 'test', 'placeholder')
+
+
+def _price_source_is_verified(price_data: Dict[str, Any]) -> bool:
+    """Derive verification from the provider source label.
+
+    Real provider quotes with a positive price are treated as verified;
+    simulated/mock/fallback/error sources are never verified evidence.
+    """
+    price = price_data.get('price') or 0
+    if price <= 0:
+        return False
+    src = str(price_data.get('source', 'unknown')).lower()
+    return not any(m in src for m in _SYNTHETIC_SOURCE_MARKERS)
