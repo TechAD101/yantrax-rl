@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__)
 
 data_ingest_bp = Blueprint('data_ingest', __name__)
 
-def verify_triple_source(instrument: str, metric: str, sources_data: dict, db: Session):
+def verify_market_source(instrument: str, metric: str, sources_data: dict, db: Session):
     """
-    sources_data: {'fmp': 150.5, 'alpaca': 150.6, 'yfinance': 150.4}
+    sources_data contains the supported provider value (currently Alpaca).
     Returns validation status, fallback level, and trust contribution
     """
     fallback_level = 0
@@ -24,8 +24,8 @@ def verify_triple_source(instrument: str, metric: str, sources_data: dict, db: S
     if len(values) == 0:
         return 'missing', 5, 0.0
 
-    if len(values) < 3:
-        fallback_level += (3 - len(values))
+    if len(values) == 0:
+        fallback_level = 5
     
     median_val = np.median(values)
     
@@ -43,16 +43,8 @@ def verify_triple_source(instrument: str, metric: str, sources_data: dict, db: S
 @data_ingest_bp.route('/data/ingest', methods=['POST'])
 def ingest_data():
     """
-    Accepts: {
-        "instrument": "AAPL",
-        "metric": "price",
-        "sources": {
-            "fmp": 150.5,
-            "alpaca": 150.6,
-            "yfinance": 150.4
-        },
-        "timestamp": "2023-10-27T10:00:00Z"
-    }
+    Accepts an instrument, metric, provider-value mapping, and optional timestamp.
+    The configured market-data provider is Alpaca; additional providers are not supported.
     """
     data = request.json
     instrument = data.get('instrument')
@@ -64,12 +56,12 @@ def ingest_data():
         
     db = get_session()
     try:
-        # 1. Triple-source verification
-        status, level, trust = verify_triple_source(instrument, metric, sources_data, db)
+        # 1. Validate the configured market-data source
+        status, level, trust = verify_market_source(instrument, metric, sources_data, db)
         
-        # 2. Pick the primary source or median
+        # 2. Use the supported source value
         values = [float(v) for v in sources_data.values() if v is not None]
-        final_value = np.median(values) if values else None
+        final_value = values[0] if values else None
         
         # 3. Store raw datapoint
         timestamp_str = data.get('timestamp')

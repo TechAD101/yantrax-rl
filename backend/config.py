@@ -36,16 +36,6 @@ class Config:
     FMP_API_KEY = os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY')
 
     @classmethod
-    def get_market_config(cls) -> Dict[str, Any]:
-        return {
-            'fmp_api_key': cls.FMP_API_KEY,
-            'cache_ttl_seconds': cls.CACHE_TTL_SECONDS,
-            'rate_limit_calls': 300,
-            'rate_limit_period': 60,
-            'batch_size': 50
-        }
-
-    @classmethod
     def is_perplexity_enabled(cls) -> bool:
         return bool(cls.PERPLEXITY_API_KEY)
 

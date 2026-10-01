@@ -682,13 +682,12 @@ class AdvancedReportGenerator:
 class InstitutionalReportGenerator:
     """Institutional-grade report generator (Perplexity-spec)"""
     
-    def __init__(self, waterfall_service=None, trade_validator=None, ghost_layer=None):
-        from services.market_data_service_waterfall import get_waterfall_service
-        from services.trade_validator import get_trade_validator
-        from services.derivatives_service import DerivativesService
-        from services.microstructure_service import MicrostructureService
+    def __init__(self, market_data_service=None, trade_validator=None, ghost_layer=None):
+        from backend.services.trade_validator import get_trade_validator
+        from backend.services.derivatives_service import DerivativesService
+        from backend.services.microstructure_service import MicrostructureService
         
-        self.waterfall = waterfall_service or get_waterfall_service()
+        self.market_data = market_data_service
         self.validator = trade_validator or get_trade_validator()
         self.derivatives = DerivativesService()
         self.microstructure = MicrostructureService()
@@ -698,10 +697,12 @@ class InstitutionalReportGenerator:
         """Generates the full 13-section institutional report"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
         
-        # Data Gathering (Triple-Source)
-        verified_data = self.waterfall.get_price_verified(symbol)
+        # Data Gathering
+        if self.market_data is None:
+            raise RuntimeError("market_data_service is required for institutional report generation")
+        verified_data = self.market_data.get_price_verified(symbol)
         price = verified_data.get('price', 100.0) # Safety fallback
-        fundamentals = self.waterfall.get_fundamentals(symbol)
+        fundamentals = self.market_data.get_fundamentals(symbol)
         derivatives_data = self.derivatives.get_derivatives_analytics(symbol, price)
         micro_data = self.microstructure.get_microstructure_analytics(symbol, price, verified_data.get('volume', 1000000))
         
@@ -786,7 +787,7 @@ class InstitutionalReportGenerator:
 **Confidence Band: {band} | Reliability: {'HIGH' if trust > 80 else 'MODERATE' if trust > 60 else 'LOW'} | Signal Effectiveness: {trust}%**
 
 Yantra X's macro environment for **{symbol}** is characterized by stable liquidity and verified pricing at **${price:,.2f}**. 
-The trust score reflect {data.get('verification', {}).get('status', 'unverified')} status across {len(data.get('verification', {}).get('sources_used', []))} sources. 
+The trust score reflects the configured market-data verification status. 
 Primary risks include sectoral volatility and data age. This report is {'SUITABLE' if trust > 70 else 'MARGINAL'} for institutional decision-making."""
 
     def _section_1_executive_summary(self, trust, symbol, data):
@@ -934,7 +935,7 @@ Interaction Narrative: Technical strength is leading, while liquidity tightness 
 | Section | Data Age | Source(s) | Fallback | ID |
 |---|---|---|---|---|
 | Price/Verified | <60s | {', '.join(data.get('verification', {}).get('sources_used', []))} | Level {data.get('verification', {}).get('fallback_level', 0)} | {data.get('audit_id')} |
-| Fundamentals | <300s | FMP/Internal | Level 0 | KB_REF_99 |"""
+| Fundamentals | <300s | configured market-data service | Level 0 | KB_REF_99 |"""
 
     def _section_13_disclaimer(self):
         return f"""### 13. DISCLAIMER/METHODOLOGY

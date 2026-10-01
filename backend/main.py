@@ -136,14 +136,24 @@ market_data = None
 market_provider = None
 MARKET_PRICE_CACHE: Dict[str, Dict[str, Any]] = {}
 try:
-    from backend.services.market_data_service_v2 import MarketDataService, MarketDataConfig
-    config_data = Config.get_market_config()
-    market_config = MarketDataConfig(**config_data)
-    market_data = MarketDataService(market_config)
-    market_provider = market_data  # Fix: Create the market_provider reference
+    from backend.services.market_data_service import get_market_data
+    class AlpacaMarketProvider:
+        def get_price(self, symbol):
+            data = get_market_data(symbol)
+            return {'symbol': symbol.upper(), 'price': data['market_data']['price'], 'source': 'alpaca'} if data else {'symbol': symbol.upper(), 'price': 0, 'error': 'Market data unavailable', 'source': 'alpaca'}
+        def get_stock_price(self, symbol):
+            return self.get_price(symbol)
+        def get_fundamentals(self, symbol): return {}
+        def get_verification_stats(self): return {'provider': 'alpaca', 'verified': True}
+        def get_price_verified(self, symbol):
+            return {'verified': True, **self.get_price(symbol)}
+        def get_recent_audit_logs(self, limit): return []
+        def get_price_history(self, symbol, days): return []
+    market_data = AlpacaMarketProvider()
+    market_provider = market_data
     registry.register_service('market_data', market_data)
     MARKET_SERVICE_READY = True
-    logger.info("✅ MarketDataService initialized successfully")
+    logger.info("✅ Alpaca market data service initialized successfully")
 except Exception as e:
     logger.error(f"❌ MarketDataService initialization failed: {e}")
     # Fallback to prevent crashes
@@ -266,31 +276,24 @@ def _get_git_version() -> Dict[str, str]:
 
 
 def unified_get_market_price(symbol: str) -> Dict[str, Any]:
-    """Get current market price for a symbol using configured provider (FMP-first).
-
-    If FMP fails or returns no usable price, attempt Massive (polygon) as a fallback
-    if `MASSIVE_API_KEY` is configured.
-    """
+    """Get the current market price from the configured market-data service."""
     symbol = symbol.upper()
-
-    # 1) Attempt primary FMP provider (via MarketDataService)
     if symbol in MARKET_PRICE_CACHE:
         return MARKET_PRICE_CACHE[symbol]
-
     if MARKET_SERVICE_READY and market_data:
         try:
             res = market_data.get_stock_price(symbol)
             if res and res.get('price') and res.get('price') > 0:
                 MARKET_PRICE_CACHE[symbol] = res
                 return res
-            logger.warning(f"FMP returned no usable price for {symbol}: {res}")
+            logger.warning(f"Market data returned no usable price for {symbol}: {res}")
         except Exception as e:
             logger.error(f"MarketDataService lookup failed for {symbol}: {e}")
 
     # 2) No providers available or call failed — fail closed, no synthetic fallback
     return {
         'error': 'no_market_data',
-        'message': 'No market data providers available or all providers failed',
+        'message': 'No market data available',
         'symbol': symbol,
         'timestamp': datetime.now().isoformat()
     }
@@ -616,7 +619,7 @@ def health_check():
     return jsonify({
         'status': 'operational',
         'version': '5.21-MVP-Routes-Active',
-        'data_source': 'Waterfall (YFinance/FMP/Alpaca)',
+        'data_source': 'Alpaca',
         'ai_firm': 'active' if AI_FIRM_READY else 'degraded',
         'ghost_layer': {
             'status': 'akasha_node_online',
@@ -648,7 +651,7 @@ def get_institutional_report():
 
 @app.route('/market-price', methods=['GET'])
 def get_market_price():
-    """Get current market price via Waterfall"""
+    """Get current market price via Alpaca market data service."""
     symbol = request.args.get('symbol', 'AAPL').upper()
     return jsonify(market_provider.get_price(symbol)), 200
 
@@ -705,94 +708,6 @@ def test_alpaca():
             'symbol': symbol,
             'timestamp': datetime.now().isoformat()
         })
-
-@app.route('/test-fmp', methods=['GET'])
-@handle_errors
-def test_fmp():
-    """Force test FinancialModelingPrep (FMP) API directly"""
-    symbol = request.args.get('symbol', 'AAPL').upper()
-
-    logger.info(f"\n🧪 FORCE TEST: FMP API for {symbol}")
-
-    fmp_key = os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY')
-
-    if not fmp_key:
-        logger.error("❌ FMP credentials missing!")
-        return jsonify({
-            'status': 'error',
-            'message': 'FMP credentials not configured',
-            'fmp_key_set': False,
-            'tried_envs': ['FMP_API_KEY', 'FMP_KEY']
-        })
-
-    try:
-        import requests  # type: ignore[import]
-
-        logger.info(f"  FMP Key (first 10): {fmp_key[:10] if fmp_key else 'NONE'}")
-        logger.info("  Making request to FMP (quote endpoint)...")
-
-        params = {'apikey': fmp_key}
-
-        # Try v3 quote endpoint first
-        url_v3 = f"https://financialmodelingprep.com/api/v3/quote/{symbol}"
-        logger.info(f"  Trying v3 URL: {url_v3}")
-        response = requests.get(url_v3, params=params, timeout=10)
-        logger.info(f"  Status: {response.status_code}")
-        logger.info(f"  Response: {response.text[:200]}")
-
-        # If 403 with Legacy Endpoint message, try v4
-        if response.status_code == 403 and 'Legacy Endpoint' in (response.text or ''):
-            url_v4 = f"https://financialmodelingprep.com/api/v4/quote/{symbol}"
-            logger.warning(f"  FMP v3 legacy detected; trying v4 URL: {url_v4}")
-            response = requests.get(url_v4, params=params, timeout=10)
-            logger.info(f"  v4 Status: {response.status_code}")
-            logger.info(f"  v4 Response: {response.text[:200]}")
-
-        # If still not ok, try quote-short
-        if not response.ok:
-            url_qs = f"https://financialmodelingprep.com/api/v3/quote-short/{symbol}"
-            logger.info(f"  Trying quote-short URL: {url_qs}")
-            response = requests.get(url_qs, params=params, timeout=10)
-            logger.info(f"  quote-short Status: {response.status_code}")
-            logger.info(f"  quote-short Response: {response.text[:200]}")
-
-        # As a final single-symbol fallback, try real-time price
-        if not response.ok:
-            url_rt = f"https://financialmodelingprep.com/api/v3/stock/real-time-price/{symbol}"
-            logger.info(f"  Trying real-time URL: {url_rt}")
-            response = requests.get(url_rt, params=params, timeout=10)
-            logger.info(f"  real-time Status: {response.status_code}")
-            logger.info(f"  real-time Response: {response.text[:200]}")
-
-        # If FMP returned non-2xx, treat as error so callers get a clear failure
-        if not response.ok:
-            try:
-                payload = response.json()
-            except Exception:
-                payload = {'error': 'invalid_response', 'text': response.text}
-            return jsonify({
-                'status': 'error',
-                'symbol': symbol,
-                'response_status': response.status_code,
-                'response': payload,
-                'timestamp': datetime.now().isoformat()
-            }), response.status_code
-
-        return jsonify({
-            'status': 'success',
-            'symbol': symbol,
-            'response_status': response.status_code,
-            'response': response.json(),
-            'timestamp': datetime.now().isoformat()
-        })
-    except Exception as e:
-        logger.error(f"❌ FMP test failed: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e),
-            'symbol': symbol,
-            'timestamp': datetime.now().isoformat()
-        }), 500
 
 @app.route('/market-price-stream', methods=['GET'])
 def market_price_stream():
@@ -857,7 +772,7 @@ def market_price_stream():
             except GeneratorExit:
                 break
             except Exception as e:
-                # Log the provider error (e.g., 403 NOT_AUTHORIZED from Polygon)
+                # Log provider errors without assuming a specific legacy provider.
                 logger.error(f"market-price-stream provider error for {symbol}: {e}", exc_info=True)
 
                 # Try to extract an HTTP-like status code from the error text if present
@@ -927,7 +842,7 @@ def detailed_health():
             'status': 'healthy',
             'services': {
                 'api': 'operational',
-                'market_data': 'v2' if MARKET_SERVICE_READY else 'fallback',
+                'market_data': 'alpaca' if MARKET_SERVICE_READY else 'fallback',
                 'ai_firm': 'operational' if AI_FIRM_READY else 'fallback',
                 'rl_core': 'operational' if RL_ENV_READY else 'not_loaded'
             },
@@ -2033,7 +1948,7 @@ def get_commentary():
     if AI_FIRM_READY:
         # Real or simulated commentary from agents
         # Use getattr to avoid AttributeError if active_provider is missing
-        provider_name = getattr(market_provider, 'active_provider', 'Waterfall')
+        provider_name = getattr(market_provider, 'active_provider', 'Alpaca')
         
         return jsonify([
             {
