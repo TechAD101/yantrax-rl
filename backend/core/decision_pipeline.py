@@ -1246,6 +1246,25 @@ class DecisionPipeline:
                     # coordinator -> agent confidence / strategy metrics.
                     learning_summary = self.learning_coordinator.apply_learning_events(learning_events)
 
+                    # CEO institutional memory: realized outcome recorded so
+                    # recall_relevant_memories feeds learned experience into
+                    # future strategic decisions.
+                    try:
+                        if self.ceo and hasattr(self.ceo, 'memory_system'):
+                            self.ceo.memory_system.store_performance_memory({
+                                'outcome_id': outcome_id,
+                                'decision_id': ctx.decision_id,
+                                'symbol': position.symbol,
+                                'action': position.side,
+                                'net_pnl': net_pnl,
+                                'exit_price': exit_price,
+                                'strategy': position.strategy_id,
+                                'regime': position.regime,
+                                'learning_events': len(learning_events),
+                            })
+                    except Exception as e:
+                        logger.warning(f"CEO performance-memory store failed: {e}")
+
                     # Update context
                     ctx.outcome_id = outcome_id
                     ctx.realized_pnl = net_pnl
