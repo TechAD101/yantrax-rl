@@ -2650,56 +2650,71 @@ def get_emotional_state():
 
 @app.route('/api/risk-metrics', methods=['GET'])
 def get_risk_metrics():
-    """Get portfolio risk metrics and analysis"""
+    """Risk metrics derived from canonical DB state.
+
+    No fabricated analytics: metrics that require live market data
+    (volatility, beta, Sharpe, correlation) are reported as null with an
+    explicit data_basis marker instead of plausible-looking mock values.
+    """
     try:
         session = get_session()
         portfolio = session.query(Portfolio).order_by(Portfolio.created_at.desc()).first()
-        
-        # Calculate basic risk metrics
+
         if portfolio:
             positions = portfolio.positions or []
             total_value = portfolio.current_value or portfolio.initial_capital
-            
-            # Mock risk calculations
+
             position_risks = []
             for pos in positions:
+                cost_basis = (pos.avg_price or 0) * (pos.quantity or 0)
                 position_risks.append({
                     'symbol': pos.symbol if hasattr(pos, 'symbol') else 'UNKNOWN',
                     'position_size': pos.quantity if hasattr(pos, 'quantity') else 0,
-                    'volatility': 0.15 + (len(position_risks) * 0.02),
-                    'max_drawdown': -0.12,
-                    'risk_level': 'medium',
-                    'risk_score': 5.5
+                    'cost_basis': round(cost_basis, 2),
+                    'weight_pct': round((cost_basis / total_value * 100), 2) if total_value else 0,
+                    # Live-market analytics require a market-data provider; not fabricated.
+                    'volatility': None,
+                    'max_drawdown': None,
+                    'risk_level': 'unknown',
+                    'risk_score': None,
                 })
-            
+
+            # Concentration from real weights (computable from DB state)
+            max_weight = max((p['weight_pct'] for p in position_risks), default=0)
+            risk_alerts = []
+            if max_weight > 25:
+                risk_alerts.append({
+                    'level': 'warning',
+                    'title': 'Position Concentration',
+                    'description': f'Largest position is {max_weight:.1f}% of portfolio',
+                    'timestamp': datetime.now().isoformat()
+                })
+
             return jsonify({
-                'value_at_risk': total_value * 0.05,
-                'portfolio_beta': 1.1,
-                'sharpe_ratio': 1.45,
-                'market_correlation': 0.72,
-                'risk_alerts': [
-                    {
-                        'level': 'info',
-                        'title': 'Portfolio Diversification',
-                        'description': 'Current portfolio shows good diversification across sectors',
-                        'timestamp': datetime.now().isoformat()
-                    }
+                'value_at_risk': None,
+                'portfolio_beta': None,
+                'sharpe_ratio': None,
+                'market_correlation': None,
+                'data_basis': 'database_state_only',
+                'unavailable_metrics': [
+                    'value_at_risk', 'portfolio_beta', 'sharpe_ratio',
+                    'market_correlation', 'position_volatility',
                 ],
+                'risk_alerts': risk_alerts,
                 'position_risks': position_risks,
+                'total_value': round(total_value or 0, 2),
                 'timestamp': datetime.now().isoformat()
             }), 200
         else:
-            # Return mock data
+            # No portfolio yet — explicit empty state, no mock positions
             return jsonify({
-                'value_at_risk': 6622.50,
-                'portfolio_beta': 1.1,
-                'sharpe_ratio': 1.45,
-                'market_correlation': 0.72,
+                'value_at_risk': None,
+                'portfolio_beta': None,
+                'sharpe_ratio': None,
+                'market_correlation': None,
+                'data_basis': 'no_portfolio',
                 'risk_alerts': [],
-                'position_risks': [
-                    {'symbol': 'AAPL', 'position_size': 150, 'volatility': 0.18, 'max_drawdown': -0.15, 'risk_level': 'medium', 'risk_score': 5.5},
-                    {'symbol': 'TSLA', 'position_size': 50, 'volatility': 0.25, 'max_drawdown': -0.20, 'risk_level': 'high', 'risk_score': 7.2}
-                ],
+                'position_risks': [],
                 'timestamp': datetime.now().isoformat()
             }), 200
     except Exception as e:
