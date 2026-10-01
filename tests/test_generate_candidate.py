@@ -1,27 +1,13 @@
 import os
 import sys
-from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
-mock_sqlalchemy = MagicMock()
-mock_sqlalchemy.orm = MagicMock()
-mock_sqlalchemy.ext = MagicMock()
-mock_sqlalchemy.ext.declarative = MagicMock()
-
-modules_to_mock = {
-    'sqlalchemy': mock_sqlalchemy,
-    'sqlalchemy.orm': mock_sqlalchemy.orm,
-    'sqlalchemy.ext': mock_sqlalchemy.ext,
-    'sqlalchemy.ext.declarative': mock_sqlalchemy.ext.declarative,
-}
-
-# Apply patch to sys.modules before any imports
-patcher = patch.dict(sys.modules, modules_to_mock)
-patcher.start()
-
-# Now it's safe to import memecoin_service
-from memecoin_service import generate_candidate
+# memecoin_service imports backend.db (real sqlalchemy); no module mocking is
+# needed. The previous global sys.modules['sqlalchemy'] mock leaked into every
+# later test (OrderManager SQLAlchemy calls received MagicMock objects -> 500).
+from unittest.mock import patch  # noqa: E402
+from memecoin_service import generate_candidate  # noqa: E402
 
 class TestGenerateCandidate:
 
@@ -95,6 +81,3 @@ class TestGenerateCandidate:
         # = round((25.0 + 150.0) / 3.5, 4) = 50.0
 
         assert result['degen_score'] == 50.0
-
-import atexit
-atexit.register(patcher.stop)

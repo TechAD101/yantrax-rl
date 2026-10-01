@@ -312,8 +312,13 @@ class DecisionPipeline:
                     pass
             
             # Generate institutional signal
+            # The engine expects a plain portfolio dict; convert the canonical
+            # PortfolioState so strategy sizing is grounded in real state.
+            portfolio_dict = (
+                ctx.portfolio_state.to_dict() if ctx.portfolio_state else portfolio_state.to_dict() if portfolio_state else None
+            )
             signal = self.strategy_engine.generate_institutional_signal(
-                ctx.symbol, enhanced_market_data, fundamentals, sentiment, portfolio_state
+                ctx.symbol, enhanced_market_data, fundamentals, sentiment, portfolio_dict
             )
             
             # Map to canonical candidate strategy

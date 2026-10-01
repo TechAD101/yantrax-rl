@@ -37,10 +37,15 @@ class TestSentimentService:
 
 class TestMarketData:
     def get_stock_price(self, symbol):
+        # Deterministic capitulation-oversold fixture: gentle drift down then a
+        # sharp 10-day sell-off. Snapshot price matches the history tail so the
+        # technical analysis is coherent with the quote.
+        price = 100.0 - 0.1 * 49 - 2.5 * 10  # 70.0
         return {
             'symbol': symbol.upper(),
-            'price': 150.0,
-            'change_percent': 2.0,
+            'price': price,
+            'change_percent': -3.0,
+            'trend': 'bearish',
             'volume': 1000000,
             'volatility': 0.02,
             'source': 'test_fixture',
@@ -58,8 +63,12 @@ class TestMarketData:
         }
 
     def get_price_history(self, symbol, days):
-        # Deterministic bullish trend with a genuine EMA relationship.
-        history = [100.0 + (i * 0.8) for i in range(60)]
+        # Deterministic oversold-capitulation series: 50-day gentle drift then a
+        # sharp 10-day decline. RSI saturates oversold and price breaks the
+        # lower Bollinger band -> genuine mean-reversion BUY setup.
+        history = [100.0 - (0.1 * i) for i in range(50)]
+        for _ in range(10):
+            history.append(history[-1] - 2.5)
         return [{'close': close} for close in history[-days:]]
 
 
@@ -131,7 +140,13 @@ class TestSizingFailureContract(unittest.TestCase):
             source="test_fixture",
             verified=True,
         )
-        pipeline_ctx.portfolio_state = PortfolioState(total_value=100000.0, positions={})
+        pipeline_ctx.portfolio_state = PortfolioState(
+            portfolio_id="test-portfolio",
+            total_value=100000.0,
+            cash=100000.0,
+            positions={},
+            risk_profile="moderate",
+        )
 
         sizer = PositionSizer(
             strategy_engine=FailingStrategyEngine(),

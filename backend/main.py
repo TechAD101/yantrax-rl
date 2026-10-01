@@ -287,23 +287,7 @@ def unified_get_market_price(symbol: str) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"MarketDataService lookup failed for {symbol}: {e}")
 
-    # 2) Fallback: Massive / Polygon if configured
-    massive_key = os.getenv('MASSIVE_API_KEY') or os.getenv('POLYGON_API_KEY') or os.getenv('POLYGON_KEY')
-    if massive_key:
-        try:
-            from backend.services.market_data_service_massive import MassiveMarketDataService
-            msvc = MassiveMarketDataService(api_key=massive_key, base_url=os.getenv('MASSIVE_BASE_URL'))
-            data = msvc.fetch_quote(symbol)
-            if data and data.get('price'):
-                MARKET_PRICE_CACHE[symbol] = data
-                logger.info(f"✅ MASSIVE provider success for {symbol}: {data.get('price')}")
-                return data
-            else:
-                logger.warning(f"MASSIVE returned no usable price for {symbol}: {data}")
-        except Exception as e:
-            logger.error(f"MASSIVE provider lookup failed for {symbol}: {e}")
-
-    # 3) No providers available or call failed
+    # 2) No providers available or call failed — fail closed, no synthetic fallback
     return {
         'error': 'no_market_data',
         'message': 'No market data providers available or all providers failed',
@@ -928,39 +912,6 @@ def market_price_stream():
                 # continue streaming instead of breaking so clients remain connected
 
     return Response(event_generator(), mimetype='text/event-stream')
-
-@app.route('/massive-quote', methods=['GET'])
-@handle_errors
-def massive_quote():
-    """Fetch a real-time quote from Massive Market Data service for a single symbol.
-
-    Query params:
-      - symbol: required (e.g., AAPL, BTC, EURUSD, SPX)
-    """
-    symbol = (request.args.get('symbol') or '').strip().upper()
-    if not symbol:
-        return jsonify({'status': 'error', 'message': 'symbol query parameter is required'}), 400
-
-    try:
-        # Allow using POLYGON_* env var aliases or explicit MASSIVE_API_KEY
-        massive_key = os.getenv('MASSIVE_API_KEY') or os.getenv('POLYGON_API_KEY') or os.getenv('POLYGON_KEY')
-        base_url = os.getenv('MASSIVE_BASE_URL')
-        if not massive_key:
-            logger.error('MASSIVE/POLYGON API key not configured')
-            return jsonify({'status': 'error', 'message': 'MASSIVE/POLYGON API key not configured'}), 400
-
-        try:
-            from backend.services.market_data_service_massive import MassiveMarketDataService
-        except ImportError:
-            return jsonify({'status': 'error', 'message': 'MassiveMarketDataService not available'}), 500
-        
-        logger.info(f"Using Massive provider key (first 8 chars): {massive_key[:8]}")
-        msvc = MassiveMarketDataService(api_key=massive_key, base_url=base_url)
-        data = msvc.fetch_quote(symbol)
-        return jsonify({'status': 'success', 'symbol': symbol, 'data': data, 'timestamp': datetime.now().isoformat()})
-    except Exception as e:
-        logger.error(f"❌ /massive-quote failed for {symbol}: {e}")
-        return jsonify({'status': 'error', 'message': str(e), 'symbol': symbol, 'timestamp': datetime.now().isoformat()}), 500
 
 @app.route('/ping', methods=['GET'])
 def ping():
