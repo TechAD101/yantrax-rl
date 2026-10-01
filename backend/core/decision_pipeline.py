@@ -134,6 +134,10 @@ class DecisionPipeline:
             # STAGE 2: EVIDENCE SYNTHESIS (includes Regime)
             # ──────────────────────────────────────────────────────
             ctx = await self._stage_evidence_synthesis(ctx)
+
+            # Fail closed when required market evidence is unavailable.
+            if ctx.final_action == TradingAction.ABSTAIN and ctx.evidence is None:
+                return ctx
             
             # ──────────────────────────────────────────────────────
             # STAGE 3: STRATEGY CANDIDATE
@@ -263,8 +267,20 @@ class DecisionPipeline:
         """Synthesize evidence package (technical + fundamental + sentiment + regime)."""
         if not ctx.market_snapshot:
             return ctx
-        
-        ctx.evidence = self.evidence_synthesizer.synthesize(ctx.symbol, ctx.market_snapshot)
+
+        try:
+            ctx.evidence = self.evidence_synthesizer.synthesize(ctx.symbol, ctx.market_snapshot)
+        except Exception as e:
+            # Missing required market evidence must fail closed — but explicitly:
+            # record the evidence failure in provenance instead of a generic
+            # pipeline_error, so the stop point is traceable.
+            logger.error(f"Evidence synthesis failed for {ctx.symbol}: {e}")
+            ctx.final_action = TradingAction.ABSTAIN
+            ctx.add_provenance("evidence_synthesis_error", {
+                "error": str(e),
+                "action": TradingAction.ABSTAIN.value,
+            })
+            return ctx
         ctx.add_provenance("evidence_synthesis", {
             "regime": ctx.evidence.market_regime.value,
             "regime_confidence": ctx.evidence.regime_confidence,
