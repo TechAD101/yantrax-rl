@@ -24,7 +24,7 @@ class GodCycleTest(unittest.TestCase):
 
     def test_no_real_data_fails_closed_no_random_signal(self):
         """Provider failure -> pipeline fails closed to explicit ABSTAIN, never a random BUY/SELL."""
-        with patch('backend.services.market_data_service_v2.MarketDataService.get_stock_price',
+        with patch('backend.services.market_data_service.get_market_data',
                    side_effect=ValueError('No usable price for AAPL')):
             client = app.test_client()
             resp = client.get('/god-cycle?symbol=AAPL')
