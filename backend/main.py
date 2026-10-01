@@ -2728,50 +2728,69 @@ def get_performance_metrics_legacy():
 
 @app.route('/api/performance', methods=['GET'])
 def get_performance_metrics():
-    """Get portfolio performance metrics and analytics"""
+    """Performance metrics derived from realized outcomes in the database.
+
+    No fabricated values: with no closed trades, all analytics are null and
+    the frontend must render an explicit empty state.
+    """
     try:
         session = get_session()
         portfolio = session.query(Portfolio).order_by(Portfolio.created_at.desc()).first()
-        
+        outcomes = session.query(Outcome).filter(Outcome.pnl.isnot(None)).all()
+
         if portfolio:
             initial_value = portfolio.initial_capital
             current_value = portfolio.current_value or initial_value
             total_return = ((current_value - initial_value) / initial_value) * 100 if initial_value > 0 else 0
-            
+
+            pnls = [o.pnl for o in outcomes if o.pnl is not None]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p <= 0]
+            win_rate = (len(wins) / len(pnls)) if pnls else None
+            best_trade = max(pnls) if pnls else None
+            worst_trade = min(pnls) if pnls else None
+            gross_profit = sum(wins)
+            gross_loss = abs(sum(losses))
+            profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else None
+
+            # Monthly aggregation from real closed outcomes
+            monthly = {}
+            for o in outcomes:
+                if o.pnl is None:
+                    continue
+                key = o.timestamp.strftime('%Y-%m') if o.timestamp else 'unknown'
+                m = monthly.setdefault(key, {'month': key, 'returns': 0.0, 'total_trades': 0, 'win_rate_n': 0, 'win_rate_d': 0})
+                m['returns'] += o.pnl
+                m['total_trades'] += 1
+                m['win_rate_d'] += 1
+                m['win_rate_n'] += 1 if o.pnl > 0 else 0
+            monthly_performance = [
+                {'month': k, 'returns': round(v['returns'], 2), 'total_trades': v['total_trades'],
+                 'win_rate': round(v['win_rate_n'] / v['win_rate_d'], 2) if v['win_rate_d'] else 0}
+                for k, v in sorted(monthly.items())
+            ]
+
             return jsonify({
-                'total_returns': total_return,
-                'win_rate': 0.62,
-                'best_trade': 2850.50,
-                'profit_factor': 1.85,
-                'monthly_performance': [
-                    {'month': 'January', 'returns': 3.2, 'total_trades': 12, 'win_rate': 0.58},
-                    {'month': 'February', 'returns': 2.1, 'total_trades': 10, 'win_rate': 0.60},
-                    {'month': 'March', 'returns': 4.5, 'total_trades': 15, 'win_rate': 0.67}
-                ],
-                'strategy_performance': [
-                    {'name': 'Momentum Strategy', 'type': 'trend', 'returns': 5.2, 'success_rate': 0.65, 'total_trades': 25},
-                    {'name': 'Mean Reversion', 'type': 'reversal', 'returns': 2.8, 'success_rate': 0.58, 'total_trades': 18},
-                    {'name': 'AI Consensus', 'type': 'ensemble', 'returns': 4.1, 'success_rate': 0.62, 'total_trades': 30}
-                ],
+                'total_returns': round(total_return, 2),
+                'win_rate': round(win_rate, 3) if win_rate is not None else None,
+                'best_trade': round(best_trade, 2) if best_trade is not None else None,
+                'worst_trade': round(worst_trade, 2) if worst_trade is not None else None,
+                'profit_factor': round(profit_factor, 3) if profit_factor is not None else None,
+                'closed_trades': len(pnls),
+                'data_basis': 'database_state_only',
+                'monthly_performance': monthly_performance,
+                'strategy_performance': [],
                 'timestamp': datetime.now().isoformat()
             }), 200
         else:
-            # Return mock data
             return jsonify({
-                'total_returns': 8.5,
-                'win_rate': 0.62,
-                'best_trade': 2850.50,
-                'profit_factor': 1.85,
-                'monthly_performance': [
-                    {'month': 'January', 'returns': 3.2, 'total_trades': 12, 'win_rate': 0.58},
-                    {'month': 'February', 'returns': 2.1, 'total_trades': 10, 'win_rate': 0.60},
-                    {'month': 'March', 'returns': 4.5, 'total_trades': 15, 'win_rate': 0.67}
-                ],
-                'strategy_performance': [
-                    {'name': 'Momentum Strategy', 'type': 'trend', 'returns': 5.2, 'success_rate': 0.65, 'total_trades': 25},
-                    {'name': 'Mean Reversion', 'type': 'reversal', 'returns': 2.8, 'success_rate': 0.58, 'total_trades': 18},
-                    {'name': 'AI Consensus', 'type': 'ensemble', 'returns': 4.1, 'success_rate': 0.62, 'total_trades': 30}
-                ],
+                'total_returns': None,
+                'win_rate': None,
+                'best_trade': None,
+                'profit_factor': None,
+                'data_basis': 'no_portfolio',
+                'monthly_performance': [],
+                'strategy_performance': [],
                 'timestamp': datetime.now().isoformat()
             }), 200
     except Exception as e:
