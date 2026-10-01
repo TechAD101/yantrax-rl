@@ -30,7 +30,7 @@ from backend.services.institutional_strategy_engine import (
     InstitutionalStrategyEngine, get_strategy_engine
 )
 from backend.services.market_sentiment_service import get_sentiment_service
-from backend.services.market_data_service_v2 import MarketDataService
+MarketDataService = Any
 from backend.services.oracle_service import OracleService
 from backend.order_manager import create_order
 from backend.db import get_session
@@ -55,6 +55,7 @@ class DecisionPipeline:
         ceo: Optional[AutonomousCEO] = None,
         ghost_layer: Optional[GhostLayer] = None,
         oracle: Optional[OracleService] = None,
+        sentiment_service: Optional[Any] = None,
         portfolio_id: int = 1,
     ):
         # Core services
@@ -65,12 +66,14 @@ class DecisionPipeline:
         self.ceo = ceo
         self.ghost_layer = ghost_layer
         self.oracle = oracle
+        self._sentiment_service = sentiment_service
         self.portfolio_id = portfolio_id
         
         # Pipeline components
         self.evidence_synthesizer = EvidenceSynthesizer(
             strategy_engine=self.strategy_engine,
             market_data=self.market_data,
+            sentiment_service=self._sentiment_service,
         )
         self.risk_governor = RiskGovernor()
         self.position_sizer = PositionSizer(strategy_engine=self.strategy_engine)
@@ -211,18 +214,28 @@ class DecisionPipeline:
         """Fetch and build canonical market snapshot."""
         symbol = ctx.symbol
         
-        # Get price data
-        if self.market_data:
-            try:
-                price_data = self.market_data.get_stock_price(symbol)
-            except Exception as e:
-                logger.warning(f"Market data error for {symbol}: {e}")
-                price_data = {'price': 0, 'source': 'error', 'error': str(e)}
-        else:
-            # Fallback to global market_provider
-            from backend.main import market_provider
-            price_data = market_provider.get_price(symbol) if market_provider else {'price': 0, 'source': 'unavailable'}
-        
+        # The canonical pipeline requires an explicit market-data provider.
+        # No global, dummy, cached, or synthetic provider may be substituted here.
+        if not self.market_data:
+            logger.error("No market-data provider configured for canonical decision pipeline")
+            ctx.final_action = TradingAction.ABSTAIN
+            ctx.add_provenance("market_snapshot_error", {
+                "error": "market_data_provider_not_configured",
+                "action": TradingAction.ABSTAIN.value,
+            })
+            return ctx
+
+        try:
+            price_data = self.market_data.get_stock_price(symbol)
+        except Exception as e:
+            logger.error(f"Market data error for {symbol}: {e}")
+            ctx.final_action = TradingAction.ABSTAIN
+            ctx.add_provenance("market_snapshot_error", {
+                "error": str(e),
+                "action": TradingAction.ABSTAIN.value,
+            })
+            return ctx
+
         # Get fundamentals
         fundamentals = {}
         if self.market_data and hasattr(self.market_data, 'get_fundamentals'):
@@ -521,19 +534,22 @@ class DecisionPipeline:
             # CEO decision (async)
             ceo_decision = await self.ceo.make_strategic_decision(ceo_context)
             
-            # Map CEO decision to canonical format
-            action_map = {
-                'BUY': TradingAction.BUY,
-                'SELL': TradingAction.SELL,
-                'HOLD': TradingAction.HOLD,
-                'defensive_lockdown': TradingAction.HOLD,
-            }
-            
+            # CEO decision_type is a workflow classification, not trade direction.
+            # Preserve the explicit candidate strategy action; governance vetoes remain
+            # separate and are enforced by risk/finalization stages.
+            strategy_action = ceo_decision.context.get('strategy_action')
+            if strategy_action in [a.value for a in TradingAction]:
+                ceo_action = TradingAction(strategy_action)
+            elif ceo_decision.decision_type == 'defensive_lockdown':
+                ceo_action = TradingAction.HOLD
+            else:
+                ceo_action = ctx.candidate_strategy.action if ctx.candidate_strategy else TradingAction.HOLD
+
             ctx.ceo_decision = CEODecision(
                 decision_id=ceo_decision.id,
                 timestamp=ceo_decision.timestamp,
                 decision_type=ceo_decision.decision_type,
-                action=action_map.get(ceo_decision.decision_type, TradingAction.HOLD),
+                action=ceo_action,
                 confidence=ceo_decision.confidence,
                 reasoning=ceo_decision.reasoning,
                 expected_impact=ceo_decision.expected_impact,
@@ -545,6 +561,7 @@ class DecisionPipeline:
             
             ctx.add_provenance("ceo_governance", {
                 "action": ctx.ceo_decision.action.value,
+                "action_source": "strategy_action" if strategy_action in [a.value for a in TradingAction] else "candidate_strategy",
                 "confidence": ctx.ceo_decision.confidence,
                 "pain_level": ctx.ceo_decision.pain_level,
                 "ghost_nudge": ctx.ceo_decision.ghost_nudge is not None,
@@ -1191,17 +1208,7 @@ class DecisionPipeline:
             except Exception:
                 pass
         
-        # Fallback: use current price with synthetic variation
-        if self.market_data:
-            try:
-                price_data = self.market_data.get_stock_price(symbol)
-                base = price_data.get('price', 100)
-            except Exception:
-                base = 100
-        else:
-            base = 100
-        
-        return [base * (1 + (i % 10 - 5) * 0.01) for i in range(days)]
+        raise ValueError(f"Real price history unavailable for {symbol}")
     
     async def _get_portfolio_state(self) -> PortfolioState:
         """Get current portfolio state from database."""
@@ -1246,8 +1253,8 @@ class DecisionPipeline:
     
     @property
     def sentiment_service(self):
-        """Lazy sentiment service getter."""
-        return get_sentiment_service()
+        """Return the injected sentiment service or lazily create the shared service."""
+        return self._sentiment_service or get_sentiment_service()
 
 
 # Convenience function for direct pipeline execution

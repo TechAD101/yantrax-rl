@@ -16,7 +16,7 @@ from backend.services.institutional_strategy_engine import (
     InstitutionalStrategyEngine, MarketRegime as StrategyMarketRegime
 )
 from backend.services.market_sentiment_service import get_sentiment_service
-from backend.services.market_data_service_v2 import MarketDataService
+MarketDataService = Any
 
 
 class EvidenceSynthesizer:
@@ -93,9 +93,7 @@ class EvidenceSynthesizer:
             except Exception:
                 pass
 
-        # Fallback: generate synthetic from current price
-        base_price = 100  # Will be overridden
-        return [base_price * (1 + np.sin(i/10) * 0.02 + np.random.normal(0, 0.01)) for i in range(days)]
+        raise ValueError(f"Real price history unavailable for {symbol}")
 
     def _get_fundamentals(self, symbol: str) -> Dict[str, Any]:
         """Get fundamental data."""

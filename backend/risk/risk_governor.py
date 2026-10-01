@@ -332,7 +332,8 @@ class RiskGovernor:
         if portfolio_value <= 0:
             return False, "Invalid portfolio value", {}
         
-        position_value = ctx.final_position_size * ctx.market_snapshot.price
+        # final_position_size is the dollar notional returned by PositionSizer.
+        position_value = ctx.final_position_size
         position_pct = position_value / portfolio_value
         
         if position_pct > self.max_position_pct:
@@ -363,14 +364,13 @@ class RiskGovernor:
                 existing_qty = pos.get('quantity', 0)
                 break
         
-        # Add proposed position
-        proposed_qty = ctx.final_position_size if ctx.final_position_size else 0
-        total_qty = existing_qty + proposed_qty
+        # Existing exposure is stored as quantity; proposed size is dollar notional.
+        existing_value = existing_qty * ctx.market_snapshot.price
+        proposed_value = ctx.final_position_size if ctx.final_position_size else 0
+        position_value = existing_value + proposed_value
         
-        if total_qty <= 0:
+        if position_value <= 0:
             return True, "No position", {}
-        
-        position_value = total_qty * ctx.market_snapshot.price
         concentration_pct = position_value / portfolio_value
         
         if concentration_pct > self.max_concentration_pct:
@@ -405,7 +405,7 @@ class RiskGovernor:
         
         # Simplified VaR: position * volatility * 2.33 (99% VaR)
         if ctx.final_position_size and ctx.market_snapshot:
-            position_value = ctx.final_position_size * ctx.market_snapshot.price
+            position_value = ctx.final_position_size
             volatility = ctx.market_snapshot.volatility
             var_99 = position_value * volatility * 2.33
             portfolio_value = ctx.portfolio_state.total_value
@@ -461,7 +461,7 @@ class RiskGovernor:
         volatility = ctx.market_snapshot.volatility or 0.02
         
         # Estimate slippage: spread/2 + volatility * position_impact
-        position_value = ctx.final_position_size * ctx.market_snapshot.price
+        position_value = ctx.final_position_size
         portfolio_value = ctx.portfolio_state.total_value if ctx.portfolio_state else 100000
         position_pct = position_value / portfolio_value if portfolio_value > 0 else 0
         
@@ -487,7 +487,8 @@ class RiskGovernor:
         if not ctx.market_snapshot or not ctx.final_position_size or not ctx.portfolio_state:
             return True, "Insufficient data for stress test", {}
         
-        position_value = ctx.final_position_size * ctx.market_snapshot.price
+        # final_position_size is already dollar notional.
+        position_value = ctx.final_position_size
         portfolio_value = ctx.portfolio_state.total_value
         
         # Stress scenarios

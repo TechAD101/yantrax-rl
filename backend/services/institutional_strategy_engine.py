@@ -177,12 +177,11 @@ class InstitutionalStrategyEngine:
     def _perform_technical_analysis(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
         """Perform comprehensive technical analysis"""
         
-        prices = market_data.get('price_history', [100] * 50)  # Default if no history
-        if len(prices) < 50:
-            # Generate synthetic data for demonstration
-            prices = [100 + np.sin(i/10) * 5 + np.random.normal(0, 1) for i in range(50)]
+        prices = market_data.get('price_history')
+        if not prices or len(prices) < 50:
+            raise ValueError("At least 50 real historical prices are required for technical analysis")
         
-        prices = np.array(prices)
+        prices = np.array(prices, dtype=float)
         
         # EMAs
         ema_9 = self._calculate_ema(prices, self.fast_ema)
