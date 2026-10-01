@@ -274,7 +274,7 @@ const YantraDashboard = () => {
                   <div className="text-center">
                     <div className="text-gray-400 text-xs">Portfolio</div>
                     <div className="font-bold text-green-400">
-                      ${portfolioMetrics.totalValue?.toLocaleString()}
+                      {portfolioMetrics.totalValue == null ? "—" : `$${portfolioMetrics.totalValue.toLocaleString()}`}
                     </div>
                   </div>
                   <div className="text-center">
@@ -387,8 +387,8 @@ const YantraDashboard = () => {
                     <div className="space-y-3">
                       <RiskMetric
                         label="Volatility"
-                        value={`${(riskAnalytics.volatility * 100)?.toFixed(1)}%`}
-                        level={riskAnalytics.volatility > 0.3 ? "high" : riskAnalytics.volatility > 0.2 ? "medium" : "low"}
+                        value={riskAnalytics.volatility == null ? "unavailable" : `${(riskAnalytics.volatility * 100).toFixed(1)}%`}
+                        level={riskAnalytics.volatility == null ? "low" : riskAnalytics.volatility > 0.3 ? "high" : riskAnalytics.volatility > 0.2 ? "medium" : "low"}
                       />
                       <RiskMetric
                         label="VaR (95%)"
@@ -407,8 +407,8 @@ const YantraDashboard = () => {
                       />
                       <RiskMetric
                         label="Risk Score"
-                        value={`${(riskAnalytics.riskScore * 100)?.toFixed(0)}/100`}
-                        level={riskAnalytics.riskScore > 0.7 ? "high" : riskAnalytics.riskScore > 0.4 ? "medium" : "low"}
+                        value={riskAnalytics.riskScore == null ? "unavailable" : `${Math.round(riskAnalytics.riskScore * 100)}/100`}
+                        level={riskAnalytics.riskScore == null ? "low" : riskAnalytics.riskScore > 0.7 ? "high" : riskAnalytics.riskScore > 0.4 ? "medium" : "low"}
                       />
                     </div>
                   </div>
