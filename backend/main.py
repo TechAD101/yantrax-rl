@@ -2621,6 +2621,33 @@ def get_risk_metrics_legacy():
     return get_risk_metrics()
 
 
+@app.route('/api/emotional-state', methods=['GET'])
+@app.route('/emotional-state', methods=['GET'])
+def get_emotional_state():
+    """Canonical emotional-safeguard governance state (NORMAL/CAUTION/MOUNA...).
+
+    Served from EmotionalSafeguards.get_status() — no fabricated values.
+    Mouna Mode is a deliberate trading-suppression condition enforced by the
+    RiskGovernor; the frontend must render this state, not guess it.
+    """
+    from backend.services.emotional_safeguards import get_emotional_safeguards
+    status = get_emotional_safeguards().get_status()
+    state = status.get('emotional_state', 'unknown')
+    governance_mode = {
+        'calm': 'NORMAL',
+        'greedy': 'CAUTION',
+        'euphoric': 'CAUTION',
+        'anxious': 'CAUTION',
+        'fearful': 'CAUTION',
+        'panicked': 'CAUTION',
+        'mouna': 'MOUNA',
+    }.get(state, 'CAUTION' if not status.get('trading_allowed', True) else 'NORMAL')
+    return jsonify({
+        'governance_mode': governance_mode,
+        **status,
+    })
+
+
 @app.route('/api/risk-metrics', methods=['GET'])
 def get_risk_metrics():
     """Get portfolio risk metrics and analysis"""
