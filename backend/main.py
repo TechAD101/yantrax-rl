@@ -65,7 +65,7 @@ PERSONA_REGISTRY = get_persona_registry()
 # Database helpers
 from backend.db import init_db, get_session
 from backend.models import Strategy, StrategyProfile
-from backend.models import Portfolio, PortfolioPosition
+from backend.models import Portfolio, PortfolioPosition, Outcome
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -288,7 +288,9 @@ def unified_get_market_price(symbol: str) -> Dict[str, Any]:
                 return res
             logger.warning(f"Market data returned no usable price for {symbol}: {res}")
         except Exception as e:
-            logger.error(f"Market data lookup failed for {symbol}: {e}")
+            logger.error(f"MarketDataService lookup failed for {symbol}: {e}")
+
+    # 2) No providers available or call failed — fail closed, no synthetic fallback
     return {
         'error': 'no_market_data',
         'message': 'No market data available',
@@ -901,117 +903,116 @@ def metrics():
 
 @app.route('/god-cycle', methods=['GET'])
 def god_cycle():
-    """Execute 24-agent voting cycle with REAL DATA & Debate Engine"""
+    """God Cycle -> canonical DecisionPipeline (single decision path).
+
+    Runs the full canonical pipeline: market snapshot -> evidence -> strategy
+    -> 24-agent voting -> debate -> CEO -> risk -> sizing -> paper execution ->
+    outcome/attribution/learning. No synthetic fallback: when real market data
+    or the pipeline is unavailable, returns an explicit error state.
+    """
     symbol = request.args.get('symbol', 'AAPL').upper()
-    
-    # 1. Fetch Real Data
-    # Use provider shims safely in case market_provider is not fully configured in tests
+
     try:
-        price_data = market_provider.get_price(symbol) if market_provider else {'price': 0, 'source': 'simulated'}
-    except Exception:
-        price_data = {'price': 0, 'source': 'simulated'}
-    try:
-        fundamentals = market_provider.get_fundamentals(symbol) if market_provider else {}
-    except Exception:
-        fundamentals = {}
-    
-    current_price = price_data.get('price', 0)
-    
-    # 2. Get Advanced Sentiment Analysis
-    sentiment_data = {}
-    if SENTIMENT_READY:
-        try:
-            sentiment_data = SENTIMENT_SERVICE.get_comprehensive_sentiment(symbol)
-        except Exception as e:
-            logger.warning(f"Sentiment analysis failed for {symbol}: {e}")
-    
-    # 3. Prepare Enhanced Context for Agents
-    context = {
-        'symbol': symbol,
-        'ticker': symbol,
-        'type': 'trade_decision',
-        'market_data': {'current_price': current_price},
-        'fundamentals': fundamentals,
-        'sentiment': sentiment_data.get('components', {}),
-        'fear_greed_index': sentiment_data.get('components', {}).get('fear_greed', {}).get('fear_greed_index', 0.5),
-        'options_flow': sentiment_data.get('components', {}).get('options_flow', {}).get('signal', 'NEUTRAL_FLOW'),
-        'social_sentiment': sentiment_data.get('components', {}).get('social_sentiment', {}).get('signal', 'NEUTRAL'),
-        'composite_sentiment': sentiment_data.get('composite_sentiment', 0.5),
-        'market_trend': 'bullish' if fundamentals.get('return_on_equity', 0) > 0.1 else 'bearish',
-        'timestamp': datetime.now().isoformat()
+        from backend.services.canonical_market_provider import get_canonical_market_provider
+        from backend.core.decision_pipeline import DecisionPipeline, run_canonical_decision_sync
+        provider = get_canonical_market_provider()
+        pipeline = DecisionPipeline(market_data=provider)
+        ctx = run_canonical_decision_sync(symbol, pipeline=pipeline)
+    except Exception as e:
+        logger.error(f"God cycle pipeline failed for {symbol}: {e}")
+        return jsonify({
+            'status': 'pipeline_unavailable',
+            'symbol': symbol,
+            'error': str(e),
+            'message': 'Canonical decision pipeline could not run with real market data; no synthetic fallback is permitted.',
+            'timestamp': datetime.now().isoformat()
+        }), 503
+
+    final_action = ctx.final_action.value if ctx.final_action else 'HOLD'
+    ceo_data = {
+        'confidence': ctx.ceo_decision.confidence if ctx.ceo_decision else ctx.final_confidence,
+        'reasoning': ctx.ceo_decision.reasoning if ctx.ceo_decision else 'canonical pipeline decision',
+        'id': ctx.ceo_decision.decision_id if ctx.ceo_decision else ctx.decision_id,
+        'decision_type': final_action,
     }
-    
-    if AI_FIRM_READY:
-        try:
-            # 3. CEO Strategic Decision (Triggers Debate & Ghost inside)
-            # Handle both sync and async CEO decision methods
-            import asyncio
-            try:
-                # Try async first
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                ceo_decision = loop.run_until_complete(ceo.make_strategic_decision(context))
-                loop.close()
-            except (RuntimeError, AttributeError):
-                # Fallback to sync if no event loop available
-                ceo_decision = ceo.make_strategic_decision(context)
-            
-            # Safely extract CEO decision attributes
-            ceo_data = {
-                'confidence': getattr(ceo_decision, 'confidence', 0),
-                'reasoning': getattr(ceo_decision, 'reasoning', 'AI Firm decision'),
-                'id': getattr(ceo_decision, 'id', 'ceo_0'),
-                'decision_type': getattr(ceo_decision, 'decision_type', 'HOLD')
-            }
-            
-            return jsonify({
-                'status': 'success',
-                'symbol': symbol,
-                'signal': ceo_data['decision_type'],
-                'market_data': price_data,
-                'fundamentals': fundamentals,
-                'ceo_decision': ceo_data,
-                'timestamp': datetime.now().isoformat()
-            }), 200
-        except Exception as e:
-            logger.error(f"CEO decision failed: {e}")
-            # Fallback to simulated
-            pass
-    
-    # If AI firm not initialized or CEO decision failed, still make a TRADING decision
-    logger.warning('AI Firm not initialized - using fallback trading logic')
-    
-    # Simple fallback trading logic: always generate a signal
-    import random
-    
-    # Basic momentum trading logic
-    price_data_formatted = price_data.get('price', 100)  # Fallback price
-    fundamentals_pe = fundamentals.get('pe_ratio', 25)  # Fallback PE
-    
-    fallback_decision = {
-        'decision_type': 'HOLD',  # Default safe decision
-        'confidence': 0.6,  # Medium confidence
-        'reasoning': f'Fallback: Price ${price_data_formatted}, P/E {fundamentals_pe} - cautious approach',
-        'id': 'fallback_0'
-    }
-    
-    # Add some randomness to avoid being too predictable
-    if fundamentals_pe < 20:  # Low P/E, consider buying
-        fallback_decision['decision_type'] = 'BUY' if random.random() > 0.4 else 'HOLD'
-        fallback_decision['confidence'] = 0.7
-    elif fundamentals_pe > 30:  # High P/E, consider selling
-        fallback_decision['decision_type'] = 'SELL' if random.random() > 0.6 else 'HOLD'
-        fallback_decision['confidence'] = 0.7
-    
+
     return jsonify({
-        'status': 'fallback_trading',
+        'status': 'success',
         'symbol': symbol,
-        'signal': fallback_decision['decision_type'],
-        'market_data': price_data,
-        'fundamentals': fundamentals,
-        'ceo_decision': fallback_decision,
+        'signal': final_action,
+        'confidence': ctx.final_confidence,
+        'decision_id': ctx.decision_id,
+        'market_data': {
+            'price': ctx.market_snapshot.price if ctx.market_snapshot else None,
+            'source': ctx.market_snapshot.source if ctx.market_snapshot else 'unavailable',
+            'verified': ctx.market_snapshot.verified if ctx.market_snapshot else False,
+        },
+        'market_snapshot': ctx.market_snapshot.to_dict() if ctx.market_snapshot else None,
+        'voting': ctx.voting_result.to_dict() if ctx.voting_result else None,
+        'debate': ctx.debate_result.to_dict() if ctx.debate_result else None,
+        'ceo_decision': ceo_data,
+        'risk_governance': ctx.risk_governance.value if ctx.risk_governance else None,
+        'final_position_size': ctx.final_position_size,
+        'order_id': ctx.order_id,
+        'outcome_id': ctx.outcome_id,
+        'learning_event_ids': ctx.learning_event_ids,
+        'provenance': {k: v.get('details', {}) for k, v in ctx.provenance.items()},
         'timestamp': datetime.now().isoformat()
     }), 200
+
+def compute_system_performance(ceo_stats: Dict[str, Any]) -> Dict[str, Any]:
+    """System performance from canonical state — no fabricated balance/success rate."""
+    portfolio_value = None
+    success_rate = None
+    closed_trades = 0
+    winning_trades = 0
+    try:
+        session = get_session()
+        try:
+            portfolio = session.query(Portfolio).order_by(Portfolio.created_at.desc()).first()
+            if portfolio:
+                portfolio_value = round(portfolio.current_value or portfolio.initial_capital or 0, 2)
+            outcomes = session.query(Outcome).filter(Outcome.pnl.isnot(None)).all()
+            closed_trades = len(outcomes)
+            winning_trades = sum(1 for o in outcomes if (o.pnl or 0) > 0)
+            if closed_trades:
+                success_rate = round(winning_trades / closed_trades * 100, 1)
+        finally:
+            session.close()
+    except Exception as e:
+        logger.warning(f"System performance computation failed: {e}")
+    institutional = ceo_stats.get('institutional_metrics', {})
+    return {
+        'portfolio_balance': portfolio_value,
+        'success_rate': success_rate,
+        'closed_trades': closed_trades,
+        'winning_trades': winning_trades,
+        'data_basis': 'database_state_only',
+        'pain_level': institutional.get('pain_level', 0),
+        'market_mood': institutional.get('market_mood', 'neutral'),
+        'is_in_panic': ceo_stats.get('is_in_panic', False),
+    }
+
+
+def compute_trading_checklist(ceo_stats: Dict[str, Any]) -> Dict[str, Any]:
+    """Trading checklist backed by real validator stats — unknown items are null."""
+    validator_stats = {}
+    try:
+        validator_stats = TRADE_VALIDATOR.get_validation_stats() if TRADE_VALIDATOR else {}
+    except Exception:
+        pass
+    total = validator_stats.get('total_validations', 0) or 0
+    allowed = validator_stats.get('allowed', 0) or 0
+    pass_rate = round(allowed / total * 100, 1) if total else None
+    institutional = ceo_stats.get('institutional_metrics', {}).get('last_fundamental_check', {}) or {}
+    return {
+        "data_basis": "trade_validator_stats",
+        "total_validations": total,
+        "validation_pass_rate_pct": pass_rate,
+        "recent_failures": validator_stats.get('recent_failures', []),
+        "fundamental_check": institutional,
+    }
+
 
 @app.route('/api/ai-firm/status', methods=['GET'])
 def ai_firm_status():
@@ -1044,25 +1045,10 @@ def ai_firm_status():
                 },
                 'data_verification': market_provider.get_verification_stats() if hasattr(market_provider, 'get_verification_stats') else {}
             },
-            'system_performance': {
-                'portfolio_balance': 132450.00,
-                'success_rate': 92,
-                'pain_level': ceo_stats.get('institutional_metrics', {}).get('pain_level', 0),
-                'market_mood': ceo_stats.get('institutional_metrics', {}).get('market_mood', 'neutral'),
-                'is_in_panic': ceo_stats.get('is_in_panic', False)
-            },
+            'system_performance': compute_system_performance(ceo_stats),
             'institutional_audit': {
                 'fundamental_check': ceo_stats.get('institutional_metrics', {}).get('last_fundamental_check', {}),
-                'trading_checklist': {
-                    "Price Structure Clear": True,
-                    "Liquidity Areas Mapped": True,
-                    "EMA 9/15 Crossover": True,
-                    "RSI 14 Alignment": True,
-                    "Fibonacci Levels Valid": True,
-                    "Risk-Reward 1:3 Min": True,
-                    "Daily Trade Limit < 2": True,
-                    "Trailing Stop Activated": True
-                }
+                'trading_checklist': compute_trading_checklist(ceo_stats),
             },
             'timestamp': datetime.now().isoformat()
         }), 200
@@ -2534,58 +2520,100 @@ def get_risk_metrics_legacy():
     return get_risk_metrics()
 
 
+@app.route('/api/emotional-state', methods=['GET'])
+@app.route('/emotional-state', methods=['GET'])
+def get_emotional_state():
+    """Canonical emotional-safeguard governance state (NORMAL/CAUTION/MOUNA...).
+
+    Served from EmotionalSafeguards.get_status() — no fabricated values.
+    Mouna Mode is a deliberate trading-suppression condition enforced by the
+    RiskGovernor; the frontend must render this state, not guess it.
+    """
+    from backend.services.emotional_safeguards import get_emotional_safeguards
+    status = get_emotional_safeguards().get_status()
+    state = status.get('emotional_state', 'unknown')
+    governance_mode = {
+        'calm': 'NORMAL',
+        'greedy': 'CAUTION',
+        'euphoric': 'CAUTION',
+        'anxious': 'CAUTION',
+        'fearful': 'CAUTION',
+        'panicked': 'CAUTION',
+        'mouna': 'MOUNA',
+    }.get(state, 'CAUTION' if not status.get('trading_allowed', True) else 'NORMAL')
+    return jsonify({
+        'governance_mode': governance_mode,
+        **status,
+    })
+
+
 @app.route('/api/risk-metrics', methods=['GET'])
 def get_risk_metrics():
-    """Get portfolio risk metrics and analysis"""
+    """Risk metrics derived from canonical DB state.
+
+    No fabricated analytics: metrics that require live market data
+    (volatility, beta, Sharpe, correlation) are reported as null with an
+    explicit data_basis marker instead of plausible-looking mock values.
+    """
     try:
         session = get_session()
         portfolio = session.query(Portfolio).order_by(Portfolio.created_at.desc()).first()
-        
-        # Calculate basic risk metrics
+
         if portfolio:
             positions = portfolio.positions or []
             total_value = portfolio.current_value or portfolio.initial_capital
-            
-            # Mock risk calculations
+
             position_risks = []
             for pos in positions:
+                cost_basis = (pos.avg_price or 0) * (pos.quantity or 0)
                 position_risks.append({
                     'symbol': pos.symbol if hasattr(pos, 'symbol') else 'UNKNOWN',
                     'position_size': pos.quantity if hasattr(pos, 'quantity') else 0,
-                    'volatility': 0.15 + (len(position_risks) * 0.02),
-                    'max_drawdown': -0.12,
-                    'risk_level': 'medium',
-                    'risk_score': 5.5
+                    'cost_basis': round(cost_basis, 2),
+                    'weight_pct': round((cost_basis / total_value * 100), 2) if total_value else 0,
+                    # Live-market analytics require a market-data provider; not fabricated.
+                    'volatility': None,
+                    'max_drawdown': None,
+                    'risk_level': 'unknown',
+                    'risk_score': None,
                 })
-            
+
+            # Concentration from real weights (computable from DB state)
+            max_weight = max((p['weight_pct'] for p in position_risks), default=0)
+            risk_alerts = []
+            if max_weight > 25:
+                risk_alerts.append({
+                    'level': 'warning',
+                    'title': 'Position Concentration',
+                    'description': f'Largest position is {max_weight:.1f}% of portfolio',
+                    'timestamp': datetime.now().isoformat()
+                })
+
             return jsonify({
-                'value_at_risk': total_value * 0.05,
-                'portfolio_beta': 1.1,
-                'sharpe_ratio': 1.45,
-                'market_correlation': 0.72,
-                'risk_alerts': [
-                    {
-                        'level': 'info',
-                        'title': 'Portfolio Diversification',
-                        'description': 'Current portfolio shows good diversification across sectors',
-                        'timestamp': datetime.now().isoformat()
-                    }
+                'value_at_risk': None,
+                'portfolio_beta': None,
+                'sharpe_ratio': None,
+                'market_correlation': None,
+                'data_basis': 'database_state_only',
+                'unavailable_metrics': [
+                    'value_at_risk', 'portfolio_beta', 'sharpe_ratio',
+                    'market_correlation', 'position_volatility',
                 ],
+                'risk_alerts': risk_alerts,
                 'position_risks': position_risks,
+                'total_value': round(total_value or 0, 2),
                 'timestamp': datetime.now().isoformat()
             }), 200
         else:
-            # Return mock data
+            # No portfolio yet — explicit empty state, no mock positions
             return jsonify({
-                'value_at_risk': 6622.50,
-                'portfolio_beta': 1.1,
-                'sharpe_ratio': 1.45,
-                'market_correlation': 0.72,
+                'value_at_risk': None,
+                'portfolio_beta': None,
+                'sharpe_ratio': None,
+                'market_correlation': None,
+                'data_basis': 'no_portfolio',
                 'risk_alerts': [],
-                'position_risks': [
-                    {'symbol': 'AAPL', 'position_size': 150, 'volatility': 0.18, 'max_drawdown': -0.15, 'risk_level': 'medium', 'risk_score': 5.5},
-                    {'symbol': 'TSLA', 'position_size': 50, 'volatility': 0.25, 'max_drawdown': -0.20, 'risk_level': 'high', 'risk_score': 7.2}
-                ],
+                'position_risks': [],
                 'timestamp': datetime.now().isoformat()
             }), 200
     except Exception as e:
@@ -2615,50 +2643,69 @@ def get_performance_metrics_legacy():
 
 @app.route('/api/performance', methods=['GET'])
 def get_performance_metrics():
-    """Get portfolio performance metrics and analytics"""
+    """Performance metrics derived from realized outcomes in the database.
+
+    No fabricated values: with no closed trades, all analytics are null and
+    the frontend must render an explicit empty state.
+    """
     try:
         session = get_session()
         portfolio = session.query(Portfolio).order_by(Portfolio.created_at.desc()).first()
-        
+        outcomes = session.query(Outcome).filter(Outcome.pnl.isnot(None)).all()
+
         if portfolio:
             initial_value = portfolio.initial_capital
             current_value = portfolio.current_value or initial_value
             total_return = ((current_value - initial_value) / initial_value) * 100 if initial_value > 0 else 0
-            
+
+            pnls = [o.pnl for o in outcomes if o.pnl is not None]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p <= 0]
+            win_rate = (len(wins) / len(pnls)) if pnls else None
+            best_trade = max(pnls) if pnls else None
+            worst_trade = min(pnls) if pnls else None
+            gross_profit = sum(wins)
+            gross_loss = abs(sum(losses))
+            profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else None
+
+            # Monthly aggregation from real closed outcomes
+            monthly = {}
+            for o in outcomes:
+                if o.pnl is None:
+                    continue
+                key = o.timestamp.strftime('%Y-%m') if o.timestamp else 'unknown'
+                m = monthly.setdefault(key, {'month': key, 'returns': 0.0, 'total_trades': 0, 'win_rate_n': 0, 'win_rate_d': 0})
+                m['returns'] += o.pnl
+                m['total_trades'] += 1
+                m['win_rate_d'] += 1
+                m['win_rate_n'] += 1 if o.pnl > 0 else 0
+            monthly_performance = [
+                {'month': k, 'returns': round(v['returns'], 2), 'total_trades': v['total_trades'],
+                 'win_rate': round(v['win_rate_n'] / v['win_rate_d'], 2) if v['win_rate_d'] else 0}
+                for k, v in sorted(monthly.items())
+            ]
+
             return jsonify({
-                'total_returns': total_return,
-                'win_rate': 0.62,
-                'best_trade': 2850.50,
-                'profit_factor': 1.85,
-                'monthly_performance': [
-                    {'month': 'January', 'returns': 3.2, 'total_trades': 12, 'win_rate': 0.58},
-                    {'month': 'February', 'returns': 2.1, 'total_trades': 10, 'win_rate': 0.60},
-                    {'month': 'March', 'returns': 4.5, 'total_trades': 15, 'win_rate': 0.67}
-                ],
-                'strategy_performance': [
-                    {'name': 'Momentum Strategy', 'type': 'trend', 'returns': 5.2, 'success_rate': 0.65, 'total_trades': 25},
-                    {'name': 'Mean Reversion', 'type': 'reversal', 'returns': 2.8, 'success_rate': 0.58, 'total_trades': 18},
-                    {'name': 'AI Consensus', 'type': 'ensemble', 'returns': 4.1, 'success_rate': 0.62, 'total_trades': 30}
-                ],
+                'total_returns': round(total_return, 2),
+                'win_rate': round(win_rate, 3) if win_rate is not None else None,
+                'best_trade': round(best_trade, 2) if best_trade is not None else None,
+                'worst_trade': round(worst_trade, 2) if worst_trade is not None else None,
+                'profit_factor': round(profit_factor, 3) if profit_factor is not None else None,
+                'closed_trades': len(pnls),
+                'data_basis': 'database_state_only',
+                'monthly_performance': monthly_performance,
+                'strategy_performance': [],
                 'timestamp': datetime.now().isoformat()
             }), 200
         else:
-            # Return mock data
             return jsonify({
-                'total_returns': 8.5,
-                'win_rate': 0.62,
-                'best_trade': 2850.50,
-                'profit_factor': 1.85,
-                'monthly_performance': [
-                    {'month': 'January', 'returns': 3.2, 'total_trades': 12, 'win_rate': 0.58},
-                    {'month': 'February', 'returns': 2.1, 'total_trades': 10, 'win_rate': 0.60},
-                    {'month': 'March', 'returns': 4.5, 'total_trades': 15, 'win_rate': 0.67}
-                ],
-                'strategy_performance': [
-                    {'name': 'Momentum Strategy', 'type': 'trend', 'returns': 5.2, 'success_rate': 0.65, 'total_trades': 25},
-                    {'name': 'Mean Reversion', 'type': 'reversal', 'returns': 2.8, 'success_rate': 0.58, 'total_trades': 18},
-                    {'name': 'AI Consensus', 'type': 'ensemble', 'returns': 4.1, 'success_rate': 0.62, 'total_trades': 30}
-                ],
+                'total_returns': None,
+                'win_rate': None,
+                'best_trade': None,
+                'profit_factor': None,
+                'data_basis': 'no_portfolio',
+                'monthly_performance': [],
+                'strategy_performance': [],
                 'timestamp': datetime.now().isoformat()
             }), 200
     except Exception as e:

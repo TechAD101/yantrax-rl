@@ -600,4 +600,7 @@ export const getAIFirmStatus = api.getAIFirmStatus;
 // Trading Journal
 export const getJournalEntries = api.getJournalEntries;
 
+// Canonical mood board (visual mood board backed by real CEO pain level)
+export const getVisualMoodBoard = api.getVisualMoodBoard;
+
 export default api;

@@ -52,7 +52,7 @@ const StrategyMarketplace = () => {
     // Industrial Sparkline
     const Sparkline = ({ type }) => {
         const color = type === 'DEGEN' ? '#d946ef' : '#00ff94'; // Purple or Green
-        const dataPoints = Array.from({ length: 8 }, () => Math.random() * 20 + 5);
+        const dataPoints = Array.from({ length: 8 }, () => 12.5); // flat: no measured performance data
 
         const createPath = (data) => {
             const width = 100;

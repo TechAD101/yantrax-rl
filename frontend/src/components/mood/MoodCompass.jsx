@@ -1,34 +1,48 @@
 // src/components/mood/MoodCompass.jsx
 import React, { useEffect, useState } from 'react';
+import { getVisualMoodBoard } from '../../api/api';
 
 const MoodCompass = () => {
     // 4 Axes: Volatility (Top), Liquidity (Right), Retail (Bottom), Institutional (Left)
-    const [data, setData] = useState({
-        volatility: 70,
-        liquidity: 40,
-        retail: 85,
-        institutional: 30
-    });
+    // Values come from the canonical mood board / market snapshot; without
+    // backend data the compass renders an explicit unavailable state — the
+    // previous random-drift mock is gone.
+    const [data, setData] = useState(null);
+    const [available, setAvailable] = useState(true);
 
-    // Mock live updates
     useEffect(() => {
-        const interval = setInterval(() => {
-            setData({
-                volatility: Math.min(100, Math.max(0, data.volatility + (Math.random() * 20 - 10))),
-                liquidity: Math.min(100, Math.max(0, data.liquidity + (Math.random() * 20 - 10))),
-                retail: Math.min(100, Math.max(0, data.retail + (Math.random() * 20 - 10))),
-                institutional: Math.min(100, Math.max(0, data.institutional + (Math.random() * 20 - 10)))
-            });
-        }, 2000);
-        return () => clearInterval(interval);
-    }, [data]);
+        let cancelled = false;
+        const load = async () => {
+            try {
+                const resp = await getVisualMoodBoard();
+                if (cancelled) return;
+                const board = resp?.data || resp || {};
+                const dial = board.emotion_dial || {};
+                const pain = dial.pain_meter;
+                const mood = board.current_mood;
+                const moodLabel = typeof mood === 'string' ? mood : (mood?.label || mood?.mood);
+                setData({
+                    // Pain meter doubles as the volatility axis (real CEO pain level)
+                    volatility: pain == null ? 0 : Math.min(100, Math.max(0, pain)),
+                    // Market mood mapped onto the retail-sentiment axis
+                    retail: moodLabel === 'euphoric' ? 90 : moodLabel === 'bullish' ? 70 : moodLabel === 'bearish' ? 30 : moodLabel === 'panic' ? 10 : 50,
+                    // Liquidity / institutional axes are not yet instrumented:
+                    // explicit zeros with an "unavailable" note, never random.
+                    liquidity: 0,
+                    institutional: 0,
+                });
+                setAvailable(true);
+            } catch (err) {
+                if (!cancelled) setAvailable(false);
+            }
+        };
+        load();
+        const interval = setInterval(load, 30000);
+        return () => { cancelled = true; clearInterval(interval); };
+    }, []);
 
     // Calculate points for the polygon
     // Center is 100,100. Radius max is 80.
-    // Volatility: (100, 20) -> Top
-    // Liquidity: (180, 100) -> Right
-    // Retail: (100, 180) -> Bottom
-    // Institutional: (20, 100) -> Left
 
     const getPoint = (value, angle) => {
         const val = typeof value === 'number' ? value : 0;
@@ -39,7 +53,18 @@ const MoodCompass = () => {
         return `${x},${y}`;
     };
 
-    if (!data) return null; // Defensive return
+    if (!available) {
+        return (
+            <div className="bg-gray-900/80 backdrop-blur rounded-2xl p-6 border border-gray-800 flex flex-col items-center">
+                <h3 className="text-lg font-bold text-gray-200 mb-4 w-full">Market Compass</h3>
+                <div className="text-sm text-gray-500 py-12 text-center">
+                    Compass data unavailable — no invented readings.
+                </div>
+            </div>
+        );
+    }
+
+    if (!data) return null; // Defensive return while loading
 
     const p1 = getPoint(data?.volatility || 0, 0);   // Top
     const p2 = getPoint(data?.liquidity || 0, 90);   // Right

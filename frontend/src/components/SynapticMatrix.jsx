@@ -19,9 +19,9 @@ const SynapticMatrix = ({ agents = [], consensus = 0 }) => {
   const totalSlots = 24;
   const displayAgents = [...agents];
   while (displayAgents.length < totalSlots) {
-    displayAgents.push({ 
-      name: `Ghost_${displayAgents.length + 1}`, 
-      confidence: Math.random() * 0.3,
+    displayAgents.push({
+      name: `Ghost_${displayAgents.length + 1}`,
+      confidence: null, // dormant synapse: no measured confidence
       role: 'Dormant Synapse'
     });
   }

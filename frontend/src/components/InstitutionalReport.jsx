@@ -106,7 +106,7 @@ const InstitutionalReport = ({ symbol, isOpen, onClose }) => {
                 {/* Footer */}
                 <div className="p-4 border-t border-white/5 bg-black/40 flex items-center justify-between">
                     <div className="text-[9px] text-gray-600 font-mono uppercase">
-                        Quantum Signature: {Math.random().toString(16).slice(2, 10)}-liminal-node-9
+                        Quantum Signature: deterministic-liminal-node-9
                     </div>
                     <button
                         onClick={() => window.print()}

@@ -86,6 +86,40 @@ class InstitutionalStrategyEngine:
         # Market regime tracking
         self.regime_history = []
         self.volatility_history = []
+
+        # Measured strategy performance (updated only from realized outcomes
+        # via the LearningCoordinator — never fabricated).
+        self.measured_outcomes = 0
+        self.measured_wins = 0
+        self.measured_total_pnl = 0.0
+
+    def apply_outcome_learning(self, pnl: float, regime: str = None) -> Dict[str, Any]:
+        """Record a realized outcome and adapt the confidence threshold.
+
+        Heuristic bounded adaptation: a losing streak raises the minimum
+        confidence threshold (more selectivity), a winning streak relaxes it
+        slightly — clamped to [0.55, 0.8]. This is confidence adjustment, not
+        policy learning.
+        """
+        self.measured_outcomes += 1
+        if pnl > 0:
+            self.measured_wins += 1
+        self.measured_total_pnl = round(self.measured_total_pnl + pnl, 4)
+
+        if pnl > 0:
+            self.min_confidence_threshold = max(0.55, self.min_confidence_threshold - 0.005)
+        else:
+            self.min_confidence_threshold = min(0.80, self.min_confidence_threshold + 0.005)
+
+        if regime:
+            self.regime_history.append({'regime': regime, 'pnl': pnl})
+
+        return {
+            'measured_outcomes': self.measured_outcomes,
+            'measured_win_rate': round(self.measured_wins / self.measured_outcomes, 3),
+            'measured_total_pnl': self.measured_total_pnl,
+            'min_confidence_threshold': round(self.min_confidence_threshold, 4),
+        }
         
     def generate_institutional_signal(self, 
                                    symbol: str,
@@ -177,12 +211,11 @@ class InstitutionalStrategyEngine:
     def _perform_technical_analysis(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
         """Perform comprehensive technical analysis"""
         
-        prices = market_data.get('price_history', [100] * 50)  # Default if no history
-        if len(prices) < 50:
-            # Generate synthetic data for demonstration
-            prices = [100 + np.sin(i/10) * 5 + np.random.normal(0, 1) for i in range(50)]
+        prices = market_data.get('price_history')
+        if not prices or len(prices) < 50:
+            raise ValueError("At least 50 real historical prices are required for technical analysis")
         
-        prices = np.array(prices)
+        prices = np.array(prices, dtype=float)
         
         # EMAs
         ema_9 = self._calculate_ema(prices, self.fast_ema)

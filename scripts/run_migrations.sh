@@ -10,6 +10,8 @@ fi
 # Move to repo root and then into backend
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$DIR/backend"
+# Alembic env imports the backend package; make the repo root importable
+export PYTHONPATH="$DIR${PYTHONPATH:+:$PYTHONPATH}"
 # Apply all heads (merge if multiple heads exist)
 if alembic upgrade heads; then
   echo "Migrations applied"

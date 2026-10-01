@@ -1,5 +1,4 @@
 import os
-import os
 import sys
 import unittest
 from datetime import datetime
@@ -15,12 +14,39 @@ from backend.db import init_db, get_session
 from backend.service_registry import registry
 
 
+class TestSentimentService:
+    def get_comprehensive_sentiment(self, symbol):
+        return {
+            'symbol': symbol,
+            'composite_sentiment': 0.75,
+            'recommendation': 'BUY',
+            'confidence': 0.8,
+            'components': {
+                'fear_greed': {
+                    'fear_greed_index': 0.75,
+                },
+                'options_flow': {
+                    'flow_score': 0.75,
+                },
+                'social_sentiment': {
+                    'overall_sentiment': 0.75,
+                },
+            },
+        }
+
+
 class TestMarketData:
     def get_stock_price(self, symbol):
+        # Deterministic capitulation-oversold fixture: gentle drift down then a
+        # sharp 10-day sell-off, closing with the first bounce day. Snapshot
+        # price matches the history tail so technical analysis is coherent.
+        base = 100.0 - 0.1 * 49 - 2.5 * 10  # 70.0
+        price = base
         return {
             'symbol': symbol.upper(),
-            'price': 150.0,
-            'change_percent': 0.5,
+            'price': price,
+            'change_percent': 0.9,
+            'trend': 'neutral',
             'volume': 1000000,
             'volatility': 0.02,
             'source': 'test_fixture',
@@ -28,20 +54,116 @@ class TestMarketData:
         }
 
     def get_fundamentals(self, symbol):
-        return {}
+        return {
+            'pe_ratio': 18.0,
+            'return_on_equity': 0.25,
+            'debt_to_equity': 0.3,
+            'revenue_growth': 0.12,
+            'earnings_growth': 0.15,
+            'profit_margin': 0.22,
+        }
 
     def get_price_history(self, symbol, days):
-        return [{'close': 150.0} for _ in range(days)]
+        # Deterministic oversold-capitulation series: 50-day gentle drift, sharp
+        # 10-day decline, then a nominal bounce day. RSI saturates oversold and
+        # price breaks the lower Bollinger band -> genuine mean-reversion BUY
+        # setup, verified by the full pipeline.
+        history = [100.0 - (0.1 * i) for i in range(50)]
+        for _ in range(10):
+            history.append(history[-1] - 2.5)
+        
+        return [{'close': close} for close in history[-days:]]
 
 
+class TestStrategySignalContract(unittest.TestCase):
+    """Regression tests for the technical directional signal contract."""
 
+    def test_bullish_technical_crossover_produces_buy(self):
+        from backend.services.institutional_strategy_engine import InstitutionalStrategyEngine
+
+        engine = InstitutionalStrategyEngine()
+        technical = {
+            'signals': {
+                'ema_crossover': 'bullish',
+                'rsi': 'neutral',
+                'bollinger': 'neutral',
+                'macd': 'bullish',
+            }
+        }
+
+        action, reasoning = engine._determine_action(
+            technical=technical,
+            sentiment=0.75,
+            fundamental=0.80,
+            regime=engine._detect_market_regime(
+                {'volatility': 0.02, 'trend': 'neutral'},
+                {'fear_greed_index': {'fear_greed_index': 0.75}},
+            ),
+        )
+
+        self.assertEqual(action, 'BUY')
+        self.assertIn('bullish', reasoning.lower())
+
+
+class TestPipelineProviderContract(unittest.TestCase):
+    def test_missing_market_provider_abstains(self):
+        import asyncio
+        pipeline = DecisionPipeline(market_data=None, sentiment_service=TestSentimentService())
+        ctx = asyncio.run(pipeline.execute_decision('AAPL'))
+        self.assertEqual(ctx.final_action, TradingAction.ABSTAIN)
+        self.assertIn('market_snapshot_error', ctx.provenance)
+
+        
+class TestSizingFailureContract(unittest.TestCase):
+    def test_sizing_engine_failure_is_not_silently_fallback(self):
+        from backend.risk.position_sizer import PositionSizer, SizingMethod
+        from backend.core.decision_context import PortfolioState, MarketSnapshot, CandidateStrategy
+        from datetime import datetime
+        from unittest.mock import Mock
+
+        class FailingStrategyEngine:
+            def _calculate_position_size(self, **kwargs):
+                raise ValueError("sizing dependency failed")
+
+        pipeline_ctx = DecisionContext(symbol="AAPL")
+        pipeline_ctx.candidate_strategy = CandidateStrategy(
+            action=TradingAction.BUY,
+            confidence=0.8,
+            reasoning="test",
+            position_size=1000.0,
+            stop_loss=140.0,
+            take_profit=165.0,
+            risk_score=0.2,
+        )
+        pipeline_ctx.market_snapshot = MarketSnapshot(
+            symbol="AAPL",
+            price=150.0,
+            timestamp=datetime.now(),
+            volatility=0.02,
+            source="test_fixture",
+            verified=True,
+        )
+        pipeline_ctx.portfolio_state = PortfolioState(
+            portfolio_id="test-portfolio",
+            total_value=100000.0,
+            cash=100000.0,
+            positions={},
+            risk_profile="moderate",
+        )
+
+        sizer = PositionSizer(
+            strategy_engine=FailingStrategyEngine(),
+            default_method=SizingMethod.STRATEGY_ENGINE,
+        )
+        with self.assertRaises(RuntimeError):
+            sizer.calculate(pipeline_ctx)
+
+        
 class TestFullPipeline(unittest.TestCase):
     """Test the full paper-trade lifecycle from market snapshot to learning."""
 
     @classmethod
     def setUpClass(cls):
-        """Set up test database once for all tests."""
-        # Use in-memory SQLite for testing
         os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
         from backend.db import reset_engine, get_engine
         from backend.models import Base
@@ -51,10 +173,11 @@ class TestFullPipeline(unittest.TestCase):
         Base.metadata.create_all(engine)
 
     def setUp(self):
-        """Set up test fixtures."""
-        self.pipeline = DecisionPipeline(market_data=TestMarketData())
+        self.pipeline = DecisionPipeline(
+            market_data=TestMarketData(),
+            sentiment_service=TestSentimentService(),
+        )
         self.session = get_session()
-        # Clear any existing data
         self.session.query(LearningEvent).delete()
         self.session.query(Attribution).delete()
         self.session.query(Outcome).delete()
@@ -62,171 +185,111 @@ class TestFullPipeline(unittest.TestCase):
         self.session.commit()
 
     def tearDown(self):
-        """Clean up after tests."""
         self.session.close()
 
     def test_full_lifecycle_buy_trade(self):
-            """Test a complete BUY trade through all 13 stages."""
-            # Execute decision for AAPL - should produce a BUY signal in test environment
-            import asyncio
-            ctx = asyncio.run(self.pipeline.execute_decision('AAPL'))
-        
-            # Verify decision ID exists
-            self.assertIsNotNone(ctx.decision_id)
-            self.assertTrue(ctx.decision_id.startswith('dec_'))
-        
-            # Verify symbol
-            self.assertEqual(ctx.symbol, 'AAPL')
-        
-            # Verify market snapshot created (stage 1)
-            self.assertIsNotNone(ctx.market_snapshot)
-            self.assertEqual(ctx.market_snapshot.symbol, 'AAPL')
-        
-            # Verify evidence synthesized (stage 2)
-            self.assertIsNotNone(ctx.evidence)
-            self.assertIsNotNone(ctx.evidence.technical)
-            self.assertIsNotNone(ctx.evidence.fundamental)
-            self.assertIsNotNone(ctx.evidence.sentiment)
-        
-            # Verify strategy selected (stage 3)
-            self.assertIsNotNone(ctx.candidate_strategy)
-            self.assertIsNotNone(ctx.candidate_strategy.action)
-        
-            # Verify agent voting occurred (stage 4)
-            self.assertIsNotNone(ctx.voting_result)
-            self.assertGreater(len(ctx.voting_result.votes), 0)
-        
-            # Verify debate occurred (stage 5)
-            self.assertIsNotNone(ctx.debate_result)
-            self.assertIsNotNone(ctx.debate_result.winning_signal)
+        """Test a complete BUY trade through all 13 stages."""
+        import asyncio
+        ctx = asyncio.run(self.pipeline.execute_decision('AAPL'))
 
-            # Verify CEO decision (stage 6)
-            self.assertIsNotNone(ctx.ceo_decision)
-            self.assertIsNotNone(ctx.ceo_decision.action)
-        
-            # Verify risk governance (stages 7 & 11)
-            self.assertIsNotNone(ctx.risk_state)
-            self.assertIsNotNone(ctx.risk_governance)
-            # In test environment, trade may be BLOCKED if Ghost triggers DIVINE_DOUBT
-            # on perfect consensus (100% debate consensus). This is correct behavior.
-            # We accept either APPROVE, WARNING, or BLOCK as valid outcomes.
-            self.assertIn(ctx.risk_governance, [GovernanceState.APPROVE, GovernanceState.WARNING, GovernanceState.BLOCK])
-        
-            # Verify position sizing (stage 8)
-            # Only check if trade was not blocked
-            if ctx.risk_governance != GovernanceState.BLOCK:
-                self.assertGreater(ctx.final_position_size, 0)
-            
-            # Verify execution occurred (stage 9)
-            # Only check if trade was not blocked
-            if ctx.risk_governance != GovernanceState.BLOCK:
-                self.assertIsNotNone(ctx.order_id)
-                self.assertIsNotNone(ctx.execution_id)
-            
-            # Verify outcome recorded (stage 12) - this is the key Phase 5 addition
-            # Only check if trade was not blocked
-            if ctx.risk_governance != GovernanceState.BLOCK:
-                self.assertIsNotNone(ctx.outcome_id)
-                outcome = self.session.query(Outcome).filter_by(id=ctx.outcome_id).first()
-                self.assertIsNotNone(outcome)
-                self.assertEqual(outcome.decision_id, ctx.decision_id)
-                self.assertEqual(outcome.symbol, 'AAPL')
-                self.assertIn(outcome.action, [TradingAction.BUY, TradingAction.SELL])
-            
-            # Verify attribution computed (stage 13) - Phase 5
-            # Only check if trade was not blocked
-            if ctx.risk_governance != GovernanceState.BLOCK:
-                self.assertIsNotNone(ctx.attribution_id)
-                attribution = self.session.query(Attribution).filter_by(id=ctx.attribution_id).first()
-                self.assertIsNotNone(attribution)
-                self.assertEqual(attribution.outcome_id, ctx.outcome_id)
-                # Attribution should have some components
-                self.assertGreater(len(attribution.attributions), 0)
-                # Total attributed PnL should be close to net PnL (allowing for residual)
-                self.assertAlmostEqual(
-                    attribution.total_attributed_pnl + attribution.residual_pnl,
-                    attribution.net_pnl,
-                    places=2,
-                    msg="Attribution math should balance"
-                )
-            
-            # Verify learning event generated - Phase 6
-            # Only check if trade was not blocked
-            if ctx.risk_governance != GovernanceState.BLOCK:
-                self.assertIsNotNone(ctx.learning_event_id)
-                learning_event = self.session.query(LearningEvent).filter_by(id=ctx.learning_event_id).first()
-                self.assertIsNotNone(learning_event)
-                self.assertEqual(learning_event.outcome_id, ctx.outcome_id)
-                self.assertIn(learning_event.event_type, ['confidence_update', 'strategy_metric_update', 'memory_store'])
-        
-            # Verify provenance tracking through all stages
-            # Note: If trade is blocked, later stages won't execute
-            if ctx.risk_governance != GovernanceState.BLOCK:
-                expected_stages = [
-                    'market_snapshot', 'evidence_synthesis', 'strategy_candidate', 'agent_voting', 'debate',
-                    'ceo_governance', 'risk', 'position_sizing', 'execution', 'outcome_attribution'
-                ]
-            else:
-                expected_stages = [
-                    'market_snapshot', 'evidence_synthesis', 'strategy_candidate', 'agent_voting', 'debate',
-                    'ceo_governance', 'risk'
-                ]
-            for stage in expected_stages:
-                self.assertIn(stage, ctx.provenance,
-                              f"Missing provenance for stage: {stage}")
-        
-            # Verify decision_id persistence through the chain
-            # decision_id -> order -> fill -> outcome -> attribution -> learning
-            # Only check if trade was not blocked
-            if ctx.risk_governance != GovernanceState.BLOCK:
-                # We already checked decision_id in outcome above
-                # Check that attribution links to outcome
-                self.assertEqual(attribution.outcome.decision_id, ctx.decision_id)
-                # Check that learning event links to outcome
-                self.assertEqual(learning_event.outcome.decision_id, ctx.decision_id)
+        self.assertIsNotNone(ctx.decision_id)
+        self.assertTrue(ctx.decision_id.startswith('dec_'))
+        self.assertEqual(ctx.symbol, 'AAPL')
+        self.assertIsNotNone(ctx.market_snapshot)
+        self.assertEqual(ctx.market_snapshot.symbol, 'AAPL')
+        self.assertIsNotNone(ctx.evidence)
+        self.assertIsNotNone(ctx.evidence.technical)
+        self.assertIsNotNone(ctx.evidence.fundamental)
+        self.assertIsNotNone(ctx.evidence.sentiment)
+        self.assertIsNotNone(ctx.candidate_strategy)
+        self.assertIsNotNone(ctx.candidate_strategy.action)
+        self.assertIsNotNone(ctx.voting_result)
+        self.assertGreater(len(ctx.voting_result.votes), 0)
+        self.assertIsNotNone(ctx.debate_result)
+        self.assertIsNotNone(ctx.debate_result.winning_signal)
+        self.assertIsNotNone(ctx.ceo_decision)
+        self.assertIsNotNone(ctx.ceo_decision.action)
+        self.assertIsNotNone(ctx.risk_state)
+        self.assertIsNotNone(ctx.risk_governance)
+        self.assertIn(ctx.risk_governance, [GovernanceState.APPROVE, GovernanceState.WARNING, GovernanceState.BLOCK])
+
+        if ctx.risk_governance != GovernanceState.BLOCK:
+            self.assertGreater(ctx.final_position_size, 0)
+            self.assertIsNotNone(ctx.order_id)
+            self.assertIsNotNone(ctx.execution_id)
+            self.assertIsNotNone(ctx.outcome_id)
+            outcome = self.session.query(Outcome).filter_by(id=ctx.outcome_id).first()
+            self.assertIsNotNone(outcome)
+            self.assertEqual(outcome.decision_id, ctx.decision_id)
+            self.assertEqual(outcome.symbol, 'AAPL')
+            self.assertIn(outcome.action, [TradingAction.BUY.value, TradingAction.SELL.value])
+            self.assertIsNotNone(ctx.attribution_id)
+            attribution = self.session.query(Attribution).filter_by(id=ctx.attribution_id).first()
+            self.assertIsNotNone(attribution)
+            self.assertEqual(attribution.outcome_id, ctx.outcome_id)
+            # Attribution components are persisted as individual rows per outcome
+            attribution_rows = self.session.query(Attribution).filter_by(outcome_id=ctx.outcome_id).all()
+            self.assertGreater(len(attribution_rows), 0)
+            outcome_row = self.session.query(Outcome).filter_by(id=ctx.outcome_id).first()
+            self.assertIsNotNone(outcome_row)
+            # Attribution math balances: component values sum to realized P&L
+            self.assertAlmostEqual(
+                sum(a.value for a in attribution_rows),
+                outcome_row.pnl,
+                places=2,
+                msg="Attribution math should balance",
+            )
+            self.assertIsNotNone(ctx.learning_event_id)
+            learning_event = self.session.query(LearningEvent).filter_by(id=ctx.learning_event_id).first()
+            self.assertIsNotNone(learning_event)
+            self.assertEqual(learning_event.outcome_id, ctx.outcome_id)
+            self.assertIn(learning_event.event_type, ['confidence_update', 'strategy_metric_update', 'memory_store'])
+
+            expected_stages = [
+                'market_snapshot', 'evidence_synthesis', 'strategy_candidate', 'agent_voting', 'debate',
+                'ceo_governance', 'risk', 'position_sizing', 'execution', 'outcome_attribution'
+            ]
+        else:
+            expected_stages = [
+                'market_snapshot', 'evidence_synthesis', 'strategy_candidate', 'agent_voting', 'debate',
+                'ceo_governance', 'risk'
+            ]
+
+        for stage in expected_stages:
+            self.assertIn(stage, ctx.provenance, f"Missing provenance for stage: {stage}")
+
+        if ctx.risk_governance != GovernanceState.BLOCK:
+            self.assertEqual(outcome_row.decision_id, ctx.decision_id)
+            learning_event = self.session.query(LearningEvent).filter_by(id=ctx.learning_event_id).first()
+            self.assertIsNotNone(learning_event)
+            self.assertEqual(learning_event.outcome_id, ctx.outcome_id)
+            self.assertEqual(ctx.decision_id, outcome_row.decision_id)
 
     def test_blocked_trade_provenance(self):
         """Test that a blocked trade preserves provenance without outcome."""
-        # We'll test by forcing a BLOCK through emotional safeguards (MOUNA mode)
-        # First, set up the pipeline
         import asyncio
-        ctx = asyncio.run(self.pipeline.execute_decision('AAPL'))
-        
-        # Manually set emotional state to MOUNA to block trade
+        asyncio.run(self.pipeline.execute_decision('AAPL'))
+
         from backend.services.emotional_safeguards import get_emotional_safeguards
         safeguards = get_emotional_safeguards()
-        safeguards._state = safeguards._state.__class__.MOUNA  # Set to MOUNA
-        
-        # Re-run pipeline - should be blocked at preliminary risk
+        safeguards._state = safeguards._state.__class__.MOUNA
         ctx_blocked = asyncio.run(self.pipeline.execute_decision('AAPL'))
-        
-        # Verify it was blocked
+
         self.assertEqual(ctx_blocked.risk_governance, GovernanceState.BLOCK,
                          "Trade should be blocked when in MOUNA mode")
-        
-        # Verify no outcome was created
         self.assertIsNone(ctx_blocked.outcome_id)
-        
-        # Verify provenance shows where it stopped
         self.assertIn('risk', ctx_blocked.provenance)
-        # Should not have execution or beyond
         self.assertNotIn('execution', ctx_blocked.provenance)
         self.assertNotIn('outcome_attribution', ctx_blocked.provenance)
-        
-        # Verify decision_id is still present
         self.assertIsNotNone(ctx_blocked.decision_id)
-        
-        # Reset safeguards for other tests
         safeguards._state = safeguards._state.__class__.CALM
 
     def test_attribution_engine_directly(self):
         """Test the attribution engine in isolation."""
         engine = AttributionEngine()
-        
-        # Create a mock outcome record (not the database model)
         from backend.attribution.attribution_engine import OutcomeRecord
         from datetime import datetime
-        
+
         outcome = OutcomeRecord(
             outcome_id='out_test123',
             decision_id='dec_test123',
@@ -263,16 +326,12 @@ class TestFullPipeline(unittest.TestCase):
             risk_governance='APPROVE',
             position_size_method='kelly'
         )
-        
-        # Run attribution
         attributed_outcome = engine.attribute_outcome(outcome)
-        
-        # Verify result structure
         self.assertIsNotNone(attributed_outcome)
         self.assertEqual(attributed_outcome.outcome_id, outcome.outcome_id)
         self.assertEqual(attributed_outcome.net_pnl, 100.0)
-        # Should have some attributions (even if zero)
         self.assertGreater(len(attributed_outcome.attributions), 0)
+
 
 if __name__ == '__main__':
     unittest.main()

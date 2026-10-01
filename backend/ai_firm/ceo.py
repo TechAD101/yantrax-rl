@@ -11,6 +11,7 @@ from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
 import hashlib
+import logging
 from .debate_engine import DebateEngine
 from .agent_manager import AgentManager
 from .ghost_layer import GhostLayer
@@ -38,6 +39,7 @@ class AutonomousCEO:
     """Autonomous CEO with memory and decision-making capabilities"""
     
     def __init__(self, personality: CEOPersonality = CEOPersonality.BALANCED):
+        self.logger = logging.getLogger(__name__)
         self.personality = personality
         self.memory_system = CEOMemorySystem()
         self.decision_history = []
@@ -65,9 +67,13 @@ class AutonomousCEO:
         if pain_level > 85:
             self.logger.warning("🚨 EMERGENCY: PAIN LEVEL CRITICAL (%s%%). ENTERING MOUNA MODE.", pain_level)
             return self._generate_panic_decision(context, pain_level)
-        ticker = context.get('ticker', 'UNKNOWN')
-        debate_result = await self.debate_engine.conduct_debate(ticker, context)
-        
+        # The canonical DecisionPipeline already ran the debate stage. Reuse that
+        # result when supplied instead of executing a second, potentially divergent debate.
+        debate_result = context.get('debate_result')
+        if not debate_result:
+            ticker = context.get('ticker', 'UNKNOWN')
+            debate_result = await self.debate_engine.conduct_debate(ticker, context)
+
         # 2. Analyze context with memory
         memory_insights = self.memory_system.recall_relevant_memories(context)
         
@@ -99,11 +105,17 @@ class AutonomousCEO:
              reasoning += " | ⛔ VETOED BY PHILOSOPHY (Adharma detected)."
         
         # 5. Create decision
+        # Keep the workflow classification separate from any trade direction.
+        # The strategy action is supplied in the context and remains explicit.
+        decision_context = dict(context)
+        candidate = context.get('candidate_strategy') or {}
+        decision_context['strategy_action'] = candidate.get('action')
+
         decision = CEODecision(
             id=str(uuid.uuid4()),
             timestamp=datetime.now(),
             decision_type=context.get('type', 'strategic'),
-            context=context,
+            context=decision_context,
             reasoning=reasoning,
             confidence=round(final_confidence, 2),
             expected_impact=self._assess_impact(context, final_confidence),

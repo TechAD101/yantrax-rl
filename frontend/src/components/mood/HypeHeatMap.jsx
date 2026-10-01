@@ -1,16 +1,40 @@
 // src/components/mood/HypeHeatMap.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { getVisualMoodBoard } from '../../api/api';
 
+// Sector Hype Map. Renders canonical mood-board data from
+// /api/visual_mood_board; without backend data it shows an explicit
+// unavailable state — no invented sector movements.
 const HypeHeatMap = () => {
-    // Mock data
-    const sectors = [
-        { name: 'AI / Compute', status: 'surging', change: '+12.5%', icon: '🤖' },
-        { name: 'DeFi 2.0', status: 'bleeding', change: '-5.2%', icon: '💸' },
-        { name: 'Metaverse', status: 'silent', change: '+0.1%', icon: '🥽' },
-        { name: 'Layer 1s', status: 'cooling', change: '-1.2%', icon: '⛓️' },
-        { name: 'Gaming', status: 'surging', change: '+8.4%', icon: '🎮' },
-        { name: 'Storage', status: 'silent', change: '0.0%', icon: '💾' }
-    ];
+    const [sectors, setSectors] = useState([]);
+    const [available, setAvailable] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        const load = async () => {
+            try {
+                const resp = await getVisualMoodBoard();
+                if (cancelled) return;
+                const data = resp?.data || resp || {};
+                const emotion = data.current_mood || {};
+                const moodLabel = typeof emotion === 'string' ? emotion : (emotion.label || emotion.mood);
+                const pain = data.emotion_dial?.pain_meter ?? null;
+                setSectors([
+                    { name: 'Firm Mood', status: 'silent', change: moodLabel || 'unknown', icon: '🏛️' },
+                    { name: 'Pain Meter', status: 'silent', change: pain == null ? 'unavailable' : `${pain}%`, icon: '⚡' },
+                ]);
+                setAvailable(true);
+            } catch (err) {
+                if (!cancelled) {
+                    setSectors([]);
+                    setAvailable(false);
+                }
+            }
+        };
+        load();
+        const interval = setInterval(load, 30000);
+        return () => { cancelled = true; clearInterval(interval); };
+    }, []);
 
     const getStyles = (status) => {
         switch (status) {
@@ -27,7 +51,7 @@ const HypeHeatMap = () => {
             case 'surging': return '🔥 SURGING';
             case 'bleeding': return '🩸 BLEEDING';
             case 'cooling': return '🧊 COOLING';
-            case 'silent': return '💤 SILENT';
+            case 'silent': return '💤 CANONICAL';
             default: return '';
         }
     };
@@ -36,8 +60,16 @@ const HypeHeatMap = () => {
         <div className="bg-gray-900/80 backdrop-blur rounded-2xl p-6 border border-gray-800">
             <h3 className="text-lg font-bold text-gray-200 mb-4 flex justify-between items-center">
                 <span>Sector Hype Map</span>
-                <span className="text-xs font-mono text-gray-500">Live Updates</span>
+                <span className="text-xs font-mono text-gray-500">
+                    {available ? 'Canonical Data' : 'Backend Unavailable'}
+                </span>
             </h3>
+
+            {!available && (
+                <div className="text-sm text-gray-500 py-8 text-center">
+                    Mood-board data unavailable — showing no invented market activity.
+                </div>
+            )}
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {sectors.map((sector, idx) => (
@@ -47,7 +79,7 @@ const HypeHeatMap = () => {
                     >
                         <span className="text-3xl mb-2">{sector.icon}</span>
                         <span className="font-bold text-gray-200 text-sm">{sector.name}</span>
-                        <span className={`text-xs font-mono mt-1 ${sector.change.startsWith('+') ? 'text-green-400' : sector.change.startsWith('-') ? 'text-red-400' : 'text-gray-400'}`}>
+                        <span className="text-xs font-mono mt-1 text-gray-300">
                             {sector.change}
                         </span>
                         <span className="text-[10px] font-bold mt-2 uppercase tracking-wider opacity-80">

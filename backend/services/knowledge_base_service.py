@@ -65,11 +65,13 @@ class KnowledgeBaseService:
 
         self._initialize_collections()
 
+        # Mark the service initialized before seeding. _seed_wisdom() intentionally
+        # uses the public store_wisdom() API, which performs its own initialization guard.
+        self._initialized = True
+
         # Seed if empty
         if self.collections['investor_wisdom'].count() == 0:
             self._seed_wisdom()
-
-        self._initialized = True
 
     def _ensure_initialized(self):
         """Ensure ChromaDB is initialized before operations."""
@@ -296,31 +298,38 @@ class KnowledgeBaseService:
             return []
 
         try:
-            # Build where filter for archetype
-            where_filter = None
-            if archetype_filter:
-                where_filter = {"archetype": {"$contains": archetype_filter}}
-
+            # ChromaDB 0.4.x does not support a string $contains metadata operator.
+            # Archetypes are persisted as comma-separated metadata, so filter them
+            # after semantic retrieval while preserving the ranked result order.
+            result_limit = max_results if not archetype_filter else collection.count()
             results = collection.query(
                 query_texts=[topic],
-                n_results=min(max_results, collection.count()),
-                where=where_filter
+                n_results=min(result_limit, collection.count())
             )
 
-            # Format results
+            # Format and optionally filter results by archetype in application code.
             wisdom_results = []
             if results['documents'] and len(results['documents'][0]) > 0:
                 for i, doc in enumerate(results['documents'][0]):
                     metadata = results['metadatas'][0][i]
+                    archetypes = [
+                        value.strip()
+                        for value in metadata.get('archetype', '').split(',')
+                        if value.strip()
+                    ]
+                    if archetype_filter and archetype_filter not in archetypes:
+                        continue
                     wisdom_results.append({
                         'content': doc,
                         'source': metadata.get('source', 'Unknown'),
                         'tags': metadata.get('tags', '').split(',') if metadata.get('tags') else [],
-                        'archetype': metadata.get('archetype', '').split(',') if metadata.get('archetype') else [],
+                        'archetype': archetypes,
                         'relevance_score': round(1.0 - results['distances'][0][i], 3),
                         'confidence': metadata.get('confidence', 0.9),
                         'id': results['ids'][0][i]
                     })
+                    if len(wisdom_results) >= max_results:
+                        break
 
             self.logger.info(f"✓ Found {len(wisdom_results)} wisdom items for: {topic[:50]}")
             return wisdom_results

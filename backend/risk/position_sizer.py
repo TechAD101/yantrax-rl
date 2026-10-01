@@ -197,8 +197,8 @@ class PositionSizer:
                 details={"engine": "InstitutionalStrategyEngine"},
             )
         except Exception as e:
-            logger.warning(f"Strategy Engine sizing failed: {e}, falling back")
-            return self._size_fixed_fractional(ctx, entry_price, stop_loss, take_profit, risk_per_share)
+            logger.error(f"Strategy Engine sizing failed: {e}")
+            raise RuntimeError(f"Strategy Engine position sizing failed: {e}") from e
     
     def _size_fixed_fractional(
         self,

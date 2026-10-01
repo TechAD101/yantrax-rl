@@ -55,6 +55,7 @@ class DecisionPipeline:
         ceo: Optional[AutonomousCEO] = None,
         ghost_layer: Optional[GhostLayer] = None,
         oracle: Optional[OracleService] = None,
+        sentiment_service: Optional[Any] = None,
         portfolio_id: int = 1,
     ):
         # Core services
@@ -65,16 +66,23 @@ class DecisionPipeline:
         self.ceo = ceo
         self.ghost_layer = ghost_layer
         self.oracle = oracle
+        self._sentiment_service = sentiment_service
         self.portfolio_id = portfolio_id
         
         # Pipeline components
         self.evidence_synthesizer = EvidenceSynthesizer(
             strategy_engine=self.strategy_engine,
             market_data=self.market_data,
+            sentiment_service=self._sentiment_service,
         )
         self.risk_governor = RiskGovernor()
         self.position_sizer = PositionSizer(strategy_engine=self.strategy_engine)
-        
+
+        # Learning loop: coordinator applies realized-outcome learning events
+        # to live components (agent confidence, strategy thresholds).
+        from backend.services.learning_coordinator import get_learning_coordinator
+        self.learning_coordinator = get_learning_coordinator()
+
         # State
         self._initialized = False
     
@@ -86,6 +94,12 @@ class DecisionPipeline:
         # Initialize AgentManager if not provided
         if not self.agent_manager:
             self.agent_manager = AgentManager(oracle_service=self.oracle)
+
+        # Register learning consumers once (agent confidence + strategy metrics)
+        if not getattr(self.learning_coordinator, '_consumers', None):
+            self.learning_coordinator.register_consumer(
+                lambda ev: self._apply_learning_event(ev)
+            )
         
         # Initialize DebateEngine if not provided
         if not self.debate_engine:
@@ -123,6 +137,12 @@ class DecisionPipeline:
             # STAGE 1: MARKET SNAPSHOT
             # ──────────────────────────────────────────────────────
             ctx = await self._stage_market_snapshot(ctx)
+
+            # Fail closed on unverified or missing market data.
+            if 'unverified_market_data' in ctx.provenance or (
+                ctx.final_action == TradingAction.ABSTAIN and ctx.market_snapshot is None
+            ):
+                return ctx
             if not ctx.market_snapshot:
                 ctx.final_action = TradingAction.ABSTAIN
                 return ctx
@@ -131,6 +151,10 @@ class DecisionPipeline:
             # STAGE 2: EVIDENCE SYNTHESIS (includes Regime)
             # ──────────────────────────────────────────────────────
             ctx = await self._stage_evidence_synthesis(ctx)
+
+            # Fail closed when required market evidence is unavailable.
+            if ctx.final_action == TradingAction.ABSTAIN and ctx.evidence is None:
+                return ctx
             
             # ──────────────────────────────────────────────────────
             # STAGE 3: STRATEGY CANDIDATE
@@ -211,18 +235,28 @@ class DecisionPipeline:
         """Fetch and build canonical market snapshot."""
         symbol = ctx.symbol
         
-        # Get price data
-        if self.market_data:
-            try:
-                price_data = self.market_data.get_stock_price(symbol)
-            except Exception as e:
-                logger.warning(f"Market data error for {symbol}: {e}")
-                price_data = {'price': 0, 'source': 'error', 'error': str(e)}
-        else:
-            # Fallback to global market_provider
-            from backend.main import market_provider
-            price_data = market_provider.get_price(symbol) if market_provider else {'price': 0, 'source': 'unavailable'}
-        
+        # The canonical pipeline requires an explicit market-data provider.
+        # No global, dummy, cached, or synthetic provider may be substituted here.
+        if not self.market_data:
+            logger.error("No market-data provider configured for canonical decision pipeline")
+            ctx.final_action = TradingAction.ABSTAIN
+            ctx.add_provenance("market_snapshot_error", {
+                "error": "market_data_provider_not_configured",
+                "action": TradingAction.ABSTAIN.value,
+            })
+            return ctx
+
+        try:
+            price_data = self.market_data.get_stock_price(symbol)
+        except Exception as e:
+            logger.error(f"Market data error for {symbol}: {e}")
+            ctx.final_action = TradingAction.ABSTAIN
+            ctx.add_provenance("market_snapshot_error", {
+                "error": str(e),
+                "action": TradingAction.ABSTAIN.value,
+            })
+            return ctx
+
         # Get fundamentals
         fundamentals = {}
         if self.market_data and hasattr(self.market_data, 'get_fundamentals'):
@@ -243,6 +277,17 @@ class DecisionPipeline:
             "source": ctx.market_snapshot.source,
             "verified": ctx.market_snapshot.verified,
         })
+
+        # Evidence integrity gate: unverified market data must not drive
+        # canonical trading decisions. Fail closed, explicitly.
+        if not ctx.market_snapshot.verified:
+            logger.warning(f"Unverified market data for {symbol} (source={ctx.market_snapshot.source}) - failing closed")
+            ctx.final_action = TradingAction.ABSTAIN
+            ctx.add_provenance("unverified_market_data", {
+                "source": ctx.market_snapshot.source,
+                "action": TradingAction.ABSTAIN.value,
+            })
+            return ctx
         
         return ctx
     
@@ -250,8 +295,20 @@ class DecisionPipeline:
         """Synthesize evidence package (technical + fundamental + sentiment + regime)."""
         if not ctx.market_snapshot:
             return ctx
-        
-        ctx.evidence = self.evidence_synthesizer.synthesize(ctx.symbol, ctx.market_snapshot)
+
+        try:
+            ctx.evidence = self.evidence_synthesizer.synthesize(ctx.symbol, ctx.market_snapshot)
+        except Exception as e:
+            # Missing required market evidence must fail closed — but explicitly:
+            # record the evidence failure in provenance instead of a generic
+            # pipeline_error, so the stop point is traceable.
+            logger.error(f"Evidence synthesis failed for {ctx.symbol}: {e}")
+            ctx.final_action = TradingAction.ABSTAIN
+            ctx.add_provenance("evidence_synthesis_error", {
+                "error": str(e),
+                "action": TradingAction.ABSTAIN.value,
+            })
+            return ctx
         ctx.add_provenance("evidence_synthesis", {
             "regime": ctx.evidence.market_regime.value,
             "regime_confidence": ctx.evidence.regime_confidence,
@@ -299,8 +356,13 @@ class DecisionPipeline:
                     pass
             
             # Generate institutional signal
+            # The engine expects a plain portfolio dict; convert the canonical
+            # PortfolioState so strategy sizing is grounded in real state.
+            portfolio_dict = (
+                ctx.portfolio_state.to_dict() if ctx.portfolio_state else portfolio_state.to_dict() if portfolio_state else None
+            )
             signal = self.strategy_engine.generate_institutional_signal(
-                ctx.symbol, enhanced_market_data, fundamentals, sentiment, portfolio_state
+                ctx.symbol, enhanced_market_data, fundamentals, sentiment, portfolio_dict
             )
             
             # Map to canonical candidate strategy
@@ -370,6 +432,19 @@ class DecisionPipeline:
                 'composite_sentiment': ctx.evidence.sentiment.composite_sentiment,
                 'timestamp': datetime.now().isoformat(),
             }
+
+            # Institutional experience: recent realized-outcome learning from
+            # the coordinator (DB-backed), injected for future-aware voting.
+            try:
+                experience = self.learning_coordinator.get_relevant_experience(ctx.symbol, limit=5)
+                if experience:
+                    agent_context['learned_experience'] = experience
+                    ctx.add_provenance("learned_experience", {
+                        "events_recalled": len(experience),
+                        "source": "learning_coordinator",
+                    })
+            except Exception as e:
+                logger.warning(f"Experience injection failed: {e}")
 
             try:
                 # Get expert opinions from personas if available
@@ -521,19 +596,22 @@ class DecisionPipeline:
             # CEO decision (async)
             ceo_decision = await self.ceo.make_strategic_decision(ceo_context)
             
-            # Map CEO decision to canonical format
-            action_map = {
-                'BUY': TradingAction.BUY,
-                'SELL': TradingAction.SELL,
-                'HOLD': TradingAction.HOLD,
-                'defensive_lockdown': TradingAction.HOLD,
-            }
-            
+            # CEO decision_type is a workflow classification, not trade direction.
+            # Preserve the explicit candidate strategy action; governance vetoes remain
+            # separate and are enforced by risk/finalization stages.
+            strategy_action = ceo_decision.context.get('strategy_action')
+            if strategy_action in [a.value for a in TradingAction]:
+                ceo_action = TradingAction(strategy_action)
+            elif ceo_decision.decision_type == 'defensive_lockdown':
+                ceo_action = TradingAction.HOLD
+            else:
+                ceo_action = ctx.candidate_strategy.action if ctx.candidate_strategy else TradingAction.HOLD
+
             ctx.ceo_decision = CEODecision(
                 decision_id=ceo_decision.id,
                 timestamp=ceo_decision.timestamp,
                 decision_type=ceo_decision.decision_type,
-                action=action_map.get(ceo_decision.decision_type, TradingAction.HOLD),
+                action=ceo_action,
                 confidence=ceo_decision.confidence,
                 reasoning=ceo_decision.reasoning,
                 expected_impact=ceo_decision.expected_impact,
@@ -545,6 +623,7 @@ class DecisionPipeline:
             
             ctx.add_provenance("ceo_governance", {
                 "action": ctx.ceo_decision.action.value,
+                "action_source": "strategy_action" if strategy_action in [a.value for a in TradingAction] else "candidate_strategy",
                 "confidence": ctx.ceo_decision.confidence,
                 "pain_level": ctx.ceo_decision.pain_level,
                 "ghost_nudge": ctx.ceo_decision.ghost_nudge is not None,
@@ -690,7 +769,7 @@ class DecisionPipeline:
             usd_amount = ctx.final_position_size
             
             # Create order through existing order manager
-            order = create_order(ctx.symbol, usd_amount)
+            order = create_order(ctx.symbol, usd_amount, price=ctx.market_snapshot.price if ctx.market_snapshot else None)
             
             ctx.order_id = order.get('id')
             ctx.execution_id = f"exec_{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -762,24 +841,46 @@ class DecisionPipeline:
             try:
                 session.add(position)
                 session.commit()
+                # Detach-safe capture: expire_on_commit would make attribute
+                # access fail after the session closes.
+                position_side = position.side
+                position_quantity = position.quantity
+                position_entry_price = position.entry_price
+                position_entry_order_id = position.entry_order_id
+                position_entry_fill_id = position.entry_fill_id
             finally:
                 session.close()
-            
+
             # Store position ID in context
             ctx.position_id = position_id
             ctx.position_status = 'OPEN'
-            
+
             ctx.add_provenance("position_opened", {
                 "position_id": position_id,
                 "symbol": ctx.symbol,
-                "side": position.side,
-                "quantity": position.quantity,
-                "entry_price": position.entry_price,
-                "entry_order_id": ctx.order_id,
-                "entry_fill_id": ctx.execution_id,
+                "side": position_side,
+                "quantity": position_quantity,
+                "entry_price": position_entry_price,
+                "entry_order_id": position_entry_order_id,
+                "entry_fill_id": position_entry_fill_id,
             })
-            
+
             logger.info(f"OPEN position created for {ctx.decision_id}: {position_id}")
+
+            # Deterministic paper round-trip: close the position in the same
+            # run using a modeled paper exit price (explicitly labeled as a
+            # simulated paper fill, never presented as real market evidence).
+            if self.market_data is not None:
+                entry_price = position_entry_price or (ctx.market_snapshot.price if ctx.market_snapshot else 0)
+                direction = 1.0 if (ctx.final_action == TradingAction.BUY) else -1.0
+                vol = (ctx.market_snapshot.volatility if ctx.market_snapshot else None) or 0.02
+                paper_exit_price = round(entry_price * (1 + direction * 0.5 * vol), 4)
+                ctx.add_provenance("paper_exit_modeled", {
+                    "mode": "paper_simulation",
+                    "exit_price": paper_exit_price,
+                    "note": "simulated paper fill, not real market evidence",
+                })
+                ctx = await self.close_position(ctx, exit_price=paper_exit_price)
             
         except Exception as e:
             logger.error(f"Position creation failed: {e}")
@@ -916,7 +1017,7 @@ class DecisionPipeline:
                         value=attr.value,
                         percentage=attr.percentage,
                         confidence=attr.confidence,
-                        details=attr.details
+                        details=attr.metadata
                     )
                     session.add(attribution_orm)
                 
@@ -1069,10 +1170,10 @@ class DecisionPipeline:
                         volatility_at_close=0.0,
                         strategy_name=position.strategy_id or 'unknown',
                         strategy_confidence=0.5,
-                        agent_votes={},
-                        debate_result=None,
-                        ceo_decision=None,
-                        risk_governance='APPROVE',
+                        agent_votes=self._build_vote_distribution(ctx),
+                        debate_result=ctx.debate_result.to_dict() if ctx.debate_result else None,
+                        ceo_decision=ctx.ceo_decision.to_dict() if ctx.ceo_decision else None,
+                        risk_governance=ctx.risk_governance.value if ctx.risk_governance else 'APPROVE',
                         position_size_method='unknown'
                     )
                 
@@ -1091,7 +1192,7 @@ class DecisionPipeline:
                             value=attr.value,
                             percentage=attr.percentage,
                             confidence=attr.confidence,
-                            details=attr.details
+                            details=attr.metadata
                         )
                         session.add(attribution_orm)
                 
@@ -1133,33 +1234,48 @@ class DecisionPipeline:
                         trade.pnl = net_pnl
                         trade.meta = attributed_outcome.to_dict()
                 
-                    # Update JournalEntry
-                    journal = session.query(JournalEntry).filter_by(trade_id=outcome_id).first()
-                    if not journal:
-                        journal = JournalEntry(
-                            trade_id=outcome_id,
-                            decision_id=outcome.decision_id,
-                            symbol=position.symbol,
-                            action=position.side,
-                            result='WIN' if net_pnl > 0 else 'LOSS',
-                            pnl=net_pnl,
-                            confidence=0.5,
-                            notes=f"Position closed. Attribution: {len(attributed_outcome.attributions)} components. "
-                                    f"Market Beta: {next((a.value for a in attributed_outcome.attributions if a.component.value == 'market_beta'), 0):.2f}, "
-                                    f"Strategy Alpha: {next((a.value for a in attributed_outcome.attributions if a.component.value == 'strategy_alpha'), 0):.2f}, "
-                                    f"Execution Cost: {next((a.value for a in attributed_outcome.attributions if a.component.value == 'execution_cost'), 0):.2f}"
-                        )
-                        session.add(journal)
-                
+                    # Journal note: the JournalEntry ORM lacks trade_id/decision_id/
+                    # pnl columns, so closed-trade journals are NOT written here —
+                    # the attribution summary lives in TradeHistory.meta and in the
+                    # persisted Outcome/Attribution/LearningEvent records.
+                    # (Writing fabricated columns would corrupt the schema contract.)
+
                     session.commit()
-                
+
+                    # Feed the realized outcome's learning events through the
+                    # coordinator -> agent confidence / strategy metrics.
+                    learning_summary = self.learning_coordinator.apply_learning_events(learning_events)
+
+                    # CEO institutional memory: realized outcome recorded so
+                    # recall_relevant_memories feeds learned experience into
+                    # future strategic decisions.
+                    try:
+                        if self.ceo and hasattr(self.ceo, 'memory_system'):
+                            self.ceo.memory_system.store_performance_memory({
+                                'outcome_id': outcome_id,
+                                'decision_id': ctx.decision_id,
+                                'symbol': position.symbol,
+                                'action': position.side,
+                                'net_pnl': net_pnl,
+                                'exit_price': exit_price,
+                                'strategy': position.strategy_id,
+                                'regime': position.regime,
+                                'learning_events': len(learning_events),
+                            })
+                    except Exception as e:
+                        logger.warning(f"CEO performance-memory store failed: {e}")
+
                     # Update context
                     ctx.outcome_id = outcome_id
                     ctx.realized_pnl = net_pnl
-                    ctx.attribution_ids = [a.id for a in attributed_outcome.attributions]
+                    ctx.attribution_ids = [
+                        f"attr_{a.component.value}_{outcome_id}" for a in attributed_outcome.attributions
+                    ]
                     ctx.learning_event_ids = [le.event_id for le in learning_events]
                     if learning_events:
                         ctx.learning_event_id = learning_events[0].event_id
+                    if ctx.attribution_ids:
+                        ctx.attribution_id = ctx.attribution_ids[0]
                     ctx.position_status = 'CLOSED'
                 
                     ctx.add_provenance("position_closed", {
@@ -1167,7 +1283,14 @@ class DecisionPipeline:
                         "exit_price": exit_price,
                         "net_pnl": net_pnl,
                         "attribution_components": len(attributed_outcome.attributions),
-                        "learning_events": len(learning_events)
+                        "learning_events": len(learning_events),
+                        "learning_applied": learning_summary,
+                    })
+                    # Canonical stage alias for the lifecycle contract
+                    ctx.add_provenance("outcome_attribution", {
+                        "outcome_id": outcome_id,
+                        "attribution_ids": ctx.attribution_ids,
+                        "learning_event_ids": ctx.learning_event_ids,
                     })
                 
                     logger.info(f"Closed position {position.id}: P&L={net_pnl:.2f}")
@@ -1181,6 +1304,36 @@ class DecisionPipeline:
         
             return ctx
     
+    def _build_vote_distribution(self, ctx: DecisionContext) -> Dict[str, Any]:
+        """Build agent vote distribution for attribution/learning from canonical votes.
+
+        Shape: {'vote_distribution': {agent_name: {signal, confidence, ...}}} —
+        the shape _generate_learning_events consumes.
+        """
+        if not ctx.voting_result or not ctx.voting_result.votes:
+            return {}
+        distribution = {}
+        for vote in ctx.voting_result.votes:
+            distribution[vote.agent_name] = {
+                'signal': vote.signal.value,
+                'confidence': vote.confidence,
+                'weight': vote.weight,
+                'department': vote.department,
+            }
+        return {'vote_distribution': distribution}
+
+    def _apply_learning_event(self, event) -> None:
+        """LearningCoordinator consumer: apply one LearningEvent to live components."""
+        meta = event.metadata or {}
+        if event.target_type == 'agent' and self.agent_manager:
+            try:
+                self.agent_manager.apply_confidence_update(event.target_id, float(event.new_value))
+            except (TypeError, ValueError):
+                pass
+        elif event.target_type == 'strategy' and self.strategy_engine:
+            pnl = float(meta.get('outcome_pnl', 0.0) or 0.0)
+            self.strategy_engine.apply_outcome_learning(pnl, regime=meta.get('regime'))
+
     def _get_price_history(self, symbol: str, days: int = 50) -> List[float]:
         """Get price history for technical analysis."""
         if self.market_data and hasattr(self.market_data, 'get_price_history'):
@@ -1191,17 +1344,7 @@ class DecisionPipeline:
             except Exception:
                 pass
         
-        # Fallback: use current price with synthetic variation
-        if self.market_data:
-            try:
-                price_data = self.market_data.get_stock_price(symbol)
-                base = price_data.get('price', 100)
-            except Exception:
-                base = 100
-        else:
-            base = 100
-        
-        return [base * (1 + (i % 10 - 5) * 0.01) for i in range(days)]
+        raise ValueError(f"Real price history unavailable for {symbol}")
     
     async def _get_portfolio_state(self) -> PortfolioState:
         """Get current portfolio state from database."""
@@ -1246,8 +1389,8 @@ class DecisionPipeline:
     
     @property
     def sentiment_service(self):
-        """Lazy sentiment service getter."""
-        return get_sentiment_service()
+        """Return the injected sentiment service or lazily create the shared service."""
+        return self._sentiment_service or get_sentiment_service()
 
 
 # Convenience function for direct pipeline execution
@@ -1258,9 +1401,10 @@ async def run_canonical_decision(symbol: str, **kwargs) -> DecisionContext:
 
 
 # Synchronous wrapper for use in Flask routes
-def run_canonical_decision_sync(symbol: str, **kwargs) -> DecisionContext:
+def run_canonical_decision_sync(symbol: str, pipeline: Optional['DecisionPipeline'] = None, **kwargs) -> DecisionContext:
     """Synchronous wrapper for canonical decision pipeline."""
-    pipeline = DecisionPipeline(**kwargs)
+    if pipeline is None:
+        pipeline = DecisionPipeline(**kwargs)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:

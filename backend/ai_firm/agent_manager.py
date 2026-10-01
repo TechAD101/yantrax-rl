@@ -229,12 +229,11 @@ class AgentManager:
                 consensus_strength = vote_tally[winning_signal] / total_weight if total_weight > 0 else 0
 
                 # DIVINE DOUBT PROTOCOL
-                # If consensus is too high (>90%), The Ghost injects doubt
+                # High consensus is a governance signal, not a trade-direction rewrite.
+                # Preserve the winning signal; downstream governance can inspect
+                # divine_doubt_applied without silently converting BUY/SELL to HOLD.
                 if consensus_strength > 0.9 and 'the_ghost' in self.enhanced_agents:
-                    self.logger.info("👻 Divine Doubt triggered! Consensus too high (%s)", consensus_strength)
-                    # Pivot: Force a re-evaluation
-                    winning_signal = "HOLD_FOR_CLARITY"
-                    consensus_strength *= 0.7  # Dilute confidence
+                    self.logger.info("👻 Divine Doubt triggered! Consensus high (%s)", consensus_strength)
                     divine_doubt_triggered = True
 
                 # ORACLE WHISPER (Gemini Integration)
@@ -419,6 +418,26 @@ class AgentManager:
             'analyst': 0.4
         }
         return role_weights.get(role, 0.5)
+
+    def apply_confidence_update(self, agent_name: str, new_confidence: float) -> bool:
+        """Apply a measured confidence update from a realized outcome.
+
+        Bounded to [0.1, 0.99]. Returns True when the agent was updated.
+        """
+        agent = self.enhanced_agents.get(agent_name)
+        if not agent:
+            return False
+        try:
+            bounded = max(0.1, min(0.99, float(new_confidence)))
+        except (TypeError, ValueError):
+            return False
+        agent['confidence'] = bounded
+        return True
+
+    def get_measured_stats(self) -> Dict[str, Any]:
+        """Expose the measured performance ledger (real outcomes, not config)."""
+        from backend.services.learning_coordinator import get_learning_coordinator
+        return get_learning_coordinator().get_agent_stats()
     
     def get_agent_status(self) -> Dict[str, Any]:
         """Get comprehensive agent status"""
