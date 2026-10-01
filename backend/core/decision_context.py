@@ -483,6 +483,7 @@ class DecisionContext:
     # Learning
     learning_event_ids: List[str] = field(default_factory=list)  # All learning event IDs
     learning_event_id: Optional[str] = None  # Backward compatibility - first event
+    attribution_id: Optional[str] = None  # Backward compatibility - first attribution
     
     # Position lifecycle
     position_id: Optional[str] = None
@@ -541,3 +542,21 @@ def create_decision_context(symbol: str) -> DecisionContext:
     ctx = DecisionContext(symbol=symbol.upper())
     ctx.add_provenance("created", {"symbol": symbol})
     return ctx
+
+
+@dataclass
+class LearningEvent:
+    """In-memory learning event generated from a realized outcome.
+
+    Persisted as backend.models.LearningEvent; this dataclass is the
+    pipeline-side representation passed to the LearningCoordinator.
+    """
+    event_id: str
+    outcome_id: str
+    event_type: str
+    target_type: str
+    target_id: str
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    timestamp: Optional[Any] = None

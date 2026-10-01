@@ -6,16 +6,26 @@ from backend.models import Order
 from backend.memecoin_service import simulate_trade
 
 
-def create_order(symbol: str, usd: float) -> Dict[str, Any]:
+def create_order(symbol: str, usd: float, price: float = None) -> Dict[str, Any]:
+    """Create a paper order.
+
+    price: explicit market price (canonical pipeline passes the verified
+    snapshot price). When omitted, falls back to the legacy memecoin
+    paper-simulation fill — SYNTHETIC, only acceptable for the memecoin
+    prototype API surface, never for canonical equity decisions.
+    """
     session = get_session()
     try:
-        # simulate execution (paper)
-        exec_res = simulate_trade(symbol, usd)
-        price = exec_res.get('price')
-        quantity = exec_res.get('quantity')
+        if price and price > 0:
+            quantity = usd / price
+        else:
+            # Legacy synthetic paper fill (memecoin prototype surface only)
+            exec_res = simulate_trade(symbol, usd)
+            price = exec_res.get('price')
+            quantity = exec_res.get('quantity')
 
         # Ensure a portfolio exists
-        from models import Portfolio
+        from backend.models import Portfolio
         portfolio = session.query(Portfolio).filter_by(name="Default Paper Portfolio").first()
         if not portfolio:
             portfolio = Portfolio(name="Default Paper Portfolio", owner_id=1, risk_profile="moderate", current_value=100000.0)

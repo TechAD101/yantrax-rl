@@ -291,8 +291,8 @@ class TradeValidator:
     def _check_no_black_swan(self, context: Dict) -> Dict[str, Any]:
         """Check 6: No Black Swan Events (extreme uncertainty protection)"""
         try:
-            vix = context.get('vix', 0)
-            volatility = context.get('volatility', 0)
+            vix = context.get('vix') or 0  # None (unavailable) must not crash the check
+            volatility = context.get('volatility') or 0
             
             # Check VIX (if available)
             if vix > self.BLACK_SWAN_VIX_MAX:

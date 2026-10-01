@@ -418,6 +418,26 @@ class AgentManager:
             'analyst': 0.4
         }
         return role_weights.get(role, 0.5)
+
+    def apply_confidence_update(self, agent_name: str, new_confidence: float) -> bool:
+        """Apply a measured confidence update from a realized outcome.
+
+        Bounded to [0.1, 0.99]. Returns True when the agent was updated.
+        """
+        agent = self.enhanced_agents.get(agent_name)
+        if not agent:
+            return False
+        try:
+            bounded = max(0.1, min(0.99, float(new_confidence)))
+        except (TypeError, ValueError):
+            return False
+        agent['confidence'] = bounded
+        return True
+
+    def get_measured_stats(self) -> Dict[str, Any]:
+        """Expose the measured performance ledger (real outcomes, not config)."""
+        from backend.services.learning_coordinator import get_learning_coordinator
+        return get_learning_coordinator().get_agent_stats()
     
     def get_agent_status(self) -> Dict[str, Any]:
         """Get comprehensive agent status"""

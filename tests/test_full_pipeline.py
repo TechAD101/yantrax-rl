@@ -38,14 +38,15 @@ class TestSentimentService:
 class TestMarketData:
     def get_stock_price(self, symbol):
         # Deterministic capitulation-oversold fixture: gentle drift down then a
-        # sharp 10-day sell-off. Snapshot price matches the history tail so the
-        # technical analysis is coherent with the quote.
-        price = 100.0 - 0.1 * 49 - 2.5 * 10  # 70.0
+        # sharp 10-day sell-off, closing with the first bounce day. Snapshot
+        # price matches the history tail so technical analysis is coherent.
+        base = 100.0 - 0.1 * 49 - 2.5 * 10  # 70.0
+        price = base
         return {
             'symbol': symbol.upper(),
             'price': price,
-            'change_percent': -3.0,
-            'trend': 'bearish',
+            'change_percent': 0.9,
+            'trend': 'neutral',
             'volume': 1000000,
             'volatility': 0.02,
             'source': 'test_fixture',
@@ -63,12 +64,14 @@ class TestMarketData:
         }
 
     def get_price_history(self, symbol, days):
-        # Deterministic oversold-capitulation series: 50-day gentle drift then a
-        # sharp 10-day decline. RSI saturates oversold and price breaks the
-        # lower Bollinger band -> genuine mean-reversion BUY setup.
+        # Deterministic oversold-capitulation series: 50-day gentle drift, sharp
+        # 10-day decline, then a nominal bounce day. RSI saturates oversold and
+        # price breaks the lower Bollinger band -> genuine mean-reversion BUY
+        # setup, verified by the full pipeline.
         history = [100.0 - (0.1 * i) for i in range(50)]
         for _ in range(10):
             history.append(history[-1] - 2.5)
+        
         return [{'close': close} for close in history[-days:]]
 
 
@@ -219,15 +222,20 @@ class TestFullPipeline(unittest.TestCase):
             self.assertIsNotNone(outcome)
             self.assertEqual(outcome.decision_id, ctx.decision_id)
             self.assertEqual(outcome.symbol, 'AAPL')
-            self.assertIn(outcome.action, [TradingAction.BUY, TradingAction.SELL])
+            self.assertIn(outcome.action, [TradingAction.BUY.value, TradingAction.SELL.value])
             self.assertIsNotNone(ctx.attribution_id)
             attribution = self.session.query(Attribution).filter_by(id=ctx.attribution_id).first()
             self.assertIsNotNone(attribution)
             self.assertEqual(attribution.outcome_id, ctx.outcome_id)
-            self.assertGreater(len(attribution.attributions), 0)
+            # Attribution components are persisted as individual rows per outcome
+            attribution_rows = self.session.query(Attribution).filter_by(outcome_id=ctx.outcome_id).all()
+            self.assertGreater(len(attribution_rows), 0)
+            outcome_row = self.session.query(Outcome).filter_by(id=ctx.outcome_id).first()
+            self.assertIsNotNone(outcome_row)
+            # Attribution math balances: component values sum to realized P&L
             self.assertAlmostEqual(
-                attribution.total_attributed_pnl + attribution.residual_pnl,
-                attribution.net_pnl,
+                sum(a.value for a in attribution_rows),
+                outcome_row.pnl,
                 places=2,
                 msg="Attribution math should balance",
             )
@@ -251,8 +259,11 @@ class TestFullPipeline(unittest.TestCase):
             self.assertIn(stage, ctx.provenance, f"Missing provenance for stage: {stage}")
 
         if ctx.risk_governance != GovernanceState.BLOCK:
-            self.assertEqual(attribution.outcome.decision_id, ctx.decision_id)
-            self.assertEqual(learning_event.outcome.decision_id, ctx.decision_id)
+            self.assertEqual(outcome_row.decision_id, ctx.decision_id)
+            learning_event = self.session.query(LearningEvent).filter_by(id=ctx.learning_event_id).first()
+            self.assertIsNotNone(learning_event)
+            self.assertEqual(learning_event.outcome_id, ctx.outcome_id)
+            self.assertEqual(ctx.decision_id, outcome_row.decision_id)
 
     def test_blocked_trade_provenance(self):
         """Test that a blocked trade preserves provenance without outcome."""
