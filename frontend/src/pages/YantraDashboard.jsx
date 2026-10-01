@@ -13,6 +13,8 @@ import {
   getCommentary,
   runRLCycle,
   getMarketPrice,
+  getPerformance,
+  getRiskMetrics,
 } from "../api/api";
 
 // Version: 6.1 - Portfolio APIs Live (Feb 1, 2026 22:50 UTC)
@@ -115,7 +117,7 @@ const YantraDashboard = () => {
   const fetchComprehensiveData = async () => {
     setLoading(true);
     try {
-      const [cycleData, journalData, commentaryData] = await Promise.allSettled([
+      const [cycleData, journalData, commentaryData, perfData, riskData] = await Promise.allSettled([
         runRLCycle().catch(err => {
           console.error('RL Cycle failed:', err);
           return { status: 'error', fallback: true, strategy: 'HOLD', signal: 'WAIT', final_balance: 10000, rl_metrics: { reward: 0 } };
@@ -127,8 +129,45 @@ const YantraDashboard = () => {
         getCommentary().catch(err => {
           console.error('Commentary failed:', err);
           return [];
+        }),
+        getPerformance().catch(err => {
+          console.error('Performance failed:', err);
+          return {};
+        }),
+        getRiskMetrics().catch(err => {
+          console.error('Risk metrics failed:', err);
+          return {};
         })
       ]);
+
+      // Canonical performance/risk metrics — render nulls as explicit empty state
+      if (perfData.status === 'fulfilled') {
+        const p = perfData.value || {};
+        setPortfolioMetrics(prev => ({
+          ...prev,
+          totalValue: p.total_returns ?? prev.totalValue,
+          dailyPnL: p.monthly_performance?.length ? p.monthly_performance[p.monthly_performance.length - 1].returns : 0,
+          winRate: p.win_rate ?? null,
+          closedTrades: p.closed_trades ?? 0,
+          profitFactor: p.profit_factor ?? null,
+          bestTrade: p.best_trade ?? null,
+          dataBasis: p.data_basis || 'unavailable',
+        }));
+      }
+      if (riskData.status === 'fulfilled') {
+        const r = riskData.value || {};
+        setRiskAnalytics(prev => ({
+          ...prev,
+          // VaR/beta/correlation are null unless a market-data provider is live;
+          // the UI must show 'unavailable', not invented numbers.
+          var95: r.value_at_risk ?? null,
+          correlation: r.market_correlation ?? null,
+          concentration: r.position_risks?.length
+            ? Math.max(...r.position_risks.map(p => p.weight_pct || 0)) / 100
+            : null,
+          totalValue: r.total_value ?? null,
+        }));
+      }
 
       // Process RL Cycle Data
       if (cycleData.status === 'fulfilled') {
@@ -141,21 +180,18 @@ const YantraDashboard = () => {
           degenAuditor: { confidence: 0.95, audit: data.audit, status: "MONITORING" }
         });
 
-        setPortfolioMetrics({
-          totalValue: data.final_balance || 10000,
-          dailyPnL: data.rl_metrics?.reward || 0,
-          sharpeRatio: 1.23,
-          maxDrawdown: -0.08,
-          winRate: 0.67
-        });
+        setPortfolioMetrics(prev => ({
+          ...prev,
+          totalValue: data.final_balance ?? prev.totalValue,
+          dailyPnL: data.rl_metrics?.reward ?? prev.dailyPnL,
+        }));
 
         if (data.market_state) {
-          setRiskAnalytics({
+          setRiskAnalytics(prev => ({
+            ...prev,
             volatility: data.market_state.volatility || 0.02,
-            var95: 0.034,
-            correlation: 0.76,
-            riskScore: data.anomalies?.risk_alert ? 0.85 : 0.45
-          });
+            riskScore: data.anomalies?.risk_alert ? 0.85 : 0.45,
+          }));
         }
       }
 
@@ -166,9 +202,11 @@ const YantraDashboard = () => {
           id: Date.now(),
           timestamp: new Date().toISOString(),
           signal: cycleValue?.signal || "WAIT",
-          confidence: Math.random() * 0.3 + 0.7,
+          // Real decision confidence from the canonical pipeline response;
+          // never a random value.
+          confidence: typeof cycleValue?.confidence === 'number' ? cycleValue.confidence : null,
           asset: selectedAssets[0],
-          reasoning: cycleData.status === 'rejected' ? "Using fallback data due to backend errors" : "Multi-agent consensus with high conviction"
+          reasoning: cycleData.status === 'rejected' ? "Using fallback data due to backend errors" : (cycleValue?.ceo_decision?.reasoning || "Canonical pipeline decision"),
         };
         return [newSignal, ...prev.slice(0, 9)]; // Keep last 10 signals
       });
@@ -248,9 +286,9 @@ const YantraDashboard = () => {
                     </div>
                   </div>
                   <div className="text-center">
-                    <div className="text-gray-400 text-xs">Sharpe</div>
+                    <div className="text-gray-400 text-xs">Closed Trades</div>
                     <div className="font-bold text-cyan-400">
-                      {portfolioMetrics.sharpeRatio?.toFixed(2)}
+                      {portfolioMetrics.closedTrades ?? 0}
                     </div>
                   </div>
                 </div>
@@ -354,13 +392,18 @@ const YantraDashboard = () => {
                       />
                       <RiskMetric
                         label="VaR (95%)"
-                        value={`${(riskAnalytics.var95 * 100)?.toFixed(1)}%`}
+                        value={riskAnalytics.var95 == null ? "unavailable" : `${(riskAnalytics.var95 * 100)?.toFixed(1)}%`}
                         level="medium"
                       />
                       <RiskMetric
                         label="Correlation"
-                        value={riskAnalytics.correlation?.toFixed(2)}
+                        value={riskAnalytics.correlation == null ? "unavailable" : riskAnalytics.correlation.toFixed(2)}
                         level="low"
+                      />
+                      <RiskMetric
+                        label="Max Position Weight"
+                        value={riskAnalytics.concentration == null ? "unavailable" : `${(riskAnalytics.concentration * 100)?.toFixed(1)}%`}
+                        level={riskAnalytics.concentration > 0.25 ? "high" : "low"}
                       />
                       <RiskMetric
                         label="Risk Score"
@@ -376,18 +419,18 @@ const YantraDashboard = () => {
                     <div className="space-y-3">
                       <PerformanceMetric
                         label="Win Rate"
-                        value={`${(portfolioMetrics.winRate * 100)?.toFixed(0)}%`}
+                        value={portfolioMetrics.winRate == null ? "unavailable" : `${(portfolioMetrics.winRate * 100)?.toFixed(0)}%`}
                         positive={portfolioMetrics.winRate > 0.5}
                       />
                       <PerformanceMetric
-                        label="Max Drawdown"
-                        value={`${(portfolioMetrics.maxDrawdown * 100)?.toFixed(1)}%`}
-                        positive={portfolioMetrics.maxDrawdown > -0.1}
+                        label="Profit Factor"
+                        value={portfolioMetrics.profitFactor == null ? "unavailable" : portfolioMetrics.profitFactor.toFixed(2)}
+                        positive={portfolioMetrics.profitFactor > 1.0}
                       />
                       <PerformanceMetric
-                        label="Sharpe Ratio"
-                        value={portfolioMetrics.sharpeRatio?.toFixed(2)}
-                        positive={portfolioMetrics.sharpeRatio > 1.0}
+                        label="Closed Trades"
+                        value={portfolioMetrics.closedTrades ?? 0}
+                        positive={(portfolioMetrics.closedTrades ?? 0) > 0}
                       />
                     </div>
                   </div>
