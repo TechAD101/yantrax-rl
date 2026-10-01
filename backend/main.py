@@ -65,7 +65,7 @@ PERSONA_REGISTRY = get_persona_registry()
 # Database helpers
 from backend.db import init_db, get_session
 from backend.models import Strategy, StrategyProfile
-from backend.models import Portfolio, PortfolioPosition
+from backend.models import Portfolio, PortfolioPosition, Outcome
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -1045,6 +1045,60 @@ def god_cycle():
         'timestamp': datetime.now().isoformat()
     }), 200
 
+def compute_system_performance(ceo_stats: Dict[str, Any]) -> Dict[str, Any]:
+    """System performance from canonical state — no fabricated balance/success rate."""
+    portfolio_value = None
+    success_rate = None
+    closed_trades = 0
+    winning_trades = 0
+    try:
+        session = get_session()
+        try:
+            portfolio = session.query(Portfolio).order_by(Portfolio.created_at.desc()).first()
+            if portfolio:
+                portfolio_value = round(portfolio.current_value or portfolio.initial_capital or 0, 2)
+            outcomes = session.query(Outcome).filter(Outcome.pnl.isnot(None)).all()
+            closed_trades = len(outcomes)
+            winning_trades = sum(1 for o in outcomes if (o.pnl or 0) > 0)
+            if closed_trades:
+                success_rate = round(winning_trades / closed_trades * 100, 1)
+        finally:
+            session.close()
+    except Exception as e:
+        logger.warning(f"System performance computation failed: {e}")
+    institutional = ceo_stats.get('institutional_metrics', {})
+    return {
+        'portfolio_balance': portfolio_value,
+        'success_rate': success_rate,
+        'closed_trades': closed_trades,
+        'winning_trades': winning_trades,
+        'data_basis': 'database_state_only',
+        'pain_level': institutional.get('pain_level', 0),
+        'market_mood': institutional.get('market_mood', 'neutral'),
+        'is_in_panic': ceo_stats.get('is_in_panic', False),
+    }
+
+
+def compute_trading_checklist(ceo_stats: Dict[str, Any]) -> Dict[str, Any]:
+    """Trading checklist backed by real validator stats — unknown items are null."""
+    validator_stats = {}
+    try:
+        validator_stats = TRADE_VALIDATOR.get_validation_stats() if TRADE_VALIDATOR else {}
+    except Exception:
+        pass
+    total = validator_stats.get('total_validations', 0) or 0
+    allowed = validator_stats.get('allowed', 0) or 0
+    pass_rate = round(allowed / total * 100, 1) if total else None
+    institutional = ceo_stats.get('institutional_metrics', {}).get('last_fundamental_check', {}) or {}
+    return {
+        "data_basis": "trade_validator_stats",
+        "total_validations": total,
+        "validation_pass_rate_pct": pass_rate,
+        "recent_failures": validator_stats.get('recent_failures', []),
+        "fundamental_check": institutional,
+    }
+
+
 @app.route('/api/ai-firm/status', methods=['GET'])
 def ai_firm_status():
     """Detailed AI Firm health check for the Dashboard"""
@@ -1076,25 +1130,10 @@ def ai_firm_status():
                 },
                 'data_verification': market_provider.get_verification_stats() if hasattr(market_provider, 'get_verification_stats') else {}
             },
-            'system_performance': {
-                'portfolio_balance': 132450.00,
-                'success_rate': 92,
-                'pain_level': ceo_stats.get('institutional_metrics', {}).get('pain_level', 0),
-                'market_mood': ceo_stats.get('institutional_metrics', {}).get('market_mood', 'neutral'),
-                'is_in_panic': ceo_stats.get('is_in_panic', False)
-            },
+            'system_performance': compute_system_performance(ceo_stats),
             'institutional_audit': {
                 'fundamental_check': ceo_stats.get('institutional_metrics', {}).get('last_fundamental_check', {}),
-                'trading_checklist': {
-                    "Price Structure Clear": True,
-                    "Liquidity Areas Mapped": True,
-                    "EMA 9/15 Crossover": True,
-                    "RSI 14 Alignment": True,
-                    "Fibonacci Levels Valid": True,
-                    "Risk-Reward 1:3 Min": True,
-                    "Daily Trade Limit < 2": True,
-                    "Trailing Stop Activated": True
-                }
+                'trading_checklist': compute_trading_checklist(ceo_stats),
             },
             'timestamp': datetime.now().isoformat()
         }), 200
