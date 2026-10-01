@@ -988,115 +988,60 @@ def metrics():
 
 @app.route('/god-cycle', methods=['GET'])
 def god_cycle():
-    """Execute 24-agent voting cycle with REAL DATA & Debate Engine"""
+    """God Cycle -> canonical DecisionPipeline (single decision path).
+
+    Runs the full canonical pipeline: market snapshot -> evidence -> strategy
+    -> 24-agent voting -> debate -> CEO -> risk -> sizing -> paper execution ->
+    outcome/attribution/learning. No synthetic fallback: when real market data
+    or the pipeline is unavailable, returns an explicit error state.
+    """
     symbol = request.args.get('symbol', 'AAPL').upper()
-    
-    # 1. Fetch Real Data
-    # Use provider shims safely in case market_provider is not fully configured in tests
+
     try:
-        price_data = market_provider.get_price(symbol) if market_provider else {'price': 0, 'source': 'simulated'}
-    except Exception:
-        price_data = {'price': 0, 'source': 'simulated'}
-    try:
-        fundamentals = market_provider.get_fundamentals(symbol) if market_provider else {}
-    except Exception:
-        fundamentals = {}
-    
-    current_price = price_data.get('price', 0)
-    
-    # 2. Get Advanced Sentiment Analysis
-    sentiment_data = {}
-    if SENTIMENT_READY:
-        try:
-            sentiment_data = SENTIMENT_SERVICE.get_comprehensive_sentiment(symbol)
-        except Exception as e:
-            logger.warning(f"Sentiment analysis failed for {symbol}: {e}")
-    
-    # 3. Prepare Enhanced Context for Agents
-    context = {
-        'symbol': symbol,
-        'ticker': symbol,
-        'type': 'trade_decision',
-        'market_data': {'current_price': current_price},
-        'fundamentals': fundamentals,
-        'sentiment': sentiment_data.get('components', {}),
-        'fear_greed_index': sentiment_data.get('components', {}).get('fear_greed', {}).get('fear_greed_index', 0.5),
-        'options_flow': sentiment_data.get('components', {}).get('options_flow', {}).get('signal', 'NEUTRAL_FLOW'),
-        'social_sentiment': sentiment_data.get('components', {}).get('social_sentiment', {}).get('signal', 'NEUTRAL'),
-        'composite_sentiment': sentiment_data.get('composite_sentiment', 0.5),
-        'market_trend': 'bullish' if fundamentals.get('return_on_equity', 0) > 0.1 else 'bearish',
-        'timestamp': datetime.now().isoformat()
+        from backend.services.canonical_market_provider import get_canonical_market_provider
+        from backend.core.decision_pipeline import DecisionPipeline, run_canonical_decision_sync
+        provider = get_canonical_market_provider()
+        pipeline = DecisionPipeline(market_data=provider)
+        ctx = run_canonical_decision_sync(symbol, pipeline=pipeline)
+    except Exception as e:
+        logger.error(f"God cycle pipeline failed for {symbol}: {e}")
+        return jsonify({
+            'status': 'pipeline_unavailable',
+            'symbol': symbol,
+            'error': str(e),
+            'message': 'Canonical decision pipeline could not run with real market data; no synthetic fallback is permitted.',
+            'timestamp': datetime.now().isoformat()
+        }), 503
+
+    final_action = ctx.final_action.value if ctx.final_action else 'HOLD'
+    ceo_data = {
+        'confidence': ctx.ceo_decision.confidence if ctx.ceo_decision else ctx.final_confidence,
+        'reasoning': ctx.ceo_decision.reasoning if ctx.ceo_decision else 'canonical pipeline decision',
+        'id': ctx.ceo_decision.decision_id if ctx.ceo_decision else ctx.decision_id,
+        'decision_type': final_action,
     }
-    
-    if AI_FIRM_READY:
-        try:
-            # 3. CEO Strategic Decision (Triggers Debate & Ghost inside)
-            # Handle both sync and async CEO decision methods
-            import asyncio
-            try:
-                # Try async first
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                ceo_decision = loop.run_until_complete(ceo.make_strategic_decision(context))
-                loop.close()
-            except (RuntimeError, AttributeError):
-                # Fallback to sync if no event loop available
-                ceo_decision = ceo.make_strategic_decision(context)
-            
-            # Safely extract CEO decision attributes
-            ceo_data = {
-                'confidence': getattr(ceo_decision, 'confidence', 0),
-                'reasoning': getattr(ceo_decision, 'reasoning', 'AI Firm decision'),
-                'id': getattr(ceo_decision, 'id', 'ceo_0'),
-                'decision_type': getattr(ceo_decision, 'decision_type', 'HOLD')
-            }
-            
-            return jsonify({
-                'status': 'success',
-                'symbol': symbol,
-                'signal': ceo_data['decision_type'],
-                'market_data': price_data,
-                'fundamentals': fundamentals,
-                'ceo_decision': ceo_data,
-                'timestamp': datetime.now().isoformat()
-            }), 200
-        except Exception as e:
-            logger.error(f"CEO decision failed: {e}")
-            # Fallback to simulated
-            pass
-    
-    # If AI firm not initialized or CEO decision failed, still make a TRADING decision
-    logger.warning('AI Firm not initialized - using fallback trading logic')
-    
-    # Simple fallback trading logic: always generate a signal
-    import random
-    
-    # Basic momentum trading logic
-    price_data_formatted = price_data.get('price', 100)  # Fallback price
-    fundamentals_pe = fundamentals.get('pe_ratio', 25)  # Fallback PE
-    
-    fallback_decision = {
-        'decision_type': 'HOLD',  # Default safe decision
-        'confidence': 0.6,  # Medium confidence
-        'reasoning': f'Fallback: Price ${price_data_formatted}, P/E {fundamentals_pe} - cautious approach',
-        'id': 'fallback_0'
-    }
-    
-    # Add some randomness to avoid being too predictable
-    if fundamentals_pe < 20:  # Low P/E, consider buying
-        fallback_decision['decision_type'] = 'BUY' if random.random() > 0.4 else 'HOLD'
-        fallback_decision['confidence'] = 0.7
-    elif fundamentals_pe > 30:  # High P/E, consider selling
-        fallback_decision['decision_type'] = 'SELL' if random.random() > 0.6 else 'HOLD'
-        fallback_decision['confidence'] = 0.7
-    
+
     return jsonify({
-        'status': 'fallback_trading',
+        'status': 'success',
         'symbol': symbol,
-        'signal': fallback_decision['decision_type'],
-        'market_data': price_data,
-        'fundamentals': fundamentals,
-        'ceo_decision': fallback_decision,
+        'signal': final_action,
+        'confidence': ctx.final_confidence,
+        'decision_id': ctx.decision_id,
+        'market_data': {
+            'price': ctx.market_snapshot.price if ctx.market_snapshot else None,
+            'source': ctx.market_snapshot.source if ctx.market_snapshot else 'unavailable',
+            'verified': ctx.market_snapshot.verified if ctx.market_snapshot else False,
+        },
+        'market_snapshot': ctx.market_snapshot.to_dict() if ctx.market_snapshot else None,
+        'voting': ctx.voting_result.to_dict() if ctx.voting_result else None,
+        'debate': ctx.debate_result.to_dict() if ctx.debate_result else None,
+        'ceo_decision': ceo_data,
+        'risk_governance': ctx.risk_governance.value if ctx.risk_governance else None,
+        'final_position_size': ctx.final_position_size,
+        'order_id': ctx.order_id,
+        'outcome_id': ctx.outcome_id,
+        'learning_event_ids': ctx.learning_event_ids,
+        'provenance': {k: v.get('details', {}) for k, v in ctx.provenance.items()},
         'timestamp': datetime.now().isoformat()
     }), 200
 

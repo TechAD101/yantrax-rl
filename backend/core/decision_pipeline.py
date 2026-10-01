@@ -1382,9 +1382,10 @@ async def run_canonical_decision(symbol: str, **kwargs) -> DecisionContext:
 
 
 # Synchronous wrapper for use in Flask routes
-def run_canonical_decision_sync(symbol: str, **kwargs) -> DecisionContext:
+def run_canonical_decision_sync(symbol: str, pipeline: Optional['DecisionPipeline'] = None, **kwargs) -> DecisionContext:
     """Synchronous wrapper for canonical decision pipeline."""
-    pipeline = DecisionPipeline(**kwargs)
+    if pipeline is None:
+        pipeline = DecisionPipeline(**kwargs)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
