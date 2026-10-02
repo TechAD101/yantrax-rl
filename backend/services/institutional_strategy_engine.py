@@ -191,7 +191,7 @@ class InstitutionalStrategyEngine:
         
         # Get volatility
         volatility = market_data.get('volatility', 0.02)
-        fear_greed = sentiment.get('fear_greed_index', {}).get('fear_greed_index', 0.5)
+        fear_greed = sentiment.get('fear_greed', {}).get('fear_greed_index', 0.5)
         
         # Get trend
         price_trend = market_data.get('trend', 'neutral')
@@ -214,7 +214,10 @@ class InstitutionalStrategyEngine:
         prices = market_data.get('price_history')
         if not prices or len(prices) < 50:
             raise ValueError("At least 50 real historical prices are required for technical analysis")
-        
+
+        if isinstance(prices[0], dict):
+            prices = [p['close'] for p in prices]
+
         prices = np.array(prices, dtype=float)
         
         # EMAs
@@ -406,7 +409,7 @@ class InstitutionalStrategyEngine:
         
         # Weighted combination
         confidence = (tech_score * 0.4 + sentiment * 0.3 + fundamental * 0.3) * regime_multiplier
-        
+
         return np.clip(confidence, 0.0, 1.0)
     
     def _determine_action(self,

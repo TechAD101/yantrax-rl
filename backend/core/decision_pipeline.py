@@ -764,6 +764,46 @@ class DecisionPipeline:
         if ctx.final_action not in (TradingAction.BUY, TradingAction.SELL):
             return ctx
         
+        # Check for existing open position for the same symbol and close it if signal is opposite
+        from backend.models import PaperPosition
+        session = get_session()
+        try:
+            existing_pos = session.query(PaperPosition).filter_by(symbol=ctx.symbol, status='OPEN').first()
+            if existing_pos:
+                # Determine if the new signal is opposite to the existing position
+                existing_side = existing_pos.side
+                new_side = ctx.final_action.value if ctx.final_action else 'BUY'
+                if existing_side != new_side and existing_side in ['BUY', 'SELL'] and new_side in ['BUY', 'SELL']:
+                    # Close the existing position
+                    # We need to create a DecisionContext for the existing position to pass to close_position
+                    from backend.core.decision_pipeline import DecisionContext
+                    close_ctx = DecisionContext()
+                    close_ctx.position_id = existing_pos.id
+                    close_ctx.symbol = ctx.symbol
+                    # Set the decision_id to match the existing position's decision for proper attribution
+                    close_ctx.decision_id = existing_pos.decision_id
+                    # Copy the voting result and evidence from the current context so that
+                    # when we build the attributed outcome, we have the agent votes that
+                    # led to the closing decision.
+                    close_ctx.voting_result = ctx.voting_result
+                    close_ctx.evidence = ctx.evidence
+                    # Call close_position with current market price
+                    exit_price = ctx.market_snapshot.price if ctx.market_snapshot else existing_pos.entry_price
+                    close_result_ctx = await self.close_position(close_ctx, exit_price)
+                    # Merge the entire provenance from the close result context into the current context
+                    for stage_name, stage_details in close_result_ctx.provenance.items():
+                        ctx.add_provenance(stage_name, stage_details)
+                    # Copy the key identifiers from the close result context
+                    ctx.outcome_id = close_result_ctx.outcome_id
+                    ctx.learning_event_ids = close_result_ctx.learning_event_ids
+                    if close_result_ctx.learning_event_ids:
+                        ctx.learning_event_id = close_result_ctx.learning_event_ids[0]
+                    ctx.attribution_ids = close_result_ctx.attribution_ids
+                    if close_result_ctx.attribution_ids:
+                        ctx.attribution_id = close_result_ctx.attribution_ids[0]
+        finally:
+            session.close()
+        
         try:
             # Calculate USD amount
             usd_amount = ctx.final_position_size
@@ -867,20 +907,8 @@ class DecisionPipeline:
 
             logger.info(f"OPEN position created for {ctx.decision_id}: {position_id}")
 
-            # Deterministic paper round-trip: close the position in the same
-            # run using a modeled paper exit price (explicitly labeled as a
-            # simulated paper fill, never presented as real market evidence).
-            if self.market_data is not None:
-                entry_price = position_entry_price or (ctx.market_snapshot.price if ctx.market_snapshot else 0)
-                direction = 1.0 if (ctx.final_action == TradingAction.BUY) else -1.0
-                vol = (ctx.market_snapshot.volatility if ctx.market_snapshot else None) or 0.02
-                paper_exit_price = round(entry_price * (1 + direction * 0.5 * vol), 4)
-                ctx.add_provenance("paper_exit_modeled", {
-                    "mode": "paper_simulation",
-                    "exit_price": paper_exit_price,
-                    "note": "simulated paper fill, not real market evidence",
-                })
-                ctx = await self.close_position(ctx, exit_price=paper_exit_price)
+            # Do NOT automatically close the position here. Position will be closed
+            # on a subsequent decision when an opposite signal or risk condition occurs.
             
         except Exception as e:
             logger.error(f"Position creation failed: {e}")

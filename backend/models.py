@@ -425,6 +425,18 @@ class Outcome(Base):
 
     # Relationship to position
     position = relationship('PaperPosition')
+    # Relationship to attributions
+    attributions = relationship('Attribution', back_populates='outcome')
+    # Relationship to learning events
+    learning_events = relationship('LearningEvent', back_populates='outcome')
+
+    @property
+    def attribution_ids(self):
+        return [attr.id for attr in self.attributions]
+
+    @property
+    def learning_event_ids(self):
+        return [event.id for event in self.learning_events]
 
     def to_dict(self) -> Dict[str, Any]:
         return {
