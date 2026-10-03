@@ -121,111 +121,116 @@ class DecisionPipeline:
         logger.info("✅ DecisionPipeline initialized")
     
     async def execute_decision(self, symbol: str) -> DecisionContext:
-        """
-        Execute the complete canonical decision pipeline for a symbol.
-        
-        Returns the DecisionContext with all stages populated.
-        """
-        self.initialize()
-        
-        # Create decision context
-        ctx = create_decision_context(symbol)
-        ctx.add_provenance("pipeline_start", {"symbol": symbol})
-        
-        try:
-            # ──────────────────────────────────────────────────────
-            # STAGE 1: MARKET SNAPSHOT
-            # ──────────────────────────────────────────────────────
-            ctx = await self._stage_market_snapshot(ctx)
+            """
+            Execute the complete canonical decision pipeline for a symbol.
 
-            # Fail closed on unverified or missing market data.
-            if 'unverified_market_data' in ctx.provenance or (
-                ctx.final_action == TradingAction.ABSTAIN and ctx.market_snapshot is None
-            ):
+            Returns the DecisionContext with all stages populated.
+            """
+            self.initialize()
+
+            # Create decision context
+            ctx = create_decision_context(symbol)
+            ctx.add_provenance("pipeline_start", {"symbol": symbol})
+
+            try:
+                # ──────────────────────────────────────────────────────
+                # STAGE 1: MARKET SNAPSHOT
+                # ──────────────────────────────────────────────────────
+                ctx = await self._stage_market_snapshot(ctx)
+
+                # Fail closed on unverified or missing market data.
+                if 'unverified_market_data' in ctx.provenance or (
+                    ctx.final_action == TradingAction.ABSTAIN and ctx.market_snapshot is None
+                ):
+                    return ctx
+                if not ctx.market_snapshot:
+                    ctx.final_action = TradingAction.ABSTAIN
+                    return ctx
+
+                # ──────────────────────────────────────────────────────
+                # STAGE 2: EVIDENCE SYNTHESIS (includes Regime)
+                # ──────────────────────────────────────────────────────
+                ctx = await self._stage_evidence_synthesis(ctx)
+
+                # Fail closed when required market evidence is unavailable.
+                if ctx.final_action == TradingAction.ABSTAIN and ctx.evidence is None:
+                    return ctx
+
+                # ──────────────────────────────────────────────────────
+                # STAGE 3: STRATEGY CANDIDATE
+                # ──────────────────────────────────────────────────────
+                ctx = await self._stage_strategy_candidate(ctx)
+
+                # ──────────────────────────────────────────────────────
+                # STAGE 4: AGENT ANALYSIS & VOTING
+                # ──────────────────────────────────────────────────────
+                ctx = await self._stage_agent_voting(ctx)
+
+                # ──────────────────────────────────────────────────────
+                # STAGE 5: DEBATE / DISSENT
+                # ──────────────────────────────────────────────────────
+                ctx = await self._stage_debate(ctx)
+
+                # ──────────────────────────────────────────────────────
+                # STAGE 6: CEO GOVERNANCE
+                # ──────────────────────────────────────────────────────
+                ctx = await self._stage_ceo_governance(ctx)
+
+                # ──────────────────────────────────────────────────────
+                # STAGE 6.5: POSITION LIFECYCLE (handle existing positions before risk)
+                # ──────────────────────────────────────────────────────
+                ctx = await self._stage_position_lifecycle(ctx)
+
+                # ──────────────────────────────────────────────────────
+                # STAGE 7: PRELIMINARY RISK GOVERNANCE
+                # ──────────────────────────────────────────────────────
+                ctx = await self._stage_preliminary_risk(ctx)
+
+                # If blocked at preliminary, stop here
+                if ctx.risk_governance == GovernanceState.BLOCK or ctx.risk_governance == GovernanceState.VETO:
+                    ctx.final_action = TradingAction.HOLD
+                    ctx.add_provenance("blocked_risk", {"governance": ctx.risk_governance.value})
+                    return ctx
+
+                # ──────────────────────────────────────────────────────
+                # STAGE 8: POSITION SIZING
+                # ──────────────────────────────────────────────────────
+                ctx = await self._stage_position_sizing(ctx)
+
+                # ──────────────────────────────────────────────────────
+                # STAGE 9: FINAL RISK GOVERNANCE (post-sizing)
+                # ──────────────────────────────────────────────────────
+                ctx = await self._stage_final_risk(ctx)
+
+                # ──────────────────────────────────────────────────────
+                # STAGE 10: FINAL DECISION
+                # ──────────────────────────────────────────────────────
+                ctx = self._finalize_decision(ctx)
+
+                # ──────────────────────────────────────────────────────
+                # STAGE 11: EXECUTION (if approved)
+                # ──────────────────────────────────────────────────────
+                if ctx.final_action in (TradingAction.BUY, TradingAction.SELL):
+                    ctx = await self._stage_execution(ctx)
+
+                # ──────────────────────────────────────────────────────
+                # STAGE 12: OUTCOME + ATTRIBUTION (for completed trades)
+                # ──────────────────────────────────────────────────────
+                if ctx.final_action in (TradingAction.BUY, TradingAction.SELL) and ctx.order_id:
+                    ctx = await self._stage_outcome_attribution(ctx)
+
+                ctx.add_provenance("pipeline_complete", {
+                    "final_action": ctx.final_action.value if ctx.final_action else None,
+                    "governance": ctx.risk_governance.value if ctx.risk_governance else None,
+                })
+
                 return ctx
-            if not ctx.market_snapshot:
+
+            except Exception as e:
+                logger.error(f"Pipeline error for {symbol}: {e}", exc_info=True)
+                ctx.add_provenance("pipeline_error", {"error": str(e)})
                 ctx.final_action = TradingAction.ABSTAIN
                 return ctx
-            
-            # ──────────────────────────────────────────────────────
-            # STAGE 2: EVIDENCE SYNTHESIS (includes Regime)
-            # ──────────────────────────────────────────────────────
-            ctx = await self._stage_evidence_synthesis(ctx)
-
-            # Fail closed when required market evidence is unavailable.
-            if ctx.final_action == TradingAction.ABSTAIN and ctx.evidence is None:
-                return ctx
-            
-            # ──────────────────────────────────────────────────────
-            # STAGE 3: STRATEGY CANDIDATE
-            # ──────────────────────────────────────────────────────
-            ctx = await self._stage_strategy_candidate(ctx)
-            
-            # ──────────────────────────────────────────────────────
-            # STAGE 4: AGENT ANALYSIS & VOTING
-            # ──────────────────────────────────────────────────────
-            ctx = await self._stage_agent_voting(ctx)
-            
-            # ──────────────────────────────────────────────────────
-            # STAGE 5: DEBATE / DISSENT
-            # ──────────────────────────────────────────────────────
-            ctx = await self._stage_debate(ctx)
-            
-            # ──────────────────────────────────────────────────────
-            # STAGE 6: CEO GOVERNANCE
-            # ──────────────────────────────────────────────────────
-            ctx = await self._stage_ceo_governance(ctx)
-            
-            # ──────────────────────────────────────────────────────
-            # STAGE 7: PRELIMINARY RISK GOVERNANCE
-            # ──────────────────────────────────────────────────────
-            ctx = await self._stage_preliminary_risk(ctx)
-            
-            # If blocked at preliminary, stop here
-            if ctx.risk_governance == GovernanceState.BLOCK or ctx.risk_governance == GovernanceState.VETO:
-                ctx.final_action = TradingAction.HOLD
-                ctx.add_provenance("blocked_risk", {"governance": ctx.risk_governance.value})
-                return ctx
-            
-            # ──────────────────────────────────────────────────────
-            # STAGE 8: POSITION SIZING
-            # ──────────────────────────────────────────────────────
-            ctx = await self._stage_position_sizing(ctx)
-            
-            # ──────────────────────────────────────────────────────
-            # STAGE 9: FINAL RISK GOVERNANCE (post-sizing)
-            # ──────────────────────────────────────────────────────
-            ctx = await self._stage_final_risk(ctx)
-            
-            # ──────────────────────────────────────────────────────
-            # STAGE 10: FINAL DECISION
-            # ──────────────────────────────────────────────────────
-            ctx = self._finalize_decision(ctx)
-            
-            # ──────────────────────────────────────────────────────
-            # STAGE 11: EXECUTION (if approved)
-            # ──────────────────────────────────────────────────────
-            if ctx.final_action in (TradingAction.BUY, TradingAction.SELL):
-                ctx = await self._stage_execution(ctx)
-            
-            # ──────────────────────────────────────────────────────
-            # STAGE 12: OUTCOME + ATTRIBUTION (for completed trades)
-            # ──────────────────────────────────────────────────────
-            if ctx.final_action in (TradingAction.BUY, TradingAction.SELL) and ctx.order_id:
-                ctx = await self._stage_outcome_attribution(ctx)
-
-            ctx.add_provenance("pipeline_complete", {
-                "final_action": ctx.final_action.value if ctx.final_action else None,
-                "governance": ctx.risk_governance.value if ctx.risk_governance else None,
-            })
-            
-            return ctx
-            
-        except Exception as e:
-            logger.error(f"Pipeline error for {symbol}: {e}", exc_info=True)
-            ctx.add_provenance("pipeline_error", {"error": str(e)})
-            ctx.final_action = TradingAction.ABSTAIN
-            return ctx
     
     # ──────────────────────────────────────────────────────────────
     # Pipeline Stages
@@ -683,7 +688,85 @@ class DecisionPipeline:
         })
         
         return ctx
-    
+    async def _stage_position_lifecycle(self, ctx: DecisionContext) -> DecisionContext:
+        """
+        Handle existing positions before risk governance.
+
+        This runs after CEO governance but before preliminary risk, ensuring:
+        1. Opposite signals close existing positions even if risk later blocks
+        2. Same-side signals are rejected to prevent duplicate positions
+        """
+        # Only handle position lifecycle for BUY/SELL actions
+        if ctx.final_action not in (TradingAction.BUY, TradingAction.SELL):
+            return ctx
+
+        from backend.models import PaperPosition
+        session = get_session()
+        try:
+            existing_pos = session.query(PaperPosition).filter_by(symbol=ctx.symbol, status='OPEN').first()
+            if not existing_pos:
+                return ctx
+
+            existing_side = existing_pos.side
+            new_side = ctx.final_action.value if ctx.final_action else 'BUY'
+
+            if existing_side == new_side:
+                # Same-side signal: reject to prevent duplicate full-size positions
+                ctx.add_provenance("position_lifecycle", {
+                    "action": "rejected_same_side",
+                    "existing_position_id": existing_pos.id,
+                    "existing_side": existing_side,
+                    "new_signal": new_side,
+                    "reason": "Same-side signal would create duplicate position"
+                })
+                # Override final action to HOLD to prevent execution
+                ctx.final_action = TradingAction.HOLD
+                ctx.final_confidence = 0.0
+                return ctx
+
+            # Opposite-side signal: close existing position
+            # This runs BEFORE risk governance so the position gets closed even if risk blocks
+            existing_side = existing_pos.side
+            new_side = ctx.final_action.value if ctx.final_action else 'BUY'
+            if existing_side != new_side and existing_side in ['BUY', 'SELL'] and new_side in ['BUY', 'SELL']:
+                # Close the existing position
+                from backend.core.decision_pipeline import DecisionContext
+                close_ctx = DecisionContext()
+                close_ctx.position_id = existing_pos.id
+                close_ctx.symbol = ctx.symbol
+                close_ctx.decision_id = existing_pos.decision_id
+                close_ctx.voting_result = ctx.voting_result
+                close_ctx.evidence = ctx.evidence
+
+                exit_price = ctx.market_snapshot.price if ctx.market_snapshot else existing_pos.entry_price
+                close_result_ctx = await self.close_position(close_ctx, exit_price)
+
+                # Merge provenance from close result
+                for stage_name, stage_details in close_result_ctx.provenance.items():
+                    ctx.add_provenance(stage_name, stage_details)
+
+                ctx.outcome_id = close_result_ctx.outcome_id
+                ctx.learning_event_ids = close_result_ctx.learning_event_ids
+                if close_result_ctx.learning_event_ids:
+                    ctx.learning_event_id = close_result_ctx.learning_event_ids[0]
+                ctx.attribution_ids = close_result_ctx.attribution_ids
+                if close_result_ctx.attribution_ids:
+                    ctx.attribution_id = close_result_ctx.attribution_ids[0]
+
+                ctx.add_provenance("position_lifecycle", {
+                    "action": "closed_opposite",
+                    "closed_position_id": existing_pos.id,
+                    "closed_side": existing_side,
+                    "new_signal": new_side,
+                    "outcome_id": ctx.outcome_id,
+                })
+
+        finally:
+            session.close()
+
+        return ctx
+
+
     async def _stage_position_sizing(self, ctx: DecisionContext) -> DecisionContext:
         """Calculate position size using PositionSizer."""
         if not ctx.candidate_strategy or ctx.candidate_strategy.action == TradingAction.HOLD:
@@ -698,7 +781,7 @@ class DecisionPipeline:
         ctx.add_provenance("position_sizing", sizing_result.to_dict())
         
         return ctx
-    
+
     async def _stage_final_risk(self, ctx: DecisionContext) -> DecisionContext:
         """Run final risk checks (after sizing)."""
         risk_result = self.risk_governor.evaluate_final(ctx)
