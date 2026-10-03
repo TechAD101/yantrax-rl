@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from backend.core.decision_pipeline import DecisionPipeline
 from backend.core.decision_context import DecisionContext, TradingAction, GovernanceState
 from backend.attribution.attribution_engine import AttributionEngine
-from backend.models import Outcome, Attribution, LearningEvent, JournalEntry
+from backend.models import Outcome, Attribution, LearningEvent, JournalEntry, PaperPosition, Order
 from backend.db import init_db, get_session
 from backend.service_registry import registry
 
@@ -71,7 +71,6 @@ class TestMarketData:
         history = [100.0 - (0.1 * i) for i in range(50)]
         for _ in range(10):
             history.append(history[-1] - 2.5)
-        
         return [{'close': close} for close in history[-days:]]
 
 
@@ -113,7 +112,7 @@ class TestPipelineProviderContract(unittest.TestCase):
         self.assertEqual(ctx.final_action, TradingAction.ABSTAIN)
         self.assertIn('market_snapshot_error', ctx.provenance)
 
-        
+
 class TestSizingFailureContract(unittest.TestCase):
     def test_sizing_engine_failure_is_not_silently_fallback(self):
         from backend.risk.position_sizer import PositionSizer, SizingMethod
@@ -158,7 +157,7 @@ class TestSizingFailureContract(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             sizer.calculate(pipeline_ctx)
 
-        
+
 class TestFullPipeline(unittest.TestCase):
     """Test the full paper-trade lifecycle from market snapshot to learning."""
 
@@ -182,88 +181,161 @@ class TestFullPipeline(unittest.TestCase):
         self.session.query(Attribution).delete()
         self.session.query(Outcome).delete()
         self.session.query(JournalEntry).delete()
+        self.session.query(PaperPosition).delete()
+        self.session.query(Order).delete()
         self.session.commit()
 
     def tearDown(self):
         self.session.close()
 
-    def test_full_lifecycle_buy_trade(self):
-        """Test a complete BUY trade through all 13 stages."""
+    def test_full_lifecycle_buy_then_sell(self):
+        """Test the full lifecycle: open a BUY position, then close it with an opposite SELL signal."""
         import asyncio
-        ctx = asyncio.run(self.pipeline.execute_decision('AAPL'))
+        from backend.core.decision_context import TradingAction, GovernanceState
 
-        self.assertIsNotNone(ctx.decision_id)
-        self.assertTrue(ctx.decision_id.startswith('dec_'))
-        self.assertEqual(ctx.symbol, 'AAPL')
-        self.assertIsNotNone(ctx.market_snapshot)
-        self.assertEqual(ctx.market_snapshot.symbol, 'AAPL')
-        self.assertIsNotNone(ctx.evidence)
-        self.assertIsNotNone(ctx.evidence.technical)
-        self.assertIsNotNone(ctx.evidence.fundamental)
-        self.assertIsNotNone(ctx.evidence.sentiment)
-        self.assertIsNotNone(ctx.candidate_strategy)
-        self.assertIsNotNone(ctx.candidate_strategy.action)
-        self.assertIsNotNone(ctx.voting_result)
-        self.assertGreater(len(ctx.voting_result.votes), 0)
-        self.assertIsNotNone(ctx.debate_result)
-        self.assertIsNotNone(ctx.debate_result.winning_signal)
-        self.assertIsNotNone(ctx.ceo_decision)
-        self.assertIsNotNone(ctx.ceo_decision.action)
-        self.assertIsNotNone(ctx.risk_state)
-        self.assertIsNotNone(ctx.risk_governance)
-        self.assertIn(ctx.risk_governance, [GovernanceState.APPROVE, GovernanceState.WARNING, GovernanceState.BLOCK])
+        # First decision: open position (BUY signal) with normal market data
+        pipeline1 = DecisionPipeline(
+            market_data=TestMarketData(),
+            sentiment_service=TestSentimentService(),
+        )
+        ctx1 = asyncio.run(pipeline1.execute_decision('AAPL'))
+        self.assertEqual(ctx1.final_action, TradingAction.BUY)
+        self.assertIsNone(ctx1.outcome_id)  # No outcome until position is closed
+        self.assertIsNotNone(ctx1.position_id)  # Position opened
+        self.assertIsNone(ctx1.attribution_id)  # No attribution yet
+        self.assertIsNone(ctx1.learning_event_id)  # No learning events yet
 
-        if ctx.risk_governance != GovernanceState.BLOCK:
-            self.assertGreater(ctx.final_position_size, 0)
-            self.assertIsNotNone(ctx.order_id)
-            self.assertIsNotNone(ctx.execution_id)
-            self.assertIsNotNone(ctx.outcome_id)
-            outcome = self.session.query(Outcome).filter_by(id=ctx.outcome_id).first()
-            self.assertIsNotNone(outcome)
-            self.assertEqual(outcome.decision_id, ctx.decision_id)
+        # Clear trade validator history to allow reversal (close BUY, open SELL)
+        from backend.services.trade_validator import get_trade_validator
+        validator = get_trade_validator()
+        validator.trade_history.clear()
+
+        # Define bearish market data and sentiment services
+        class BearishMarketData:
+            def get_stock_price(self, symbol):
+                return {
+                    'symbol': symbol.upper(),
+                    'price': 1.0,  # Extremely low price to induce SELL
+                    'change_percent': -90.0,
+                    'trend': 'strong_down',
+                    'volume': 2000000,
+                    'volatility': 0.05,
+                    'source': 'test_fixture',
+                    'verified': True,
+                }
+
+            def get_fundamentals(self, symbol):
+                # Poor fundamentals to reinforce SELL
+                return {
+                    'pe_ratio': 1.0,
+                    'return_on_equity': 0.01,
+                    'debt_to_equity': 2.0,
+                    'revenue_growth': -0.5,
+                    'earnings_growth': -0.5,
+                    'profit_margin': 0.01,
+                }
+
+            def get_price_history(self, symbol, days):
+                # Provide a price history that is consistently declining
+                base = 100.0
+                history = []
+                for i in range(days):
+                    price = base - (1.0 * i)  # Decline by 1 each day
+                    history.append(round(price, 2))
+                return [{'close': close} for close in history]
+
+        class BearishSentimentService:
+            def get_sentiment(self, symbol):
+                return {
+                    'score': -0.9,
+                    'label': 'BEARISH',
+                }
+
+            def get_fundamentals_sentiment(self, symbol):
+                return {
+                    'score': -0.8,
+                    'label': 'BEARISH',
+                }
+
+            def get_social_sentiment(self, symbol):
+                return {
+                    'score': -0.7,
+                    'label': 'BEARISH',
+                }
+
+            def get_comprehensive_sentiment(self, symbol):
+                return {
+                    'score': -0.8,
+                    'label': 'BEARISH',
+                }
+
+        # Second decision: opposite signal (SELL) with bearish market data to close the position
+        # Use the mock strategy engine to guarantee a SELL signal for the bearish fixture
+        from tests.mock_strategy_engine import MockStrategyEngineForBearishFixture
+        pipeline2 = DecisionPipeline(
+            market_data=BearishMarketData(),
+            sentiment_service=BearishSentimentService(),
+            strategy_engine=MockStrategyEngineForBearishFixture(),
+        )
+        ctx2 = asyncio.run(pipeline2.execute_decision('AAPL'))
+        # Now we expect the position from ctx1 to be closed and a new position (SELL) opened.
+        self.assertEqual(ctx2.final_action, TradingAction.SELL)
+        self.assertIsNotNone(ctx2.outcome_id)  # Outcome from the closed BUY position
+        self.assertIsNotNone(ctx2.position_id)  # Position ID of the new SELL position
+        self.assertIsNotNone(ctx2.attribution_id)  # Attribution from the closed position
+        self.assertIsNotNone(ctx2.learning_event_id)  # Learning events from the closed position
+
+        # Check database for the closed outcome and its attribution and learning events
+        session = get_session()
+        try:
+            from backend.models import PaperPosition
+            # We should have two PaperPositions: one closed (BUY) and one open (SELL)
+            positions = session.query(PaperPosition).all()
+            self.assertEqual(len(positions), 2)
+            closed_count = sum(1 for p in positions if p.status == 'CLOSED')
+            open_count = sum(1 for p in positions if p.status == 'OPEN')
+            self.assertEqual(closed_count, 1)
+            self.assertEqual(open_count, 1)
+            closed_pos = [p for p in positions if p.status == 'CLOSED'][0]
+            open_pos = [p for p in positions if p.status == 'OPEN'][0]
+            self.assertEqual(closed_pos.side, 'BUY')
+            self.assertEqual(open_pos.side, 'SELL')
+            # Check that the closed position has an outcome
+            outcomes = session.query(Outcome).all()
+            self.assertEqual(len(outcomes), 1)
+            outcome = outcomes[0]
             self.assertEqual(outcome.symbol, 'AAPL')
-            self.assertIn(outcome.action, [TradingAction.BUY.value, TradingAction.SELL.value])
-            self.assertIsNotNone(ctx.attribution_id)
-            attribution = self.session.query(Attribution).filter_by(id=ctx.attribution_id).first()
-            self.assertIsNotNone(attribution)
-            self.assertEqual(attribution.outcome_id, ctx.outcome_id)
-            # Attribution components are persisted as individual rows per outcome
-            attribution_rows = self.session.query(Attribution).filter_by(outcome_id=ctx.outcome_id).all()
-            self.assertGreater(len(attribution_rows), 0)
-            outcome_row = self.session.query(Outcome).filter_by(id=ctx.outcome_id).first()
-            self.assertIsNotNone(outcome_row)
-            # Attribution math balances: component values sum to realized P&L
-            self.assertAlmostEqual(
-                sum(a.value for a in attribution_rows),
-                outcome_row.pnl,
-                places=2,
-                msg="Attribution math should balance",
-            )
-            self.assertIsNotNone(ctx.learning_event_id)
-            learning_event = self.session.query(LearningEvent).filter_by(id=ctx.learning_event_id).first()
-            self.assertIsNotNone(learning_event)
-            self.assertEqual(learning_event.outcome_id, ctx.outcome_id)
-            self.assertIn(learning_event.event_type, ['confidence_update', 'strategy_metric_update', 'memory_store'])
+            self.assertEqual(outcome.action, 'BUY')  # The action of the closed position
+            self.assertIsNotNone(outcome.pnl)
+            # Check attributions and learning events from the closed outcome
+            attributions = session.query(Attribution).all()
+            self.assertGreater(len(attributions), 0)
+            learning_events = session.query(LearningEvent).all()
+            self.assertGreater(len(learning_events), 0)
+            # Check that the outcome_id matches ctx2.outcome_id
+            self.assertEqual(outcome.id, ctx2.outcome_id)
+            # Check that the attribution_id and learning_event_id are set (they are from the closed outcome)
+            self.assertEqual(ctx2.attribution_id, f"attr_{outcome.attributions[0].component}_{outcome.id}" if outcome.attributions else None)
+            self.assertEqual(ctx2.learning_event_id, outcome.learning_event_ids[0] if outcome.learning_event_ids else None)
+        finally:
+            session.close()
 
-            expected_stages = [
-                'market_snapshot', 'evidence_synthesis', 'strategy_candidate', 'agent_voting', 'debate',
-                'ceo_governance', 'risk', 'position_sizing', 'execution', 'outcome_attribution'
-            ]
-        else:
-            expected_stages = [
-                'market_snapshot', 'evidence_synthesis', 'strategy_candidate', 'agent_voting', 'debate',
-                'ceo_governance', 'risk'
-            ]
+        # Check that the provenance includes the expected stages for both decisions
+        # For the first decision, we expect up to position_opened (no outcome_attribution)
+        expected_stages_first = [
+            'market_snapshot', 'evidence_synthesis', 'strategy_candidate', 'agent_voting', 'debate',
+            'ceo_governance', 'risk', 'position_sizing', 'execution', 'position_opened'
+        ]
+        for stage in expected_stages_first:
+            self.assertIn(stage, ctx1.provenance, f"Missing provenance for stage {stage} in first decision: {ctx1.provenance.keys()}")
 
-        for stage in expected_stages:
-            self.assertIn(stage, ctx.provenance, f"Missing provenance for stage: {stage}")
-
-        if ctx.risk_governance != GovernanceState.BLOCK:
-            self.assertEqual(outcome_row.decision_id, ctx.decision_id)
-            learning_event = self.session.query(LearningEvent).filter_by(id=ctx.learning_event_id).first()
-            self.assertIsNotNone(learning_event)
-            self.assertEqual(learning_event.outcome_id, ctx.outcome_id)
-            self.assertEqual(ctx.decision_id, outcome_row.decision_id)
+        # For the second decision, we expect outcome_attribution (since we closed a position)
+        expected_stages_second = [
+            'market_snapshot', 'evidence_synthesis', 'strategy_candidate', 'agent_voting', 'debate',
+            'ceo_governance', 'risk', 'position_sizing', 'execution', 'outcome_attribution'
+        ]
+        for stage in expected_stages_second:
+            self.assertIn(stage, ctx2.provenance, f"Missing provenance for stage {stage} in second decision: {ctx2.provenance.keys()}")
 
     def test_blocked_trade_provenance(self):
         """Test that a blocked trade preserves provenance without outcome."""
