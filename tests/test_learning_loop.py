@@ -26,10 +26,6 @@ class TestLearningLoop(unittest.TestCase):
         from backend.services.learning_coordinator import _coordinator
         if _coordinator is not None:
             _coordinator._applied_event_ids.clear()
-        # Reset the learning coordinator's applied event ids to avoid interference between tests
-        from backend.services.learning_coordinator import _coordinator
-        if _coordinator is not None:
-            _coordinator._applied_event_ids.clear()
 
     def test_agent_manager_bounded_confidence_update(self):
         from backend.ai_firm.agent_manager import AgentManager
