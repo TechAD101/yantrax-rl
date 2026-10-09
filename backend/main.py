@@ -212,6 +212,9 @@ else:
 from backend.routes.data_ingest import data_ingest_bp
 app.register_blueprint(data_ingest_bp, url_prefix='/api')
 
+from backend.heartbeat import heartbeat_bp
+app.register_blueprint(heartbeat_bp)
+
 # Initialize DB tables (safe to call; in prod use Alembic migrations)
 try:
     init_db()
@@ -835,38 +838,25 @@ def ping():
 
 
 @app.route('/health', methods=['GET'])
-@handle_errors  
 def detailed_health():
+    """Legacy health — returns real heartbeat state, never fabricated."""
+    from backend.heartbeat import build_heartbeat
     try:
+        status, payload = build_heartbeat()
+        return jsonify(payload), (200 if status in ('HEALTHY', 'DEGRADED') else 503)
+    except Exception as exc:
+        logger.exception('Health check failed: %s', exc)
         return jsonify({
-            'status': 'healthy',
-            'services': {
-                'api': 'operational',
-                'market_data': 'alpaca' if MARKET_SERVICE_READY else 'fallback',
-                'ai_firm': 'operational' if AI_FIRM_READY else 'fallback',
-                'rl_core': 'operational' if RL_ENV_READY else 'not_loaded'
-            },
-            'ai_firm': {
-                'enabled': AI_FIRM_READY,
-                'agents': 24 if AI_FIRM_READY else 4,
-                'ceo': AI_FIRM_READY,
-                'personas': {'warren': AI_FIRM_READY, 'cathie': AI_FIRM_READY}
-            },
-            'rl_core': {
-                'enabled': RL_ENV_READY,
-                'environment': 'MarketSimEnv' if RL_ENV_READY else None
-            },
-            'performance': error_counts,
-            'timestamp': datetime.now().isoformat()
-        })
-    except Exception as e:
-        logger.error(f"Health endpoint failed: {e}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e),
-            'services': {'api': 'error'},
+            'status': 'UNHEALTHY',
+            'message': str(exc),
             'timestamp': datetime.now().isoformat()
         }), 500
+
+@app.route('/heartbeat', methods=['GET'], strict_slashes=False)
+def _heartbeat_legacy():
+    """Canonical heartbeat lives in heartbeat_bp, but also register top-level for direct root access."""
+    from backend.heartbeat import heartbeat_endpoint
+    return heartbeat_endpoint()
 
 @app.route('/run-cycle', methods=['POST'])
 def run_cycle():
@@ -935,6 +925,13 @@ def god_cycle():
         'id': ctx.ceo_decision.decision_id if ctx.ceo_decision else ctx.decision_id,
         'decision_type': final_action,
     }
+
+    # Record to heartbeat state
+    from backend import heartbeat
+    heartbeat.record_pipeline_run(
+        status=final_action,
+        error=None
+    )
 
     return jsonify({
         'status': 'success',

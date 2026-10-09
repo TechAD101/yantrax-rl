@@ -34,6 +34,7 @@ class Config:
     CACHE_TTL_SECONDS = 60
 
     FMP_API_KEY = os.getenv('FMP_API_KEY') or os.getenv('FMP_KEY')
+    MARKET_DATA_API_KEY = os.getenv('MARKET_DATA_API_KEY') or FMP_API_KEY
 
     @classmethod
     def is_perplexity_enabled(cls) -> bool:
