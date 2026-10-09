@@ -146,7 +146,16 @@ try:
         def get_fundamentals(self, symbol): return {}
         def get_verification_stats(self): return {'provider': 'alpaca', 'verified': True}
         def get_price_verified(self, symbol):
-            return {'verified': True, **self.get_price(symbol)}
+            price_result = self.get_price(symbol)
+            # Verified means the price is real, usable, and non-zero
+            has_usable_price = bool(price_result.get('price')) and price_result.get('price', 0) > 0
+            return {
+                'verified': has_usable_price,
+                'symbol': price_result.get('symbol', symbol.upper()),
+                'price': price_result.get('price'),
+                'source': 'alpaca',
+                'error': price_result.get('error'),
+            }
         def get_recent_audit_logs(self, limit): return []
         def get_price_history(self, symbol, days): return []
     market_data = AlpacaMarketProvider()
