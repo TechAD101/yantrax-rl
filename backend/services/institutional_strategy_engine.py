@@ -182,7 +182,7 @@ class InstitutionalStrategyEngine:
             
         except Exception as e:
             self.logger.error(f"Error generating institutional signal for {symbol}: {e}")
-            return self._get_neutral_signal(symbol)
+            raise  # Fail closed — do not silently return neutral signal
     
     def _detect_market_regime(self, 
                            market_data: Dict[str, Any], 
