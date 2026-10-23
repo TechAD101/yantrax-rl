@@ -432,13 +432,8 @@ export const api = {
   getSystemStatus: () => fetchWithRetry(`${BASE_URL}/health`),
   // WORLD CLASS API (Vision Upgrade)
   getVisualMoodBoard: async () => {
-    try {
-      const resp = await fetchWithRetry(`${BASE_URL}/api/visual_mood_board`);
-      return resp;
-    } catch (e) {
-      console.error('Mood Board fetch failed:', e);
-      return { emotion_dial: { current_mood: 'neutral', pain_meter: 0 }, market_weather: 'Cloudy', philosophy_quote: 'Connecting...' };
-    }
+    const resp = await fetchWithRetry(`${BASE_URL}/api/visual_mood_board`);
+    return resp;
   },
 
   getTopStrategies: async (opts = {}) => {

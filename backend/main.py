@@ -888,16 +888,19 @@ def _heartbeat_legacy():
 
 @app.route('/run-cycle', methods=['POST'])
 def run_cycle():
-    """Trigger a single trading cycle (used by UI/tests). This is intentionally lightweight.
+    """Trigger a single trading cycle (used by UI/tests).
 
-    Returns 200 on acceptance, 202 if no-op, or 500 on internal error.
+    Delegates to the canonical god-cycle pipeline so the same decision path
+    is exercised whether the UI calls /run-cycle or /god-cycle.
+    Returns 200 on success, 202 if no-op, or 500 on internal error.
     """
     try:
         payload = request.get_json(silent=True) or {}
-        # For safety in test environments, do not execute heavy cycles; simulate a cycle instead
-        logger.info('Received /run-cycle request')
-        result = {'status': 'accepted', 'payload': payload, 'timestamp': datetime.now().isoformat()}
-        return jsonify(result), 200
+        symbol = payload.get('symbol', 'AAPL').upper()
+        logger.info('Received /run-cycle request for %s', symbol)
+
+        # Delegate to the canonical god-cycle endpoint logic
+        return god_cycle()
     except Exception as e:
         logger.exception('run-cycle failed')
         return jsonify({'status': 'error', 'message': str(e), 'timestamp': datetime.now().isoformat()}), 500
