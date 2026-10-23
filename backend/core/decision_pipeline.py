@@ -669,8 +669,18 @@ class DecisionPipeline:
                     overconfidence_streak=safeguard_status.get('overconfidence_streak', 0),
                     current_drawdown=safeguard_status.get('current_drawdown_pct', 0.0) / 100,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Emotional safeguards get_status() failed: {e}. Failing closed: trading_allowed=False")
+                ctx.risk_state = RiskState(
+                    emotional_state='error',
+                    pain_level=100,
+                    trading_allowed=False,
+                    cooling_off_until=None,
+                    consecutive_losses=0,
+                    overconfidence_streak=0,
+                    current_drawdown=1.0,
+                )
+                ctx.add_provenance("risk", {"emotional_safeguards_error": str(e), "fail_closed": True})
         
         # Build portfolio state
         ctx.portfolio_state = await self._get_portfolio_state()

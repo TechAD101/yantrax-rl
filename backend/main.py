@@ -2362,7 +2362,16 @@ def create_portfolio_mvp():
 
 @app.route('/api/portfolio/<int:portfolio_id>/trade', methods=['POST'])
 def execute_trade_mvp(portfolio_id: int):
-    """Execute a paper trade (BUY/SELL)"""
+    """Execute a paper trade (BUY/SELL) — LEGACY BYPASS ENDPOINT.
+
+    DEPRECATED: This endpoint directly mutates PortfolioPosition without evidence,
+    voting, risk governance, or position sizing. It bypasses the canonical
+    decision pipeline (decision_pipeline.py). Use POST /api/orders with an
+    explicit price instead for production workflows.
+
+    Kept only for backward compatibility with legacy integration tests and
+    quick manual portfolio experiments.
+    """
     session = get_session()
     try:
         portfolio = session.query(Portfolio).get(portfolio_id)

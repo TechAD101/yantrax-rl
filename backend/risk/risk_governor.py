@@ -218,9 +218,9 @@ class RiskGovernor:
             passed=stress_check[0],
             reason=stress_check[1],
             details=stress_check[2],
-            severity="warning",
+            severity=stress_check[2].get('severity', 'warning'),
         ))
-        
+
         # Gate 7: Tail Risk
         tail_check = self._check_tail_risk(ctx)
         gates.append(RiskGateResult(
@@ -228,7 +228,7 @@ class RiskGovernor:
             passed=tail_check[0],
             reason=tail_check[1],
             details=tail_check[2],
-            severity="warning",
+            severity=tail_check[2].get('severity', 'info'),
         ))
         
         overall = self._determine_overall(gates)
@@ -483,21 +483,25 @@ class RiskGovernor:
         }
     
     def _check_stress_test(self, ctx: DecisionContext) -> Tuple[bool, str, Dict]:
-        """Stress test the position under adverse scenarios."""
+        """Stress test the position under adverse scenarios.
+
+        Fails closed (error severity) when worst-case stress loss exceeds 15% of portfolio,
+        warning-only for moderate stress. Returns True (passes) when no data available.
+        """
         if not ctx.market_snapshot or not ctx.final_position_size or not ctx.portfolio_state:
             return True, "Insufficient data for stress test", {}
-        
+
         # final_position_size is already dollar notional.
         position_value = ctx.final_position_size
         portfolio_value = ctx.portfolio_state.total_value
-        
+
         # Stress scenarios
         scenarios = {
             "market_crash_20pct": -0.20,
             "volatility_spike_3x": ctx.market_snapshot.volatility * 3,
             "liquidity_dry_up": 0.05,  # 5% slippage
         }
-        
+
         worst_case_loss = 0
         for name, shock in scenarios.items():
             if name == "market_crash_20pct":
@@ -507,41 +511,61 @@ class RiskGovernor:
             else:
                 loss = position_value * shock
             worst_case_loss = max(worst_case_loss, loss)
-        
+
         worst_case_pct = worst_case_loss / portfolio_value if portfolio_value > 0 else 0
-        
-        # Warning only - don't block on stress test
-        details = {
+
+        # Hard block when worst-case exceeds 15% of portfolio; warning for moderate
+        if worst_case_pct > 0.15:
+            return False, f"Stress test BLOCK: worst case {worst_case_pct:.1%} portfolio loss exceeds 15% threshold", {
+                "worst_case_pct": worst_case_pct,
+                "scenarios": scenarios,
+                "severity": "error",
+            }
+        if worst_case_pct > 0.10:
+            return True, f"Stress test warning: worst case {worst_case_pct:.1%} portfolio loss", {
+                "worst_case_pct": worst_case_pct,
+                "scenarios": scenarios,
+                "severity": "warning",
+            }
+
+        return True, f"Stress test passed: worst case {worst_case_pct:.1%}", {
             "worst_case_pct": worst_case_pct,
             "scenarios": scenarios,
-            "severity": "warning" if worst_case_pct > 0.10 else "info",
+            "severity": "info",
         }
-        
-        if worst_case_pct > 0.10:  # >10% portfolio loss in stress
-            return True, f"Stress test warning: worst case {worst_case_pct:.1%} portfolio loss", details
-        
-        return True, f"Stress test passed: worst case {worst_case_pct:.1%}", details
     
     def _check_tail_risk(self, ctx: DecisionContext) -> Tuple[bool, str, Dict]:
-        """Check for tail risk (black swan conditions)."""
+        """Check for tail risk (black swan conditions).
+
+        Fails closed (error severity) when VIX > 50 or volatility > 0.6,
+        warning-only for moderate extremes. Returns True (passes) when no data.
+        """
         if not ctx.market_snapshot:
             return True, "No market data", {}
-        
+
         vix = ctx.market_snapshot.vix or 20
         volatility = ctx.market_snapshot.volatility
-        
-        # Extreme conditions
-        is_extreme = vix > 40 or volatility > 0.5
-        details = {
+
+        # Hard block when extreme tail risk detected
+        if vix > 50 or volatility > 0.6:
+            return False, f"Tail risk BLOCK: VIX {vix}, vol {volatility:.1%} — extreme conditions", {
+                "vix": vix,
+                "volatility": volatility,
+                "severity": "error",
+            }
+        # Warning for elevated but manageable conditions
+        if vix > 40 or volatility > 0.5:
+            return True, f"Tail risk warning: VIX {vix}, vol {volatility:.1%}", {
+                "vix": vix,
+                "volatility": volatility,
+                "severity": "warning",
+            }
+
+        return True, "Tail risk within normal bounds", {
             "vix": vix,
             "volatility": volatility,
-            "severity": "warning" if is_extreme else "info",
+            "severity": "info",
         }
-        
-        if is_extreme:
-            return True, f"Tail risk warning: VIX {vix}, vol {volatility:.1%}", details
-        
-        return True, "Tail risk within normal bounds", details
     
     def _determine_overall(self, gates: List[RiskGateResult]) -> GovernanceState:
         """Determine overall governance state from gate results."""
