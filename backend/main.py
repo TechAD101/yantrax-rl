@@ -213,6 +213,8 @@ if cors_origins_raw:
 else:
     origins = ['*']
 if '*' in origins:
+    logger.warning("CORS_ORIGINS contains wildcard '*' — this is insecure in production. "
+                   "Set CORS_ORIGINS to a comma-separated list of trusted origins.")
     CORS(app, origins=origins, supports_credentials=False)
 else:
     CORS(app, origins=origins, supports_credentials=True)

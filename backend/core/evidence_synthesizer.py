@@ -4,9 +4,12 @@ Evidence Synthesis for Yantra X.
 Connects existing intelligence components to the canonical EvidencePackage.
 """
 
+import logging
 from typing import Dict, Any, Optional
 from datetime import datetime
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 from backend.core.decision_context import (
     EvidencePackage, TechnicalEvidence, FundamentalEvidence,
@@ -94,8 +97,8 @@ class EvidenceSynthesizer:
                 history = self.market_data.get_price_history(symbol, days)
                 if history:
                     return [h['close'] for h in history]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Price history unavailable for {symbol}: {e}")
 
         raise ValueError(f"Real price history unavailable for {symbol}")
 
@@ -104,8 +107,8 @@ class EvidenceSynthesizer:
         if self.market_data and hasattr(self.market_data, 'get_fundamentals'):
             try:
                 return self.market_data.get_fundamentals(symbol) or {}
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Fundamentals unavailable for {symbol}: {e}")
         return {}
 
     def _get_sentiment(self, symbol: str) -> Dict[str, Any]:
@@ -113,8 +116,8 @@ class EvidenceSynthesizer:
         if self.sentiment_service:
             try:
                 return self.sentiment_service.get_comprehensive_sentiment(symbol) or {}
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Sentiment unavailable for {symbol}: {e}")
         return {}
 
     def _detect_regime(
@@ -135,8 +138,8 @@ class EvidenceSynthesizer:
                     StrategyMarketRegime.LIQUIDITY_CRUNCH: MarketRegime.LIQUIDITY_CRUNCH,
                 }
                 return mapping.get(strategy_regime, MarketRegime.SIDEWAYS)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Regime detection failed for {symbol}: {e}")
 
         # Fallback logic
         volatility = market_data.get('volatility', 0.02)
