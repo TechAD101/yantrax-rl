@@ -628,10 +628,27 @@ yantrax_system = YantraXEnhancedSystem()
 @app.route('/', methods=['GET'])
 def health_check():
     """Root endpoint - system status"""
+    # Determine actual market data source status by testing the provider
+    market_source = 'Alpaca'
+    market_ready = MARKET_SERVICE_READY
+    if not MARKET_SERVICE_READY:
+        market_source = 'unavailable'
+        market_ready = False
+    elif hasattr(market_provider, 'get_price'):
+        # Actually test the provider to see if it works
+        try:
+            test_result = market_provider.get_price('AAPL')
+            if isinstance(test_result, dict) and (test_result.get('price', 0) <= 0 or test_result.get('error')):
+                market_source = 'unavailable'
+                market_ready = False
+        except Exception:
+            market_source = 'unavailable'
+            market_ready = False
+    
     return jsonify({
         'status': 'operational',
         'version': '5.21-MVP-Routes-Active',
-        'data_source': 'Alpaca',
+        'data_source': market_source,
         'ai_firm': 'active' if AI_FIRM_READY else 'degraded',
         'ghost_layer': {
             'status': 'akasha_node_online',
@@ -640,8 +657,8 @@ def health_check():
             'last_whisper': "Silent Observation"
         },
         'institutional_trust': {
-            'score': 88.5 if MARKET_SERVICE_READY else 45.0,
-            'confidence_band': 'HIGH' if MARKET_SERVICE_READY else 'LOW',
+            'score': 88.5 if market_ready else 45.0,
+            'confidence_band': 'HIGH' if market_ready else 'LOW',
             'audit_status': 'verified'
         },
         'cache_sync': '60s_forced',
