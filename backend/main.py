@@ -171,6 +171,7 @@ except Exception as e:
         def get_fundamentals(self, symbol): return {}
         def get_verification_stats(self): return {}
         def get_price_verified(self, symbol): return {'verified': False, 'price': 0}
+        def get_price_history(self, symbol, days): return []
         def get_recent_audit_logs(self, limit): return []
     market_provider = DummyMarketProvider()
 
@@ -1434,30 +1435,39 @@ def institutional_strategy():
         }), 503
     
     try:
-        # Get market data (use price with synthetic history for demo)
+        # Get market data from the canonical provider
         price_data = market_provider.get_price(symbol)
-        current_price = price_data.get('price', 100)
-        
-        # Generate synthetic price history for technical analysis
+        current_price = price_data.get('price', 0)
+
+        # Use canonical provider for real price history; fall back to
+        # explicitly-labeled unavailable state when no data is accessible.
         try:
-            price_history = [current_price * (1 + np.sin(i/10) * 0.02 + np.random.normal(0, 0.01)) for i in range(50)]
-            volatility = float(np.std(np.diff(price_history)))
-            volume = int(np.random.randint(100000, 5000000))
-            trend = 'bullish' if np.random.random() > 0.5 else 'bearish'
+            history = market_provider.get_price_history(symbol, days=50)
+            if history and len(history) > 0:
+                price_history = [float(h.get('close', 0)) for h in history]
+            else:
+                price_history = []
         except Exception as e:
-            logger.error(f"Error generating market data: {e}")
-            price_history = [current_price] * 50
-            volatility = 0.02
-            volume = 1000000
-            trend = 'neutral'
-        
+            logger.warning('Price history unavailable for %s: %s', symbol, e)
+            price_history = []
+
+        if price_history and len(price_history) >= 2:
+            volatility = float(np.std(np.diff(price_history)))
+            volume = int(price_history[-1] * 1000) if price_history[-1] > 0 else 0
+            trend = 'bullish' if price_history[-1] > price_history[0] else 'bearish'
+        else:
+            volatility = None
+            volume = None
+            trend = 'unavailable'
+
         enhanced_market_data = {
             'price': current_price,
             'price_history': price_history,
             'volatility': volatility,
             'volume': volume,
             'trend': trend,
-            'volume_trend': np.random.choice(['increasing', 'decreasing', 'stable'])
+            'volume_trend': 'unavailable',
+            'data_provenance': 'canonical_provider',
         }
         
         # Get fundamentals
