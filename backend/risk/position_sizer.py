@@ -397,14 +397,15 @@ class PositionSizer:
         """Calculate total portfolio risk after adding this position."""
         if not ctx.portfolio_state:
             return 0.0
-        
-        # Sum existing position risks (simplified)
+
+        # Sum existing position risks using actual volatility from market snapshot
         existing_risk = 0.0
+        market_vol = ctx.market_snapshot.volatility if ctx.market_snapshot else 0.02
         for pos in ctx.portfolio_state.positions:
-            # Estimate: position_value * avg_volatility * 2.33
+            # Use actual market volatility, not hardcoded 2%
             pos_value = pos.get('quantity', 0) * pos.get('avg_price', 0)
-            existing_risk += pos_value * 0.02 * 2.33  # Assume 2% vol
-        
+            existing_risk += pos_value * market_vol * 2.33
+
         total_risk = existing_risk + new_risk_amount
         portfolio_value = ctx.portfolio_state.total_value
         

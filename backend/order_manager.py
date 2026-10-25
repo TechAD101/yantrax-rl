@@ -38,6 +38,9 @@ def create_order(symbol: str, usd: float, price: float = None) -> Dict[str, Any]
             session.commit()
             session.refresh(portfolio)
 
+        if not price or price <= 0:
+            raise ValueError("Price must be provided and positive. Synthetic fallback removed.")
+
         o = Order(
             portfolio_id=portfolio.id,
             symbol=symbol.upper(),

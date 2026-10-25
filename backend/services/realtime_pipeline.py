@@ -113,10 +113,15 @@ class RealtimeMarketPipeline:
 
         result = {}
         # Try batch Alpaca first
-        batch = self._alpaca_snapshot(symbols)
-        if batch:
-            result = batch
-        else:
+        try:
+            batch = self._alpaca_snapshot(symbols)
+            if batch:
+                result = batch
+            else:
+                for sym in symbols:
+                    result[sym] = self.get_quote(sym)
+        except (ValueError, Exception) as e:
+            logger.warning(f"Batch snapshot failed: {e}")
             for sym in symbols:
                 result[sym] = self.get_quote(sym)
 
@@ -200,7 +205,7 @@ class RealtimeMarketPipeline:
 
     def _alpaca_snapshot(self, symbols: List[str]) -> Optional[Dict[str, Any]]:
         if not self._config["alpaca_key"]:
-            return None
+            raise ValueError("Alpaca API key not configured — market data unavailable")
         try:
             headers = {
                 "APCA-API-KEY-ID":     self._config["alpaca_key"],
@@ -214,9 +219,11 @@ class RealtimeMarketPipeline:
                     sym: self._normalise_alpaca_snapshot(sym, data)
                     for sym, data in raw.items()
                 }
+            else:
+                raise ValueError(f"Alpaca API returned HTTP {resp.status_code}: {resp.text[:200]}")
         except Exception as e:
-            logger.debug(f"Alpaca snapshot failed: {e}")
-        return None
+            logger.error(f"Alpaca snapshot failed for {symbols}: {e}")
+            raise
 
     def _stale_fallback(self, symbol: str) -> Dict[str, Any]:
         """Return last cached value (even if expired) or error scaffold"""

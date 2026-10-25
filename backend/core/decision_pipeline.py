@@ -669,8 +669,18 @@ class DecisionPipeline:
                     overconfidence_streak=safeguard_status.get('overconfidence_streak', 0),
                     current_drawdown=safeguard_status.get('current_drawdown_pct', 0.0) / 100,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Emotional safeguards get_status() failed: {e}. Failing closed: trading_allowed=False")
+                ctx.risk_state = RiskState(
+                    emotional_state='error',
+                    pain_level=100,
+                    trading_allowed=False,
+                    cooling_off_until=None,
+                    consecutive_losses=0,
+                    overconfidence_streak=0,
+                    current_drawdown=1.0,
+                )
+                ctx.add_provenance("risk", {"emotional_safeguards_error": str(e), "fail_closed": True})
         
         # Build portfolio state
         ctx.portfolio_state = await self._get_portfolio_state()
@@ -999,35 +1009,41 @@ class DecisionPipeline:
         
         return ctx
     
-    def _generate_learning_events(self, outcome) -> List:
-        """Generate LearningEvent objects from outcome and attribution results."""
+    def _generate_learning_events(self, outcome, include_pnl_based: bool = True) -> List:
+        """Generate LearningEvent objects from outcome and attribution results.
+
+        When include_pnl_based=False (OPEN events), only store regime metadata.
+        Confidence/signal learning requires realized P&L and is skipped at entry.
+        """
         from backend.core.decision_context import LearningEvent
         from datetime import datetime
         import uuid
-        
+
         events = []
-        
+
         # Event 1: Agent confidence updates based on attribution
-        if outcome.agent_votes:
+        # Only include P&L-based confidence when we have realized outcomes
+        if outcome.agent_votes and include_pnl_based:
             for agent_name, vote_data in outcome.agent_votes.get('vote_distribution', {}).items():
                 if isinstance(vote_data, dict):
                     signal = vote_data.get('signal', 'HOLD')
                     confidence = vote_data.get('confidence', 0.5)
-                    
+
                     # Determine if agent was "right" based on outcome
                     # BUY with positive P&L = correct, SELL with negative P&L = correct (for short)
                     was_correct = False
-                    if signal == 'BUY' and outcome.net_pnl > 0:
-                        was_correct = True
-                    elif signal == 'SELL' and outcome.net_pnl < 0:
-                        was_correct = True
+                    if outcome.net_pnl is not None:
+                        if signal == 'BUY' and outcome.net_pnl > 0:
+                            was_correct = True
+                        elif signal == 'SELL' and outcome.net_pnl < 0:
+                            was_correct = True
                     elif signal == 'HOLD':
                         was_correct = True  # HOLD is correct if no action was best
-                    
+
                     # Simple confidence adjustment
                     new_confidence = confidence * (1.02 if was_correct else 0.98)
                     new_confidence = max(0.1, min(0.99, new_confidence))
-                    
+
                     event = LearningEvent(
                         event_id=f"le_agent_{agent_name}_{outcome.outcome_id}",
                         outcome_id=outcome.outcome_id,
@@ -1045,9 +1061,33 @@ class DecisionPipeline:
                         timestamp=datetime.now()
                     )
                     events.append(event)
+        elif outcome.agent_votes and not include_pnl_based:
+            # OPEN event: store agent votes as metadata without confidence changes
+            for agent_name, vote_data in outcome.agent_votes.get('vote_distribution', {}).items():
+                if isinstance(vote_data, dict):
+                    signal = vote_data.get('signal', 'HOLD')
+                    confidence = vote_data.get('confidence', 0.5)
+                    event = LearningEvent(
+                        event_id=f"le_agent_{agent_name}_{outcome.outcome_id}_open",
+                        outcome_id=outcome.outcome_id,
+                        event_type="vote_recorded",
+                        target_type="agent",
+                        target_id=agent_name,
+                        old_value=None,
+                        new_value=None,
+                        metadata={
+                            'agent_signal': signal,
+                            'confidence': confidence,
+                            'outcome_pnl': outcome.net_pnl,
+                            'note': 'Vote recorded at entry; confidence update on closure'
+                        },
+                        timestamp=datetime.now()
+                    )
+                    events.append(event)
         
-        # Event 2: Strategy performance update
-        if outcome.strategy_name and outcome.strategy_name != 'unknown':
+        # Event 2: Strategy performance update (only when P&L is known)
+        if outcome.strategy_name and outcome.strategy_name != 'unknown' and include_pnl_based:
+            pnl_factor = 1.01 if outcome.net_pnl is not None and outcome.net_pnl > 0 else 0.99
             event = LearningEvent(
                 event_id=f"le_strategy_{outcome.strategy_name}_{outcome.outcome_id}",
                 outcome_id=outcome.outcome_id,
@@ -1055,7 +1095,7 @@ class DecisionPipeline:
                 target_type="strategy",
                 target_id=outcome.strategy_name,
                 old_value=str(outcome.strategy_confidence),
-                new_value=str(min(0.99, outcome.strategy_confidence * (1.01 if outcome.net_pnl > 0 else 0.99))),
+                new_value=str(min(0.99, outcome.strategy_confidence * pnl_factor)),
                 metadata={
                     'outcome_pnl': outcome.net_pnl,
                     'regime': outcome.market_regime_at_decision,
@@ -1079,7 +1119,7 @@ class DecisionPipeline:
                 'volatility': outcome.volatility_at_decision,
                 'strategy': outcome.strategy_name,
                 'action': outcome.action,
-                'correct': outcome.net_pnl > 0
+                'correct': outcome.net_pnl is not None and outcome.net_pnl > 0
             },
             timestamp=datetime.now()
         )
@@ -1133,7 +1173,9 @@ class DecisionPipeline:
                     session.add(attribution_orm)
                 
                 # 3. Store LearningEvent ORM records (initial learning at entry)
-                learning_events = self._generate_learning_events(outcome)
+                # NOTE: Learning events at OPEN have no realized P&L, so we only
+                # store metadata events (regime knowledge), not confidence updates.
+                learning_events = self._generate_learning_events(outcome, include_pnl_based=False)
                 for le in learning_events:
                     learning_event_orm = LearningEvent(
                         id=le.event_id,
@@ -1308,7 +1350,8 @@ class DecisionPipeline:
                         session.add(attribution_orm)
                 
                     # Generate and store learning events from realized outcome
-                    learning_events = self._generate_learning_events(attributed_outcome)
+                    # At CLOSE, all P&L is known — include confidence/signal learning
+                    learning_events = self._generate_learning_events(attributed_outcome, include_pnl_based=True)
                     for le in learning_events:
                         learning_event_orm = LearningEvent(
                             id=le.event_id,

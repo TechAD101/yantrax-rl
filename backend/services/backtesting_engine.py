@@ -42,7 +42,11 @@ def _fetch_historical_prices(symbol: str, days: int = 365) -> List[Dict[str, Any
     Real historical market data will be provided by the supported market-data
     integration once the historical-data adapter is wired into this service.
     """
-    logger.info("Using synthetic price data for %s", symbol)
+    logger.warning(
+        "Using SYNTHETIC price data for %s — backtest results are NOT "
+        "real market data and must be labeled SIMULATION in any output.",
+        symbol
+    )
     return _generate_synthetic_prices(symbol, days)
 def _generate_synthetic_prices(symbol: str, days: int) -> List[Dict[str, Any]]:
     """Generate GBM price series for backtesting when real data is unavailable."""
@@ -333,6 +337,8 @@ def run_backtest(
         "initial_capital": initial_capital,
         "final_capital": round(final_equity, 2),
         "total_return_pct": round(total_return, 2),
+        "mode": "SIMULATION",
+        "data_provenance": "synthetic",
         "buy_hold_return_pct": round(buy_hold_return, 2),
         "alpha_vs_buy_hold": round(total_return - buy_hold_return, 2),
         "total_trades": len(trades),

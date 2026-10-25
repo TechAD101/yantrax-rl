@@ -65,7 +65,7 @@ PERSONA_REGISTRY = get_persona_registry()
 # Database helpers
 from backend.db import init_db, get_session
 from backend.models import Strategy, StrategyProfile
-from backend.models import Portfolio, PortfolioPosition, Outcome
+from backend.models import Portfolio, PortfolioPosition, Outcome, JournalEntry
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -171,6 +171,7 @@ except Exception as e:
         def get_fundamentals(self, symbol): return {}
         def get_verification_stats(self): return {}
         def get_price_verified(self, symbol): return {'verified': False, 'price': 0}
+        def get_price_history(self, symbol, days): return []
         def get_recent_audit_logs(self, limit): return []
     market_provider = DummyMarketProvider()
 
@@ -213,6 +214,8 @@ if cors_origins_raw:
 else:
     origins = ['*']
 if '*' in origins:
+    logger.warning("CORS_ORIGINS contains wildcard '*' — this is insecure in production. "
+                   "Set CORS_ORIGINS to a comma-separated list of trusted origins.")
     CORS(app, origins=origins, supports_credentials=False)
 else:
     CORS(app, origins=origins, supports_credentials=True)
@@ -628,10 +631,27 @@ yantrax_system = YantraXEnhancedSystem()
 @app.route('/', methods=['GET'])
 def health_check():
     """Root endpoint - system status"""
+    # Determine actual market data source status by testing the provider
+    market_source = 'Alpaca'
+    market_ready = MARKET_SERVICE_READY
+    if not MARKET_SERVICE_READY:
+        market_source = 'unavailable'
+        market_ready = False
+    elif hasattr(market_provider, 'get_price'):
+        # Actually test the provider to see if it works
+        try:
+            test_result = market_provider.get_price('AAPL')
+            if isinstance(test_result, dict) and (test_result.get('price', 0) <= 0 or test_result.get('error')):
+                market_source = 'unavailable'
+                market_ready = False
+        except Exception:
+            market_source = 'unavailable'
+            market_ready = False
+    
     return jsonify({
         'status': 'operational',
         'version': '5.21-MVP-Routes-Active',
-        'data_source': 'Alpaca',
+        'data_source': market_source,
         'ai_firm': 'active' if AI_FIRM_READY else 'degraded',
         'ghost_layer': {
             'status': 'akasha_node_online',
@@ -640,8 +660,8 @@ def health_check():
             'last_whisper': "Silent Observation"
         },
         'institutional_trust': {
-            'score': 88.5 if MARKET_SERVICE_READY else 45.0,
-            'confidence_band': 'HIGH' if MARKET_SERVICE_READY else 'LOW',
+            'score': 88.5 if market_ready else 45.0,
+            'confidence_band': 'HIGH' if market_ready else 'LOW',
             'audit_status': 'verified'
         },
         'cache_sync': '60s_forced',
@@ -869,16 +889,19 @@ def _heartbeat_legacy():
 
 @app.route('/run-cycle', methods=['POST'])
 def run_cycle():
-    """Trigger a single trading cycle (used by UI/tests). This is intentionally lightweight.
+    """Trigger a single trading cycle (used by UI/tests).
 
-    Returns 200 on acceptance, 202 if no-op, or 500 on internal error.
+    Delegates to the canonical god-cycle pipeline so the same decision path
+    is exercised whether the UI calls /run-cycle or /god-cycle.
+    Returns 200 on success, 202 if no-op, or 500 on internal error.
     """
     try:
         payload = request.get_json(silent=True) or {}
-        # For safety in test environments, do not execute heavy cycles; simulate a cycle instead
-        logger.info('Received /run-cycle request')
-        result = {'status': 'accepted', 'payload': payload, 'timestamp': datetime.now().isoformat()}
-        return jsonify(result), 200
+        symbol = payload.get('symbol', 'AAPL').upper()
+        logger.info('Received /run-cycle request for %s', symbol)
+
+        # Delegate to the canonical god-cycle endpoint logic
+        return god_cycle()
     except Exception as e:
         logger.exception('run-cycle failed')
         return jsonify({'status': 'error', 'message': str(e), 'timestamp': datetime.now().isoformat()}), 500
@@ -1412,30 +1435,39 @@ def institutional_strategy():
         }), 503
     
     try:
-        # Get market data (use price with synthetic history for demo)
+        # Get market data from the canonical provider
         price_data = market_provider.get_price(symbol)
-        current_price = price_data.get('price', 100)
-        
-        # Generate synthetic price history for technical analysis
+        current_price = price_data.get('price', 0)
+
+        # Use canonical provider for real price history; fall back to
+        # explicitly-labeled unavailable state when no data is accessible.
         try:
-            price_history = [current_price * (1 + np.sin(i/10) * 0.02 + np.random.normal(0, 0.01)) for i in range(50)]
-            volatility = float(np.std(np.diff(price_history)))
-            volume = int(np.random.randint(100000, 5000000))
-            trend = 'bullish' if np.random.random() > 0.5 else 'bearish'
+            history = market_provider.get_price_history(symbol, days=50)
+            if history and len(history) > 0:
+                price_history = [float(h.get('close', 0)) for h in history]
+            else:
+                price_history = []
         except Exception as e:
-            logger.error(f"Error generating market data: {e}")
-            price_history = [current_price] * 50
-            volatility = 0.02
-            volume = 1000000
-            trend = 'neutral'
-        
+            logger.warning('Price history unavailable for %s: %s', symbol, e)
+            price_history = []
+
+        if price_history and len(price_history) >= 2:
+            volatility = float(np.std(np.diff(price_history)))
+            volume = int(price_history[-1] * 1000) if price_history[-1] > 0 else 0
+            trend = 'bullish' if price_history[-1] > price_history[0] else 'bearish'
+        else:
+            volatility = None
+            volume = None
+            trend = 'unavailable'
+
         enhanced_market_data = {
             'price': current_price,
             'price_history': price_history,
             'volatility': volatility,
             'volume': volume,
             'trend': trend,
-            'volume_trend': np.random.choice(['increasing', 'decreasing', 'stable'])
+            'volume_trend': 'unavailable',
+            'data_provenance': 'canonical_provider',
         }
         
         # Get fundamentals
@@ -1986,27 +2018,23 @@ def get_commentary():
 
 @app.route('/journal', methods=['GET'])
 def get_journal():
-    """Get trading journal/history"""
-    # Mock history for now since we don't have a DB connected in this view
-    # In a real app, this would come from a database
-    journal_entries = []
-    base_balance = 132240.84
-    
-    for i in range(10):
-        entry = {
-            'id': i + 1,
-            'timestamp': (datetime.now() - timedelta(hours=i*2)).isoformat(),
-            'action': ['BUY', 'SELL', 'HOLD'][i % 3],
-            'symbol': 'AAPL' if i % 2 == 0 else 'TSLA',
-            'reward': round(np.random.normal(50 * (i+1), 20), 2),
-            'balance': round(base_balance + (i * 150), 2),
-            'notes': 'AI Firm Consensus Trade',
-            'confidence': 0.85 + (i * 0.01),
-            'agent_consensus': 0.88
-        }
-        journal_entries.append(entry)
-        
-    return jsonify(journal_entries)
+    """Get trading journal/history from database"""
+    try:
+        session = get_session()
+        # Query real journal entries from database
+        entries = session.query(JournalEntry).order_by(JournalEntry.timestamp.desc()).limit(50).all()
+        if entries:
+            return jsonify([e.to_dict() if hasattr(e, 'to_dict') else e.__dict__ for e in entries])
+        # Return empty list if no entries exist (don't generate fake data)
+        return jsonify([])
+    except Exception as e:
+        logger.error(f"Journal fetch failed: {e}")
+        return jsonify([])
+    finally:
+        try:
+            session.close()
+        except:
+            pass
 
 @app.route('/portfolio', methods=['GET'])
 def get_portfolio():
@@ -2362,7 +2390,16 @@ def create_portfolio_mvp():
 
 @app.route('/api/portfolio/<int:portfolio_id>/trade', methods=['POST'])
 def execute_trade_mvp(portfolio_id: int):
-    """Execute a paper trade (BUY/SELL)"""
+    """Execute a paper trade (BUY/SELL) — LEGACY BYPASS ENDPOINT.
+
+    DEPRECATED: This endpoint directly mutates PortfolioPosition without evidence,
+    voting, risk governance, or position sizing. It bypasses the canonical
+    decision pipeline (decision_pipeline.py). Use POST /api/orders with an
+    explicit price instead for production workflows.
+
+    Kept only for backward compatibility with legacy integration tests and
+    quick manual portfolio experiments.
+    """
     session = get_session()
     try:
         portfolio = session.query(Portfolio).get(portfolio_id)

@@ -1,0 +1,12 @@
+# Yantra X Recovery Cron Job
+# Runs every 2 hours to ensure system health and recovery from failures
+#
+# Install: cp yantrax_recovery.cron /etc/cron.d/yantrax-recovery
+# Or add to user crontab: crontab -e
+
+# Environment
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Recovery cron — runs every 2 hours, 5 minutes past the hour
+5 */2 * * * ubuntu cd /home/ubuntu/yantrax-rl && /home/ubuntu/yantrax-rl/.venv/bin/python backend/recovery_cron.py >> /home/ubuntu/yantrax-mission/recovery_cron.log 2>&1
