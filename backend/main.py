@@ -65,7 +65,7 @@ PERSONA_REGISTRY = get_persona_registry()
 # Database helpers
 from backend.db import init_db, get_session
 from backend.models import Strategy, StrategyProfile
-from backend.models import Portfolio, PortfolioPosition, Outcome
+from backend.models import Portfolio, PortfolioPosition, Outcome, JournalEntry
 
 def _load_dotenv_fallback(filepath: str) -> None:
     """Fallback loader for .env when python-dotenv isn't available.
@@ -2018,27 +2018,23 @@ def get_commentary():
 
 @app.route('/journal', methods=['GET'])
 def get_journal():
-    """Get trading journal/history"""
-    # Mock history for now since we don't have a DB connected in this view
-    # In a real app, this would come from a database
-    journal_entries = []
-    base_balance = 132240.84
-    
-    for i in range(10):
-        entry = {
-            'id': i + 1,
-            'timestamp': (datetime.now() - timedelta(hours=i*2)).isoformat(),
-            'action': ['BUY', 'SELL', 'HOLD'][i % 3],
-            'symbol': 'AAPL' if i % 2 == 0 else 'TSLA',
-            'reward': round(np.random.normal(50 * (i+1), 20), 2),
-            'balance': round(base_balance + (i * 150), 2),
-            'notes': 'AI Firm Consensus Trade',
-            'confidence': 0.85 + (i * 0.01),
-            'agent_consensus': 0.88
-        }
-        journal_entries.append(entry)
-        
-    return jsonify(journal_entries)
+    """Get trading journal/history from database"""
+    try:
+        session = get_session()
+        # Query real journal entries from database
+        entries = session.query(JournalEntry).order_by(JournalEntry.timestamp.desc()).limit(50).all()
+        if entries:
+            return jsonify([e.to_dict() if hasattr(e, 'to_dict') else e.__dict__ for e in entries])
+        # Return empty list if no entries exist (don't generate fake data)
+        return jsonify([])
+    except Exception as e:
+        logger.error(f"Journal fetch failed: {e}")
+        return jsonify([])
+    finally:
+        try:
+            session.close()
+        except:
+            pass
 
 @app.route('/portfolio', methods=['GET'])
 def get_portfolio():
