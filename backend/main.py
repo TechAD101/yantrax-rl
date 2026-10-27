@@ -1737,14 +1737,30 @@ def simulate_memecoin_trade():
 
 @app.route('/api/orders', methods=['POST'])
 def create_order_endpoint():
+    """Create a paper order via the legacy entry point.
+
+    Requires an explicit `price` field. For memecoin prototype testing,
+    pass `"simulation_mode": true` in the request body; the canonical
+    decision pipeline always supplies a verified snapshot price.
+    """
     data = request.get_json() or {}
     symbol = data.get('symbol')
     usd = float(data.get('usd', 100.0))
     if not symbol:
         return jsonify({'error': 'symbol is required'}), 400
+    price = data.get('price')
+    if price is not None:
+        try:
+            price = float(price)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'price must be a number'}), 400
+    simulation_mode = bool(data.get('simulation_mode', False))
     try:
-        o = create_order(symbol, usd)
+        o = create_order(symbol, usd, price=price, simulation_mode=simulation_mode)
         return jsonify({'order': o}), 201
+    except ValueError as e:
+        # Fail-closed errors are client issues, not 500s
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         logger.error(f"Error creating order: {e}")
         return jsonify({'error': str(e)}), 500

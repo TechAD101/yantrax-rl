@@ -6,23 +6,37 @@ from backend.models import Order, Portfolio
 from backend.memecoin_service import simulate_trade
 
 
-def create_order(symbol: str, usd: float, price: float = None) -> Dict[str, Any]:
+def create_order(symbol: str, usd: float, price: float | None = None, simulation_mode: bool = False) -> Dict[str, Any]:
     """Create a paper order.
 
     price: explicit market price (canonical pipeline passes the verified
-    snapshot price). When omitted, falls back to the legacy memecoin
-    paper-simulation fill — SYNTHETIC, only acceptable for the memecoin
-    prototype API surface, never for canonical equity decisions.
+    snapshot price). When omitted and simulation_mode is explicitly enabled,
+    uses the memecoin prototype simulation fill — SYNTHETIC, only acceptable
+    for the memecoin prototype API surface, never for canonical equity decisions.
+
+    When price is omitted and simulation_mode is False, raises ValueError
+    to fail closed — no silent synthetic fallback.
     """
     session = get_session()
     try:
-        if price and price > 0:
-            quantity = usd / price
-        else:
-            # Legacy synthetic paper fill (memecoin prototype surface only)
+        if price is None:
+            if not simulation_mode:
+                raise ValueError(
+                    "Price must be provided for canonical order creation. "
+                    "Pass simulation_mode=True to explicitly use the memecoin prototype fill."
+                )
+            # Explicitly labeled simulation mode — memecoin prototype surface only
+            from backend.memecoin_service import simulate_trade
             exec_res = simulate_trade(symbol, usd)
             price = exec_res.get('price')
             quantity = exec_res.get('quantity')
+        else:
+            if price <= 0:
+                raise ValueError("Price must be positive.")
+            quantity = usd / price
+
+        if not price or price <= 0:
+            raise ValueError("Price must be provided and positive.")
 
         # Ensure a portfolio exists
         from backend.models import Portfolio
@@ -38,9 +52,6 @@ def create_order(symbol: str, usd: float, price: float = None) -> Dict[str, Any]
             session.commit()
             session.refresh(portfolio)
 
-        if not price or price <= 0:
-            raise ValueError("Price must be provided and positive. Synthetic fallback removed.")
-
         o = Order(
             portfolio_id=portfolio.id,
             symbol=symbol.upper(),
@@ -49,7 +60,7 @@ def create_order(symbol: str, usd: float, price: float = None) -> Dict[str, Any]
             price=price,
             status='filled',
             executed_at=datetime.utcnow(),
-            meta={'simulated': True},
+            meta={'simulated': True, 'simulation_mode': simulation_mode},
         )
         session.add(o)
         session.commit()
