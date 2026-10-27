@@ -12,10 +12,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Use Node.js 18
+      - name: Use Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Install frontend dependencies
         working-directory: frontend
@@ -23,6 +23,8 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
+        env:
+          VITE_API_URL: https://yantrax-backend.onrender.com
         run: npm run build
 
       - name: Verify VERCEL_TOKEN secret
@@ -34,12 +36,19 @@ jobs:
             echo "ERROR: VERCEL_TOKEN is not set. Add the secret 'VERCEL_TOKEN' to the repository settings to enable deployments to Vercel." >&2
             exit 1
           fi
+          # Basic structural check: Vercel tokens are non-empty, no whitespace, no shell metacharacters.
+          if echo "$VERCEL_TOKEN" | grep -qE '[[:space:]]|[\$\`"\'\\]'; then
+            echo "ERROR: VERCEL_TOKEN contains whitespace or shell metacharacters. Check the secret value for accidental formatting." >&2
+            exit 1
+          fi
+          echo "VERCEL_TOKEN is present and has a valid format."
+
       - name: Deploy to Vercel
         working-directory: frontend
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          npm install -g vercel
+          npm install -g vercel@60.1.3
           vercel --prod --yes --token $VERCEL_TOKEN --cwd .
 
   trigger_render:

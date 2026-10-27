@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
-Yantra X Recovery Cron — resume-from-checkpoint with lock safety.
+Yantra X Recovery Cron — safe engineering-goal checkpoint recovery.
 
 Purpose:
-- Run every 2–5 hours (configurable via YANTRAX_RECOVERY_INTERVAL env var)
+- Run every 2-5 hours (configurable via YANTRAX_RECOVERY_INTERVAL env var)
 - Acquire a lock file to prevent concurrent runs on VPS restarts/crashes
-- Check if the system completed a full god-cycle in the last INTERVAL hours
-- If not, trigger a recovery god-cycle run
-- Log all actions with timestamps for audit trail
-- Suppress when system is healthy and up-to-date
+- Check if the mission checkpoint has been updated within the interval
+- If the checkpoint is stale, log a recovery notice and report status
+- NEVER trigger trading logic — this is an engineering checkpoint recovery job only
 
 Usage:
     python recovery_cron.py [--dry-run] [--interval <seconds>]
@@ -17,13 +16,12 @@ Environment:
     YANTRAX_RECOVERY_INTERVAL  default: 7200 (2 hours)
     YANTRAX_RECOVERY_LOCK_DIR  default: /tmp/yantrax-recovery
     YANTRAX_BACKEND_URL        default: https://yantrax-backend.onrender.com
+    YANTRAX_MISSION_DIR        default: /home/ubuntu/yantrax-mission
 """
-
 import argparse
 import json
 import os
 import sys
-import time
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
@@ -34,6 +32,7 @@ from typing import Optional
 # Configuration
 LOCK_TIMEOUT_HOURS = 3  # Maximum lock age before allowing recovery
 DEFAULT_INTERVAL = 7200  # 2 hours
+CHECKPOINT_FILENAME = "YANTRAX_CHECKPOINT.md"
 
 
 def get_lock_path() -> Path:
@@ -62,7 +61,7 @@ def acquire_lock() -> Optional[Path]:
                 print(f"[RECOVERY] Lock held by another process ({age_hours:.1f}h ago)")
                 return None
         except (json.JSONDecodeError, KeyError):
-            print(f"[RECOVERY] Corrupt lock file, removing")
+            print("[RECOVERY] Corrupt lock file, removing")
             lock_path.unlink()
 
     # Acquire new lock
@@ -70,7 +69,7 @@ def acquire_lock() -> Optional[Path]:
         "acquired_at": now.isoformat(),
         "hostname": os.uname().nodename,
         "pid": os.getpid(),
-        "version": "1.0.0",
+        "version": "2.0.0",
     }
     lock_path.write_text(json.dumps(lock_data, indent=2))
     print(f"[RECOVERY] Lock acquired: {lock_path}")
@@ -81,48 +80,39 @@ def release_lock(lock_path: Path):
     """Release the recovery lock."""
     if lock_path.exists():
         lock_path.unlink()
-        print(f"[RECOVERY] Lock released")
+        print("[RECOVERY] Lock released")
 
 
-def check_last_god_cycle(url: str) -> dict:
-    """Check the health endpoint for last run time."""
+def check_backend_health(url: str) -> dict:
+    """Check the health endpoint for service status."""
     try:
-        req = urllib.request.Request(f"{url}/health", headers={"User-Agent": "YantraX-Recovery/1.0"})
+        req = urllib.request.Request(f"{url}/health", headers={"User-Agent": "YantraX-Recovery/2.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode())
-            return data.get("checks", {}).get("pipeline", {})
-    except (urllib.error.URLError, json.JSONDecodeError, KeyError) as e:
+            return json.loads(resp.read().decode())
+    except (urllib.error.URLError, json.JSONDecodeError) as e:
         print(f"[RECOVERY] Health check failed: {e}")
         return {}
 
 
-def trigger_god_cycle(url: str, dry_run: bool = False) -> bool:
-    """Trigger a god-cycle via the API."""
-    if dry_run:
-        print("[RECOVERY] DRY RUN: Would trigger god-cycle")
-        return True
+def check_checkpoint_staleness(mission_dir: Path) -> dict:
+    """Check if the mission checkpoint file exists and is recent."""
+    checkpoint_path = mission_dir / CHECKPOINT_FILENAME
+    if not checkpoint_path.exists():
+        return {"exists": False, "stale": True, "reason": "checkpoint file missing"}
 
-    try:
-        req = urllib.request.Request(
-            f"{url}/god-cycle",
-            method="GET",
-            headers={"User-Agent": "YantraX-Recovery/1.0"}
-        )
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            status = resp.status
-            print(f"[RECOVERY] God-cycle triggered: HTTP {status}")
-            return status == 200
-    except urllib.error.URLError as e:
-        print(f"[RECOVERY] Failed to trigger god-cycle: {e}")
-        return False
-    except Exception as e:
-        print(f"[RECOVERY] Unexpected error: {e}")
-        return False
+    mtime = datetime.fromtimestamp(checkpoint_path.stat().st_mtime, tz=timezone.utc)
+    age_hours = (datetime.now(timezone.utc) - mtime).total_seconds() / 3600
+    return {
+        "exists": True,
+        "stale": age_hours > 24,
+        "age_hours": age_hours,
+        "path": str(checkpoint_path),
+    }
 
 
 def log_recovery_event(action: str, details: dict):
     """Log recovery event to journal file."""
-    journal_dir = Path("/home/ubuntu/yantrax-mission")
+    journal_dir = Path(os.environ.get("YANTRAX_MISSION_DIR", "/home/ubuntu/yantrax-mission"))
     journal_dir.mkdir(parents=True, exist_ok=True)
     journal_path = journal_dir / "recovery_journal.jsonl"
 
@@ -147,6 +137,7 @@ def main():
     # Configuration
     interval = args.interval or int(os.environ.get("YANTRAX_RECOVERY_INTERVAL", DEFAULT_INTERVAL))
     backend_url = os.environ.get("YANTRAX_BACKEND_URL", "https://yantrax-backend.onrender.com")
+    mission_dir = Path(os.environ.get("YANTRAX_MISSION_DIR", "/home/ubuntu/yantrax-mission"))
 
     print(f"[RECOVERY] Starting recovery check (interval={interval}s, url={backend_url})")
 
@@ -157,29 +148,32 @@ def main():
         return 0
 
     try:
-        # Check last pipeline run
-        health = check_last_god_cycle(backend_url)
-        last_run = health.get("last_run")
+        # Check backend health (read-only, no trading)
+        health = check_backend_health(backend_url)
+        backend_status = health.get("status", "unknown")
+        print(f"[RECOVERY] Backend status: {backend_status}")
 
-        if not last_run:
-            print("[RECOVERY] No pipeline run recorded, triggering recovery")
-            success = trigger_god_cycle(backend_url, args.dry_run)
-            if success:
-                log_recovery_event("triggered", {"reason": "no_last_run", "dry_run": args.dry_run})
-        else:
-            last_run_dt = datetime.fromisoformat(last_run.replace("Z", "+00:00"))
-            age_hours = (datetime.now(timezone.utc) - last_run_dt).total_seconds() / 3600
+        # Check checkpoint staleness
+        checkpoint = check_checkpoint_staleness(mission_dir)
 
-            if age_hours > (interval / 3600):
-                print(f"[RECOVERY] Last run was {age_hours:.1f}h ago, triggering recovery")
-                success = trigger_god_cycle(backend_url, args.dry_run)
-                if success:
-                    log_recovery_event("triggered", {"reason": "stale", "age_hours": age_hours, "dry_run": args.dry_run})
-                else:
-                    log_recovery_event("failed", {"reason": "trigger_failed", "age_hours": age_hours})
+        if checkpoint["stale"]:
+            reason = checkpoint.get("reason", "stale")
+            age = checkpoint.get("age_hours", "unknown")
+            print(f"[RECOVERY] Checkpoint is stale (age={age}h, reason={reason})")
+            if not args.dry_run:
+                log_recovery_event("checkpoint_stale", {
+                    "reason": reason,
+                    "age_hours": age,
+                    "backend_status": backend_status,
+                })
             else:
-                print(f"[RECOVERY] System healthy (last run {age_hours:.1f}h ago)")
-                log_recovery_event("healthy", {"age_hours": age_hours})
+                print("[RECOVERY] DRY RUN: Would log checkpoint_stale event")
+        else:
+            print(f"[RECOVERY] Checkpoint is current ({checkpoint.get('age_hours', 0):.1f}h ago)")
+            log_recovery_event("healthy", {
+                "age_hours": checkpoint.get("age_hours", 0),
+                "backend_status": backend_status,
+            })
 
         return 0
 
