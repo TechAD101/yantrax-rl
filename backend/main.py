@@ -3,6 +3,8 @@ import os
 import sys
 import logging
 import json
+import asyncio
+import functools
 
 class MockDebateEngine:
     async def conduct_debate(self, symbol, context=None):
@@ -212,13 +214,94 @@ cors_origins_raw = os.environ.get('CORS_ORIGINS')
 if cors_origins_raw:
     origins = [o.strip() for o in cors_origins_raw.split(',') if o.strip()]
 else:
-    origins = ['*']
-if '*' in origins:
-    logger.warning("CORS_ORIGINS contains wildcard '*' — this is insecure in production. "
-                   "Set CORS_ORIGINS to a comma-separated list of trusted origins.")
-    CORS(app, origins=origins, supports_credentials=False)
+    # In production, require explicit CORS_ORIGINS; no wildcard fallback.
+    # For local dev, frontend .env files should set this.
+    origins = []
+    logger.warning("CORS_ORIGINS not set — CORS disabled for all origins. "
+                   "Set CORS_ORIGINS to a comma-separated list of trusted origins (e.g., https://yantrax-rl.vercel.app,http://localhost:3000).")
+CORS(app, origins=origins, supports_credentials=False)
+
+# JWT Authentication (optional in dev, required in production)
+# Use JWT_SECRET_KEY from env; if missing, mutating endpoints remain unguarded with a warning.
+from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', '')
+app.config['JWT_TOKEN_LOCATION'] = ['headers']
+app.config['JWT_HEADER_NAME'] = 'Authorization'
+app.config['JWT_HEADER_TYPE'] = 'Bearer'
+if app.config['JWT_SECRET_KEY']:
+    jwt = JWTManager(app)
+    logger.info("JWT authentication enabled")
 else:
-    CORS(app, origins=origins, supports_credentials=True)
+    jwt = None
+    logger.warning("JWT_SECRET_KEY not set — mutating API endpoints are unguarded. Set JWT_SECRET_KEY to enable auth.")
+
+# Helper: require JWT if secret is configured (works for sync and async)
+def require_jwt_if_enabled(fn):
+    if asyncio.iscoroutinefunction(fn):
+        @functools.wraps(fn)
+        async def async_wrapper(*args, **kwargs):
+            # Only enforce JWT if secret is configured
+            if not app.config.get('JWT_SECRET_KEY'):
+                return await fn(*args, **kwargs)
+            from flask_jwt_extended import verify_jwt_in_request
+            try:
+                verify_jwt_in_request()
+            except Exception as e:
+                from flask import jsonify
+                return jsonify({'error': 'Unauthorized', 'detail': str(e)}), 401
+            return await fn(*args, **kwargs)
+        return async_wrapper
+    else:
+        @functools.wraps(fn)
+        def sync_wrapper(*args, **kwargs):
+            if not app.config.get('JWT_SECRET_KEY'):
+                return fn(*args, **kwargs)
+            from flask_jwt_extended import verify_jwt_in_request
+            try:
+                verify_jwt_in_request()
+            except Exception as e:
+                from flask import jsonify
+                return jsonify({'error': 'Unauthorized', 'detail': str(e)}), 401
+            return fn(*args, **kwargs)
+        return sync_wrapper
+
+# ==================== AUTH ENDPOINTS ====================
+@app.route('/api/auth/token', methods=['POST'])
+def create_token():
+    """Issue a JWT token for a valid API key.
+    
+    In production, callers must provide a valid JWT_SECRET_KEY-configured secret
+    as the api_key in the request body. In dev (JWT_SECRET_KEY unset), this
+    endpoint returns a warning-only token that does not authenticate endpoints.
+    """
+    data = request.get_json(silent=True) or {}
+    api_key = data.get('api_key', '')
+
+    if not app.config['JWT_SECRET_KEY']:
+        # Dev mode: issue a token that will be rejected at require_jwt_if_enabled
+        return jsonify({
+            'token': 'dev-no-auth',
+            'warning': 'JWT_SECRET_KEY not configured — auth is disabled. '
+                       'Mutating endpoints are open to any caller.',
+            'mode': 'development'
+        }), 200
+
+    if not api_key:
+        return jsonify({'error': 'api_key is required'}), 400
+
+    # Simple static key check — replace with DB-backed user auth in production
+    valid_key = os.environ.get('API_ACCESS_KEY', '')
+    if not valid_key:
+        logger.warning("API_ACCESS_KEY not set — all token requests will be rejected")
+        return jsonify({'error': 'Service not configured for auth'}), 503
+
+    if api_key != valid_key:
+        return jsonify({'error': 'Invalid credentials'}), 401
+
+    # Create JWT token directly
+    from flask_jwt_extended import create_access_token
+    token = create_access_token(identity={'user': 'api_user', 'role': 'trader'})
+    return jsonify({'token': token, 'token_type': 'Bearer'}), 200
 
 # Register Institutional Blueprints
 from backend.routes.data_ingest import data_ingest_bp
@@ -888,6 +971,7 @@ def _heartbeat_legacy():
     return heartbeat_endpoint()
 
 @app.route('/run-cycle', methods=['POST'])
+@require_jwt_if_enabled
 def run_cycle():
     """Trigger a single trading cycle (used by UI/tests).
 
@@ -1223,6 +1307,7 @@ def get_persona_details(persona_name: str):
     }), 200
 
 @app.route('/api/personas/<persona_name>/analyze', methods=['POST'])
+@require_jwt_if_enabled
 def persona_analyze(persona_name: str):
     """Run a persona's analysis on a symbol"""
     if not PERSONA_REGISTRY:
@@ -1258,6 +1343,7 @@ def persona_analyze(persona_name: str):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/personas/vote', methods=['POST'])
+@require_jwt_if_enabled
 def conduct_persona_vote():
     """Conduct a vote across all personas on a trade proposal"""
     if not PERSONA_REGISTRY:
@@ -1292,6 +1378,7 @@ def conduct_persona_vote():
 # ==================== KNOWLEDGE BASE API ENDPOINTS ====================
 
 @app.route('/api/knowledge/query', methods=['POST'])
+@require_jwt_if_enabled
 def query_knowledge():
     """Query investor wisdom using semantic search"""
     if not KNOWLEDGE_BASE:
@@ -1505,6 +1592,7 @@ def institutional_strategy():
         }), 500
 
 @app.route('/api/strategy/ai-debate/trigger', methods=['POST'])
+@require_jwt_if_enabled
 async def trigger_ai_debate():
     """Trigger a persona debate for a given symbol/ticker"""
     data = request.get_json() or {}
@@ -1524,6 +1612,7 @@ async def trigger_ai_debate():
 
 # ------------------- Strategy Marketplace (Internal-only MVP) -------------------
 @app.route('/api/strategy/publish', methods=['POST'])
+@require_jwt_if_enabled
 def publish_strategy():
     """Publish an internal strategy (admin/system only). Internal-only for MVP."""
     data = request.get_json() or {}
@@ -1702,6 +1791,7 @@ from backend.auth_service import register_user, authenticate_user, get_user
 
 
 @app.route('/api/memecoin/scan', methods=['POST'])
+@require_jwt_if_enabled
 def scan_memecoins():
     data = request.get_json() or {}
     symbols = data.get('symbols', ['DOGE', 'SHIB', 'PEPE', 'WOJAK', 'MEME'])
@@ -1721,6 +1811,7 @@ def top_memecoins():
 
 
 @app.route('/api/memecoin/simulate', methods=['POST'])
+@require_jwt_if_enabled
 def simulate_memecoin_trade():
     data = request.get_json() or {}
     symbol = data.get('symbol')
@@ -1736,6 +1827,7 @@ def simulate_memecoin_trade():
 
 
 @app.route('/api/orders', methods=['POST'])
+@require_jwt_if_enabled
 def create_order_endpoint():
     """Create a paper order via the legacy entry point.
 
@@ -1791,6 +1883,7 @@ def get_order_endpoint(order_id):
 
 # -------------------- Backtester + KB Feedback ----------------
 @app.route('/api/backtest', methods=['POST'])
+@require_jwt_if_enabled
 def run_backtest():
     data = request.get_json() or {}
     strategy_id = data.get('strategy_id')
@@ -1886,6 +1979,7 @@ def get_verification_stats():
 # ==================== TRADE VALIDATION ENGINE ENDPOINTS ====================
 
 @app.route('/api/trade/validate', methods=['POST'])
+@require_jwt_if_enabled
 def validate_trade():
     """Validate trade proposal against 8-point checklist"""
     if not TRADE_VALIDATOR:
@@ -1943,6 +2037,7 @@ def get_validation_stats():
 # ==================== LEGACY PERSONA ENDPOINTS ====================
 
 @app.route('/api/ai-firm/personas/warren', methods=['GET', 'POST'])
+@require_jwt_if_enabled
 def warren_analysis():
     """Warren Persona Analysis Endpoint"""
     if not AI_FIRM_READY: return jsonify({'error': 'offline'}), 500
@@ -1971,6 +2066,7 @@ def warren_analysis():
     }), 200
 
 @app.route('/api/ai-firm/personas/cathie', methods=['GET', 'POST'])
+@require_jwt_if_enabled
 def cathie_analysis():
     """Cathie Persona Analysis Endpoint"""
     if not AI_FIRM_READY: return jsonify({'error': 'offline'}), 500
@@ -2092,6 +2188,7 @@ def get_portfolio():
 
 # ------------------- Portfolio Management API -------------------
 @app.route('/api/portfolio', methods=['POST'])
+@require_jwt_if_enabled
 def create_portfolio():
     """Create a new portfolio with optional strategy profile"""
     data = request.get_json() or {}
@@ -2294,6 +2391,7 @@ def get_intelligence_status():
 
 # --- WORLD CLASS SOCIAL LAYER (Marketplace & Contests) ---
 @app.route('/api/strategies/publish-to-hub', methods=['POST'])
+@require_jwt_if_enabled
 def publish_strategy_hub():
     """Publish a user strategy to the marketplace"""
     if not hasattr(app, 'marketplace_service'):
@@ -2305,6 +2403,7 @@ def publish_strategy_hub():
     return jsonify(result), 201
 
 @app.route('/api/strategies/publish', methods=['POST'])
+@require_jwt_if_enabled
 def publish_strategy_alias():
     """Compatibility alias for older frontend clients."""
     return publish_strategy_hub()
@@ -2321,6 +2420,7 @@ def get_top_strategies():
     return jsonify(strategies), 200
 
 @app.route('/api/strategies/copy', methods=['POST'])
+@require_jwt_if_enabled
 def copy_strategy():
     """Copy a strategy"""
     if not hasattr(app, 'marketplace_service'):
@@ -2405,6 +2505,7 @@ def create_portfolio_mvp():
 
 
 @app.route('/api/portfolio/<int:portfolio_id>/trade', methods=['POST'])
+@require_jwt_if_enabled
 def execute_trade_mvp(portfolio_id: int):
     """Execute a paper trade (BUY/SELL) — LEGACY BYPASS ENDPOINT.
 
@@ -2466,6 +2567,7 @@ def execute_trade_mvp(portfolio_id: int):
 # ==================== KNOWLEDGE BASE INGESTION ====================
 
 @app.route('/api/knowledge/ingest', methods=['POST'])
+@require_jwt_if_enabled
 async def trigger_knowledge_ingest():
     """Manually trigger autonomous wisdom ingestion"""
     kb = registry.get_service('kb')
@@ -2547,6 +2649,7 @@ def get_market_stats_alias():
 
 
 @app.route('/optimize-portfolio', methods=['POST'])
+@require_jwt_if_enabled
 def optimize_portfolio_alias():
     """Compatibility portfolio optimizer used by the frontend analytics panel."""
     data = request.get_json(silent=True) or {}

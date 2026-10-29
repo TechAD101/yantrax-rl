@@ -514,3 +514,52 @@ class LearningEvent(Base):
             'metadata': self.event_metadata or {},
             'timestamp': self.timestamp.isoformat() if self.timestamp else None
         }
+
+
+class CEODecisionRecord(Base):
+    """Durable CEO decision memory — persists across process restarts."""
+    __tablename__ = 'ceo_decision_records'
+
+    id = Column(String(64), primary_key=True)
+    timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)
+    decision_type = Column(String(32), nullable=False)
+    symbol = Column(String(32), nullable=True, index=True)
+    decision_hash = Column(String(16), nullable=True)
+    reasoning = Column(Text, nullable=False)
+    confidence = Column(Float, nullable=False)
+    outcome_id = Column(String(64), ForeignKey('outcomes.id'), nullable=True, index=True)
+    position_id = Column(String(64), ForeignKey('paper_positions.id'), nullable=True, index=True)
+    memory_tags = Column(JSON, nullable=True)
+    metadata_json = Column(JSON, nullable=True)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'decision_type': self.decision_type,
+            'symbol': self.symbol,
+            'decision_hash': self.decision_hash,
+            'reasoning': self.reasoning,
+            'confidence': self.confidence,
+            'outcome_id': self.outcome_id,
+            'position_id': self.position_id,
+            'memory_tags': self.memory_tags or [],
+        }
+
+
+class LearningState(Base):
+    """Durable learning state — persists applied event IDs and performance ledgers."""
+    __tablename__ = 'learning_state'
+
+    id = Column(String(64), primary_key=True)
+    key = Column(String(128), nullable=False, unique=True)
+    value = Column(Text, nullable=False)  # JSON-serialized
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'key': self.key,
+            'value': self.value,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }

@@ -15,6 +15,7 @@ import logging
 from .debate_engine import DebateEngine
 from .agent_manager import AgentManager
 from .ghost_layer import GhostLayer
+from .ceo_persistent_memory import PersistentCEOMemorySystem, get_persistent_ceo_memory
 
 class CEOPersonality(Enum):
     CONSERVATIVE = "conservative"
@@ -41,7 +42,7 @@ class AutonomousCEO:
     def __init__(self, personality: CEOPersonality = CEOPersonality.BALANCED):
         self.logger = logging.getLogger(__name__)
         self.personality = personality
-        self.memory_system = CEOMemorySystem()
+        self.memory_system = PersistentCEOMemorySystem()
         self.decision_history = []
         self.learning_rate = 0.1
         self.confidence_threshold = 0.75
@@ -87,7 +88,11 @@ class AutonomousCEO:
         reasoning = self._generate_reasoning(context, memory_insights, debate_result)
         
         # 4. The Ghost Observation (Divine Doubt)
-        ghost_nudge = self.ghost_layer.observe(context, debate_result['consensus_score'])
+        # Calculate average confidence from debate arguments for ghost layer
+        avg_confidence = sum(
+            arg.get('confidence', 0.5) for arg in debate_result.get('arguments', [])
+        ) / len(debate_result.get('arguments', [])) if debate_result.get('arguments') else 0.5
+        ghost_nudge = self.ghost_layer.observe(context, debate_result['consensus_score'], avg_confidence)
         if ghost_nudge:
             reasoning += f" | {ghost_nudge['origin']}: {ghost_nudge['whisper']} [{ghost_nudge['influence_level']}]"
             if ghost_nudge['influence_level'] == 'VETO_RECOMMENDED':
@@ -278,7 +283,7 @@ class AutonomousCEO:
             ],
             'average_confidence': sum(d.confidence for d in recent_decisions) / len(recent_decisions) if recent_decisions else 0,
             'is_in_panic': self._calculate_pain_level() > 85,
-            'memory_items': len(self.memory_system.memories),
+            'memory_items': len(self.memory_system._in_memory_cache),
             'uptime_days': (datetime.now() - self.created_at).days,
             'institutional_metrics': {
                 'pain_level': pain_level, # 0-100

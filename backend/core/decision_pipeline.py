@@ -399,19 +399,14 @@ class DecisionPipeline:
             
         except Exception as e:
             logger.error(f"Strategy candidate generation failed: {e}")
-            # Fallback: create neutral candidate
-            ctx.candidate_strategy = CandidateStrategy(
-                action=TradingAction.HOLD,
-                confidence=0.5,
-                reasoning=f"Strategy engine error: {e}",
-                position_size=0.0,
-                stop_loss=0.0,
-                take_profit=0.0,
-                risk_score=0.5,
-            )
-        
-        return ctx
+            ctx.add_provenance("strategy_candidate_error", {
+                "error": str(e),
+                "action": TradingAction.ABSTAIN.value,
+            })
+            ctx.final_action = TradingAction.ABSTAIN
+            return ctx
     
+        return ctx
     async def _stage_agent_voting(self, ctx: DecisionContext) -> DecisionContext:
             """Run agent voting through AgentManager."""
             if not ctx.evidence or not ctx.market_snapshot:
@@ -710,6 +705,7 @@ class DecisionPipeline:
         if ctx.final_action not in (TradingAction.BUY, TradingAction.SELL):
             return ctx
 
+        return ctx
         from backend.models import PaperPosition
         session = get_session()
         try:

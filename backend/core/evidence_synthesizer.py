@@ -126,36 +126,19 @@ class EvidenceSynthesizer:
         sentiment: Dict[str, Any]
     ) -> MarketRegime:
         """Detect market regime using Strategy Engine logic."""
-        if self.strategy_engine:
-            try:
-                strategy_regime = self.strategy_engine._detect_market_regime(market_data, sentiment)
-                # Map to canonical regime
-                mapping = {
-                    StrategyMarketRegime.BULL_MARKET: MarketRegime.BULL_MARKET,
-                    StrategyMarketRegime.BEAR_MARKET: MarketRegime.BEAR_MARKET,
-                    StrategyMarketRegime.SIDEWAYS: MarketRegime.SIDEWAYS,
-                    StrategyMarketRegime.VOLATILITY_CRISIS: MarketRegime.VOLATILITY_CRISIS,
-                    StrategyMarketRegime.LIQUIDITY_CRUNCH: MarketRegime.LIQUIDITY_CRUNCH,
-                }
-                return mapping.get(strategy_regime, MarketRegime.SIDEWAYS)
-            except Exception as e:
-                logger.warning(f"Regime detection failed for {symbol}: {e}")
+        if not self.strategy_engine:
+            raise ValueError("No strategy engine configured for regime detection")
 
-        # Fallback logic
-        volatility = market_data.get('volatility', 0.02)
-        fear_greed = sentiment.get('components', {}).get('fear_greed', {}).get('fear_greed_index', 0.5)
-        price_trend = market_data.get('trend', 'neutral')
-
-        if volatility > 0.4:
-            return MarketRegime.VOLATILITY_CRISIS
-        elif fear_greed < 0.2 and price_trend == 'bearish':
-            return MarketRegime.LIQUIDITY_CRUNCH
-        elif price_trend == 'bullish' and fear_greed > 0.6:
-            return MarketRegime.BULL_MARKET
-        elif price_trend == 'bearish' and fear_greed < 0.4:
-            return MarketRegime.BEAR_MARKET
-        else:
-            return MarketRegime.SIDEWAYS
+        strategy_regime = self.strategy_engine._detect_market_regime(market_data, sentiment)
+        # Map to canonical regime
+        mapping = {
+            StrategyMarketRegime.BULL_MARKET: MarketRegime.BULL_MARKET,
+            StrategyMarketRegime.BEAR_MARKET: MarketRegime.BEAR_MARKET,
+            StrategyMarketRegime.SIDEWAYS: MarketRegime.SIDEWAYS,
+            StrategyMarketRegime.VOLATILITY_CRISIS: MarketRegime.VOLATILITY_CRISIS,
+            StrategyMarketRegime.LIQUIDITY_CRUNCH: MarketRegime.LIQUIDITY_CRUNCH,
+        }
+        return mapping.get(strategy_regime, MarketRegime.SIDEWAYS)
 
     def _analyze_technical(self, market_data: Dict[str, Any]) -> TechnicalEvidence:
         """Extract technical evidence using Strategy Engine.
