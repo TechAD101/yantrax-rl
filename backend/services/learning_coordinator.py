@@ -8,7 +8,9 @@ Heuristic confidence adjustments (+/-2% agents, +/-1% strategy) are bounded
 and based on realized P&L only — learning events are never generated for open
 positions or blocked trades.
 """
+import json
 import logging
+import uuid
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -79,11 +81,71 @@ class LearningCoordinator:
     """Applies generated LearningEvents to live components and maintains
     measured performance ledgers. Registered consumers receive each event."""
 
-    def __init__(self):
+    def __init__(self, persist: bool = True):
         self.agent_ledger = AgentPerformanceLedger()
         self.strategy_ledger = StrategyPerformanceLedger()
         self._consumers = []
         self._applied_event_ids = set()
+        self._persist_enabled = persist
+        self._load_persisted_state()
+
+    # -------------------- persistence ------------------------
+    def _load_persisted_state(self) -> None:
+        """Reload applied event IDs and ledgers from durable storage."""
+        try:
+            from backend.db import get_session
+            from backend.models import LearningState
+            session = get_session()
+            try:
+                rows = session.query(LearningState).all()
+                for row in rows:
+                    if row.key == 'applied_event_ids':
+                        self._applied_event_ids = set(json.loads(row.value))
+                    elif row.key == 'agent_ledger':
+                        self.agent_ledger._stats = json.loads(row.value)
+                    elif row.key == 'strategy_ledger':
+                        self.strategy_ledger._stats = json.loads(row.value)
+            finally:
+                session.close()
+            if self._applied_event_ids or self.agent_ledger.all() or self.strategy_ledger.all():
+                logger.info(
+                    "LearningCoordinator restored: %d applied events, %d agent ledgers, %d strategy ledgers",
+                    len(self._applied_event_ids), len(self.agent_ledger.all()), len(self.strategy_ledger.all()),
+                )
+        except Exception as e:
+            # No DB available (fresh/test env) — continue in memory only.
+            logger.debug(f"LearningCoordinator: no persisted state loaded: {e}")
+
+    def persist_state(self) -> None:
+        """Write applied event IDs and ledgers to durable storage."""
+        if not self._persist_enabled:
+            return
+        try:
+            from backend.db import get_session
+            from backend.models import LearningState
+            session = get_session()
+            try:
+                payload = {
+                    'applied_event_ids': sorted(self._applied_event_ids),
+                    'agent_ledger': self.agent_ledger._stats,
+                    'strategy_ledger': self.strategy_ledger._stats,
+                }
+                for key, value in payload.items():
+                    row = session.query(LearningState).filter(
+                        LearningState.key == key).first()
+                    if row is None:
+                        row = LearningState(id=f"state_{key}", key=key, value="{}")
+                        session.add(row)
+                    row.value = json.dumps(value)
+                session.commit()
+            finally:
+                session.close()
+        except Exception as e:
+            logger.error(f"LearningCoordinator failed to persist state: {e}")
+            try:
+                session.rollback()
+            except Exception:
+                pass
 
     def register_consumer(self, consumer) -> None:
         """consumer signature: (learning_event) -> None"""
@@ -134,6 +196,9 @@ class LearningCoordinator:
                 summary['events_applied'] += 1
             except Exception as e:
                 logger.error(f"LearningCoordinator failed on {event.event_id}: {e}")
+
+        # Persist state after applying events
+        self.persist_state()
 
         return summary
 
