@@ -253,6 +253,15 @@ class DecisionPipeline:
 
         try:
             price_data = self.market_data.get_stock_price(symbol)
+            if price_data is None:
+                logger.warning(f"No market data returned for {symbol} - failing closed")
+                ctx.final_action = TradingAction.ABSTAIN
+                ctx.add_provenance("market_snapshot_error", {
+                    "error": "market_data_returned_none",
+                    "symbol": symbol,
+                    "action": TradingAction.ABSTAIN.value,
+                })
+                return ctx
         except Exception as e:
             logger.error(f"Market data error for {symbol}: {e}")
             ctx.final_action = TradingAction.ABSTAIN
@@ -700,12 +709,25 @@ class DecisionPipeline:
         This runs after CEO governance but before preliminary risk, ensuring:
         1. Opposite signals close existing positions even if risk later blocks
         2. Same-side signals are rejected to prevent duplicate positions
+
+        Note: at this stage ctx.final_action has not yet been finalized (that
+        happens in _finalize_decision).  We derive the intended action from
+        ceo_decision / candidate_strategy / voting_result instead.
         """
+        # Derive the intended action (finalization hasn't run yet)
+        intended_action = ctx.final_action
+        if intended_action is None:
+            if ctx.ceo_decision:
+                intended_action = ctx.ceo_decision.action
+            elif ctx.candidate_strategy:
+                intended_action = ctx.candidate_strategy.action
+            elif ctx.voting_result:
+                intended_action = ctx.voting_result.winning_signal
+
         # Only handle position lifecycle for BUY/SELL actions
-        if ctx.final_action not in (TradingAction.BUY, TradingAction.SELL):
+        if intended_action not in (TradingAction.BUY, TradingAction.SELL):
             return ctx
 
-        return ctx
         from backend.models import PaperPosition
         session = get_session()
         try:
@@ -714,7 +736,7 @@ class DecisionPipeline:
                 return ctx
 
             existing_side = existing_pos.side
-            new_side = ctx.final_action.value if ctx.final_action else 'BUY'
+            new_side = intended_action.value if intended_action else 'BUY'
 
             if existing_side == new_side:
                 # Same-side signal: reject to prevent duplicate full-size positions
@@ -733,7 +755,7 @@ class DecisionPipeline:
             # Opposite-side signal: close existing position
             # This runs BEFORE risk governance so the position gets closed even if risk blocks
             existing_side = existing_pos.side
-            new_side = ctx.final_action.value if ctx.final_action else 'BUY'
+            new_side = intended_action.value if intended_action else 'BUY'
             if existing_side != new_side and existing_side in ['BUY', 'SELL'] and new_side in ['BUY', 'SELL']:
                 # Close the existing position
                 from backend.core.decision_pipeline import DecisionContext
@@ -812,6 +834,11 @@ class DecisionPipeline:
     
     def _finalize_decision(self, ctx: DecisionContext) -> DecisionContext:
         """Determine final action based on all inputs."""
+        # If position lifecycle already rejected the action (same-side repeat, etc.),
+        # do not override it in finalization.
+        if ctx.final_action == TradingAction.HOLD:
+            return ctx
+
         # Start with CEO decision as baseline
         if ctx.ceo_decision:
             ctx.final_action = ctx.ceo_decision.action

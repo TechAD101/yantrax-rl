@@ -8,8 +8,8 @@ class GhostLayer:
     Injects Divine Doubt and non-linear insights into the firm's consciousness.
     Named 'Akasha Node' or 'The 9th Chamber' in internal lore.
     """
-    
-    def __init__(self):
+
+    def __init__(self, consensus_threshold: float = 0.98):
         self.logger = logging.getLogger(__name__)
         self.name = "The Ghost"
         self.lore_name = "Akasha Node"
@@ -25,23 +25,24 @@ class GhostLayer:
             "The 9th Chamber hears the whispers before the roar."
         ]
         self.veto_history = []
+        self.consensus_threshold = consensus_threshold
 
-    def observe(self, decision_context: Dict[str, Any], consensus_score: float) -> Optional[Dict[str, Any]]:
+    def observe(self, decision_context: Dict[str, Any], consensus_score: float, avg_confidence: float = 0.5) -> Optional[Dict[str, Any]]:
         """Silently observes and occasionally nudges or vetoes decisions.
         Returns a nudge/insight dict if activated, else None.
         """
-        
-        # The Ghost only speaks when things are too certain or too uncertain
-        if consensus_score > 0.98:
-            # Consensus too high: Dangerous groupthink/euphoria
+        # High consensus + low confidence = uniform uncertainty (not euphoria)
+        # High consensus + high confidence = potential groupthink
+        if consensus_score > self.consensus_threshold and avg_confidence > 0.7:
+            # Consensus too high AND high confidence: Dangerous groupthink/euphoria
             return self._inject_influence("Consensus/Euphoria is too perfect. The Akasha Node senses a trap in the crowd's certainty.", "DIVINE_DOUBT")
-        
+
         if consensus_score < 0.35:
             # Extreme division: Chaos
             veto = self._inject_influence("The firm is fractured beyond reason. Veto active: Transitioning to defensive soul-searching.", "VETO")
             self.veto_history.append({'timestamp': datetime.now().isoformat(), 'reason': veto['whisper']})
             return veto
-            
+
         # Volatility Stress Check
         volatility = decision_context.get('market_volatility', 0)
         if volatility > 0.65:
@@ -51,7 +52,7 @@ class GhostLayer:
         if random.random() < 0.03:
             insight = random.choice(self.foundation_principles)
             return self._inject_influence(f"Quantum Whisper: {insight}", "WISDOM_DROP")
-            
+
         return None
 
     def _inject_influence(self, message: str, level: str) -> Dict[str, Any]:
