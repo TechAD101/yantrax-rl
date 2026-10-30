@@ -36,9 +36,10 @@ jobs:
             echo "ERROR: VERCEL_TOKEN is not set. Add the secret 'VERCEL_TOKEN' to the repository settings to enable deployments to Vercel." >&2
             exit 1
           fi
-          # Basic structural check: Vercel tokens are non-empty, no whitespace, no shell metacharacters.
-          if echo "$VERCEL_TOKEN" | grep -qE '[[:space:]]|[\$\`"\'\\]'; then
-            echo "ERROR: VERCEL_TOKEN contains whitespace or shell metacharacters. Check the secret value for accidental formatting." >&2
+          # Basic structural check: Vercel tokens are non-empty and contain no
+          # whitespace (tokens with whitespace indicate broken secret formatting).
+          if printf '%s' "$VERCEL_TOKEN" | grep -qE '[[:space:]]'; then
+            echo "ERROR: VERCEL_TOKEN contains whitespace. Check the secret value for accidental formatting." >&2
             exit 1
           fi
           echo "VERCEL_TOKEN is present and has a valid format."
