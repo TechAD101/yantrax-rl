@@ -440,14 +440,22 @@ class AgentManager:
         return get_learning_coordinator().get_agent_stats()
     
     def get_agent_status(self) -> Dict[str, Any]:
-        """Get comprehensive agent status"""
-        
+        """Get comprehensive agent status.
+
+        Configured confidence/performance values are initialization defaults,
+        NOT measured outcomes. Measured stats (from realized P&L via the
+        learning coordinator) are reported separately under ``measured`` so
+        callers cannot confuse configured labels with observed performance.
+        """
+        # Measured performance ledger (real outcomes only, never config defaults).
+        measured_stats = self.get_measured_stats()
+
         department_breakdown = {}
-        
+
         for dept in ['market_intelligence', 'trade_operations', 'risk_control', 'performance_lab', 'communications']:
-            dept_agents = [(name, data) for name, data in self.enhanced_agents.items() 
+            dept_agents = [(name, data) for name, data in self.enhanced_agents.items()
                           if data.get('department') == dept]
-            
+
             if dept_agents:
                 department_breakdown[dept] = {
                     'agent_count': len(dept_agents),
@@ -457,10 +465,22 @@ class AgentManager:
                         'performance': data['performance'],
                         'role': data['role'],
                         'specialty': data['specialty'],
-                        'persona': data.get('persona', False)
+                        'persona': data.get('persona', False),
+                        # Honest labeling: configured defaults are not measured.
+                        'measured': False,
+                        'measured_confidence': measured_stats.get('agents', {}).get(name, {}).get('confidence'),
+                        'measured_performance': measured_stats.get('agents', {}).get(name, {}).get('performance'),
                     } for name, data in dept_agents],
                     'avg_confidence': round(np.mean([data['confidence'] for _, data in dept_agents]), 3),
-                    'avg_performance': round(np.mean([data['performance'] for _, data in dept_agents]), 2)
+                    'avg_performance': round(np.mean([data['performance'] for _, data in dept_agents]), 2),
+                    'avg_measured_confidence': round(np.mean([
+                        measured_stats.get('agents', {}).get(name, {}).get('confidence') or 0
+                        for name, _ in dept_agents
+                    ]), 3),
+                    'avg_measured_performance': round(np.mean([
+                        measured_stats.get('agents', {}).get(name, {}).get('performance') or 0
+                        for name, _ in dept_agents
+                    ]), 2),
                 }
         
         # Build a flattened list of all agents (compatibility for older callers)
@@ -502,7 +522,10 @@ class AgentManager:
                 'recent_voting_sessions': len(self.voting_sessions),
                 'personas_active': len([a for a in self.enhanced_agents.values() if a.get('persona', False)]),
                 # Compatibility: include a list value so legacy callers can count enhanced agents
-                'all_agents': all_agents_list
+                'all_agents': all_agents_list,
+                # Honest labeling: configured values are defaults, not measured outcomes.
+                # measured_stats is the real performance ledger (realized P&L only).
+                'measured': measured_stats,
             }
 
             # Also include a short sample of the first agent in each department for diagnostics
