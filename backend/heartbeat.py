@@ -104,20 +104,44 @@ def check_database() -> tuple[str, dict]:
 
 
 def check_market_data() -> tuple[str, dict]:
-    """Check whether any market-data provider is configured."""
+    """Check whether market-data provider is configured and test data reachability.
+
+    Per Gate 6: A configured API key is not proof of data availability.
+    This probe tests actual market quote reachability without executing a trade.
+    """
     ts = datetime.now(timezone.utc).isoformat()
     _heartbeat_state['last_market_check'] = ts
     try:
         from backend.config import Config
         has_api = bool(Config.MARKET_DATA_API_KEY)
-        return 'HEALTHY' if has_api else 'DEGRADED', {
-            'configured': has_api,
-            'note': 'Market data provider not configured — decisions will ABSTAIN'
-            if not has_api else 'Market data provider configured',
+        if not has_api:
+            return 'DEGRADED', {
+                'configured': False,
+                'data_reachable': False,
+                'note': 'Market data provider not configured — decisions will ABSTAIN',
+            }
+
+        # Verify actual data availability via canonical provider test probe
+        from backend.services.canonical_market_provider import get_canonical_market_provider
+        provider = get_canonical_market_provider()
+        price_info = provider.get_stock_price('AAPL')
+        price_ok = bool(price_info and price_info.get('price', 0) > 0)
+
+        return ('HEALTHY' if price_ok else 'DEGRADED'), {
+            'configured': True,
+            'data_reachable': price_ok,
+            'source': price_info.get('source', 'alpaca'),
+            'note': 'Market data provider configured and verified reachable' if price_ok else 'Market data configured but quote fetch failed',
         }
     except Exception as exc:
+        logger.warning('Heartbeat market data check probe failed: %s', exc)
         _heartbeat_state['last_market_status'] = str(exc)
-        return 'DEPENDENCY_FAILURE', {'error': str(exc)}
+        return 'DEGRADED', {
+            'configured': True,
+            'data_reachable': False,
+            'error': str(exc),
+            'note': 'Market data configured but unreachable — pipeline will fail closed',
+        }
 
 
 def check_pipeline() -> tuple[str, dict]:
