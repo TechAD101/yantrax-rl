@@ -822,6 +822,20 @@ class DecisionPipeline:
                     "new_signal": new_side,
                     "outcome_id": ctx.outcome_id,
                 })
+            elif existing_side == new_side and existing_side in ['BUY', 'SELL']:
+                # Same-side signal: reject to prevent duplicate positions.
+                # A repeated BUY when a BUY is already open (or SELL when SELL is
+                # open) must not create a second order/position. Setting
+                # final_action=HOLD here is preserved through _finalize_decision's
+                # early-return guard, so execution and outcome stages skip cleanly.
+                ctx.final_action = TradingAction.HOLD
+                ctx.add_provenance("position_lifecycle", {
+                    "action": "rejected_same_side",
+                    "existing_position_id": existing_pos.id,
+                    "existing_side": existing_side,
+                    "new_signal": new_side,
+                    "reason": "duplicate_position_prevented",
+                })
 
         finally:
             session.close()

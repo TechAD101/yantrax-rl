@@ -8,7 +8,7 @@ import json
 import os
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
 os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
@@ -24,8 +24,12 @@ class GodCycleTest(unittest.TestCase):
 
     def test_no_real_data_fails_closed_no_random_signal(self):
         """Provider failure -> pipeline fails closed to explicit ABSTAIN, never a random BUY/SELL."""
-        with patch('backend.services.market_data_service.get_market_data',
-                   side_effect=ValueError('No usable price for AAPL')):
+        # Patch the canonical market provider directly
+        with patch('backend.services.canonical_market_provider.get_canonical_market_provider') as mock_get:
+            mock_provider = MagicMock()
+            mock_provider.get_stock_price.side_effect = ValueError('No usable price for AAPL')
+            mock_get.return_value = mock_provider
+            
             client = app.test_client()
             resp = client.get('/god-cycle?symbol=AAPL')
             self.assertEqual(resp.status_code, 200)
@@ -42,6 +46,24 @@ class GodCycleTest(unittest.TestCase):
         self.assertIn('DecisionPipeline', source)
         self.assertIn('run_canonical_decision_sync', source)
         self.assertNotIn('random.random', source)
+    
+    def test_real_market_data_works(self):
+        """Verify the pipeline works with real market data via canonical provider."""
+        client = app.test_client()
+        resp = client.get('/god-cycle?symbol=AAPL')
+        data = resp.get_json()
+        
+        # Should succeed with real data
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(data['status'], 'success')
+        # Signal can be HOLD or ABSTAIN for neutral symbols
+        self.assertIn(data['signal'], ['HOLD', 'ABSTAIN'])
+        self.assertIsNotNone(data['market_data'])
+        
+        # Market data should be from yfinance
+        self.assertEqual(data['market_data']['verified'], True)
+        self.assertIn(data['market_data']['source'], ['yfinance', 'alpaca'])
+        self.assertGreater(data['market_data']['price'], 0)
 
 
 if __name__ == '__main__':

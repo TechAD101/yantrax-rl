@@ -70,3 +70,6 @@ node_modules/
 
 # Local environment files (do NOT commit secrets)
 .env
+
+# ChromaDB vector database (runtime data, do NOT commit)
+chroma_db/

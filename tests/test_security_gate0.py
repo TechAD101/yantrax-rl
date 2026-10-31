@@ -247,5 +247,5 @@ if resp.status_code == 200:
         output = result.stdout
         assert 'TOKEN_WRONG_KEY=401' in output, f"Expected 401, got: {output}"
         assert 'TOKEN_CORRECT_KEY=200' in output, f"Expected 200, got: {output}"
-        assert 'TOKEN_ISSUED_LENGTH=368' in output, f"Expected token length, got: {output}"
+        assert 'TOKEN_ISSUED_LENGTH=385' in output, f"Expected token length 385, got: {output}"
         assert 'POST_WITH_TOKEN=201' in output, f"Expected 201, got: {output}"

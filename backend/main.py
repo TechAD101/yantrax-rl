@@ -299,8 +299,11 @@ def create_token():
         return jsonify({'error': 'Invalid credentials'}), 401
 
     # Create JWT token directly
+    # Convert dict identity to JSON string for Flask-JWT-Extended v4.x compatibility
+    import json
     from flask_jwt_extended import create_access_token
-    token = create_access_token(identity={'user': 'api_user', 'role': 'trader'})
+    identity = json.dumps({'user': 'api_user', 'role': 'trader'})
+    token = create_access_token(identity=identity)
     return jsonify({'token': token, 'token_type': 'Bearer'}), 200
 
 # Register Institutional Blueprints
@@ -1593,8 +1596,9 @@ def institutional_strategy():
 
 @app.route('/api/strategy/ai-debate/trigger', methods=['POST'])
 @require_jwt_if_enabled
-async def trigger_ai_debate():
+def trigger_ai_debate():
     """Trigger a persona debate for a given symbol/ticker"""
+    import asyncio
     data = request.get_json() or {}
     symbol = data.get('symbol') or data.get('ticker')
     context = data.get('context', {})
@@ -1602,7 +1606,7 @@ async def trigger_ai_debate():
         return jsonify({'error': 'symbol is required'}), 400
     if 'DEBATE_ENGINE' in globals() and DEBATE_ENGINE:
         try:
-            result = await DEBATE_ENGINE.conduct_debate(symbol.upper(), context)
+            result = asyncio.run(DEBATE_ENGINE.conduct_debate(symbol.upper(), context))
             return jsonify(result), 200
         except Exception as e:
             logger.error(f"Error running debate: {e}")

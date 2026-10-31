@@ -108,39 +108,51 @@ def check_market_data() -> tuple[str, dict]:
 
     Per Gate 6: A configured API key is not proof of data availability.
     This probe tests actual market quote reachability without executing a trade.
+    Uses the canonical provider which may use yfinance (no keys required for basic data).
     """
     ts = datetime.now(timezone.utc).isoformat()
     _heartbeat_state['last_market_check'] = ts
     try:
         from backend.config import Config
         has_api = bool(Config.MARKET_DATA_API_KEY)
-        if not has_api:
-            return 'DEGRADED', {
-                'configured': False,
-                'data_reachable': False,
-                'note': 'Market data provider not configured — decisions will ABSTAIN',
+        
+        # Try canonical provider first - it may work with yfinance even without API keys
+        try:
+            from backend.services.canonical_market_provider import get_canonical_market_provider
+            provider = get_canonical_market_provider()
+            price_info = provider.get_stock_price('AAPL')
+            price_ok = bool(price_info and price_info.get('price', 0) > 0)
+            
+            return ('HEALTHY' if price_ok else 'DEGRADED'), {
+                'configured': has_api or True,  # yfinance doesn't need API key
+                'data_reachable': price_ok,
+                'source': price_info.get('source', 'unknown'),
+                'note': 'Market data provider verified reachable via canonical provider' if price_ok else 'Market data configured but quote fetch failed',
             }
-
-        # Verify actual data availability via canonical provider test probe
-        from backend.services.canonical_market_provider import get_canonical_market_provider
-        provider = get_canonical_market_provider()
-        price_info = provider.get_stock_price('AAPL')
-        price_ok = bool(price_info and price_info.get('price', 0) > 0)
-
-        return ('HEALTHY' if price_ok else 'DEGRADED'), {
-            'configured': True,
-            'data_reachable': price_ok,
-            'source': price_info.get('source', 'alpaca'),
-            'note': 'Market data provider configured and verified reachable' if price_ok else 'Market data configured but quote fetch failed',
-        }
+        except Exception as provider_exc:
+            logger.warning('Canonical provider probe failed: %s', provider_exc)
+            # If no API key and provider failed, system is degraded
+            if not has_api:
+                return 'DEGRADED', {
+                    'configured': False,
+                    'data_reachable': False,
+                    'note': 'Market data provider not configured — decisions will ABSTAIN',
+                }
+            # Have API key but provider failed
+            return 'DEGRADED', {
+                'configured': True,
+                'data_reachable': False,
+                'error': str(provider_exc),
+                'note': 'Market data configured but unreachable — pipeline will fail closed',
+            }
     except Exception as exc:
         logger.warning('Heartbeat market data check probe failed: %s', exc)
         _heartbeat_state['last_market_status'] = str(exc)
         return 'DEGRADED', {
-            'configured': True,
+            'configured': False,
             'data_reachable': False,
             'error': str(exc),
-            'note': 'Market data configured but unreachable — pipeline will fail closed',
+            'note': 'Market data check failed',
         }
 
 
