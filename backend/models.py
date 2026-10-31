@@ -420,6 +420,7 @@ class Outcome(Base):
     commission = Column(Float, nullable=True, default=0.0)
     slippage = Column(Float, nullable=True, default=0.0)
     spread_cost = Column(Float, nullable=True, default=0.0)
+    exit_reason = Column(String(64), nullable=True)  # stop_loss, take_profit, opposite_signal, manual
     pnl = Column(Float, nullable=False)  # Realized P&L
     timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)  # close timestamp
 
@@ -451,6 +452,7 @@ class Outcome(Base):
             'commission': self.commission,
             'slippage': self.slippage,
             'spread_cost': self.spread_cost,
+            'exit_reason': self.exit_reason,
             'pnl': self.pnl,
             'timestamp': self.timestamp.isoformat() if self.timestamp else None,
         }

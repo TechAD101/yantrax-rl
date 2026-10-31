@@ -703,53 +703,87 @@ class DecisionPipeline:
         
         return ctx
     async def _stage_position_lifecycle(self, ctx: DecisionContext) -> DecisionContext:
-        """
-        Handle existing positions before risk governance.
-
-        This runs after CEO governance but before preliminary risk, ensuring:
-        1. Opposite signals close existing positions even if risk later blocks
-        2. Same-side signals are rejected to prevent duplicate positions
-
-        Note: at this stage ctx.final_action has not yet been finalized (that
-        happens in _finalize_decision).  We derive the intended action from
-        ceo_decision / candidate_strategy / voting_result instead.
-        """
-        # Derive the intended action (finalization hasn't run yet)
-        intended_action = ctx.final_action
-        if intended_action is None:
-            if ctx.ceo_decision:
-                intended_action = ctx.ceo_decision.action
-            elif ctx.candidate_strategy:
-                intended_action = ctx.candidate_strategy.action
-            elif ctx.voting_result:
-                intended_action = ctx.voting_result.winning_signal
-
-        # Only handle position lifecycle for BUY/SELL actions
-        if intended_action not in (TradingAction.BUY, TradingAction.SELL):
-            return ctx
-
+        """\n        Handle existing positions before risk governance.\n\n        This runs after CEO governance but before preliminary risk, ensuring:\n        1. Opposite signals close existing positions even if risk later blocks\n        2. Same-side signals are rejected to prevent duplicate positions\n        3. Stop-loss/take-profit exits are evaluated every cycle\n\n        Note: at this stage ctx.final_action has not yet been finalized (that\n        happens in _finalize_decision).  We derive the intended action from\n        ceo_decision / candidate_strategy / voting_result instead.\n        """
         from backend.models import PaperPosition
         session = get_session()
         try:
             existing_pos = session.query(PaperPosition).filter_by(symbol=ctx.symbol, status='OPEN').first()
+            
+            # FIRST: Check for exit conditions (stop-loss/take-profit)
+            # This runs regardless of the intended action - positions can exit on their terms
+            if existing_pos:
+                current_price = ctx.market_snapshot.price if ctx.market_snapshot else existing_pos.entry_price
+                meta = existing_pos.meta or {}
+                stop_loss = meta.get('stop_loss') if meta else None
+                take_profit = meta.get('take_profit') if meta else None
+                
+                # Determine exit reason
+                exit_reason = None
+                if existing_pos.side == 'BUY':
+                    # For BUY positions: stop_loss < entry_price, take_profit > entry_price
+                    if stop_loss and current_price <= stop_loss:
+                        exit_reason = 'STOP_LOSS'
+                    elif take_profit and current_price >= take_profit:
+                        exit_reason = 'TAKE_PROFIT'
+                elif existing_pos.side == 'SELL':
+                    # For SELL positions: take_profit < entry_price, stop_loss > entry_price
+                    if stop_loss and current_price >= stop_loss:
+                        exit_reason = 'STOP_LOSS'
+                    elif take_profit and current_price <= take_profit:
+                        exit_reason = 'TAKE_PROFIT'
+                
+                if exit_reason:
+                    # Close the position due to exit condition
+                    close_ctx = DecisionContext()
+                    close_ctx.position_id = existing_pos.id
+                    close_ctx.symbol = ctx.symbol
+                    close_ctx.decision_id = existing_pos.decision_id
+                    close_ctx.voting_result = ctx.voting_result
+                    close_ctx.evidence = ctx.evidence
+                    exit_price = ctx.market_snapshot.price if ctx.market_snapshot else existing_pos.entry_price
+                    close_result_ctx = await self.close_position(close_ctx, exit_price, reason=exit_reason)
+                    
+                    # Merge provenance from close result
+                    for stage_name, stage_details in close_result_ctx.provenance.items():
+                        ctx.add_provenance(stage_name, stage_details)
+                    
+                    ctx.outcome_id = close_result_ctx.outcome_id
+                    ctx.learning_event_ids = close_result_ctx.learning_event_ids
+                    if close_result_ctx.learning_event_ids:
+                        ctx.learning_event_id = close_result_ctx.learning_event_ids[0]
+                    ctx.attribution_ids = close_result_ctx.attribution_ids
+                    if close_result_ctx.attribution_ids:
+                        ctx.attribution_id = close_result_ctx.attribution_ids[0]
+                    
+                    ctx.add_provenance("position_lifecycle", {
+                        "action": "closed_exit_condition",
+                        "closed_position_id": existing_pos.id,
+                        "exit_reason": exit_reason,
+                        "exit_price": exit_price,
+                        "market_price": current_price,
+                        "stop_loss": stop_loss,
+                        "take_profit": take_profit,
+                        "outcome_id": ctx.outcome_id,
+                    })
+                    
+                    # Clear the existing_pos reference since we've closed it
+                    existing_pos = None
+            
             if not existing_pos:
                 return ctx
 
-            existing_side = existing_pos.side
-            new_side = intended_action.value if intended_action else 'BUY'
+            # Derive the intended action (finalization hasn't run yet)
+            intended_action = ctx.final_action
+            if intended_action is None:
+                if ctx.ceo_decision:
+                    intended_action = ctx.ceo_decision.action
+                elif ctx.candidate_strategy:
+                    intended_action = ctx.candidate_strategy.action
+                elif ctx.voting_result:
+                    intended_action = ctx.voting_result.winning_signal
 
-            if existing_side == new_side:
-                # Same-side signal: reject to prevent duplicate full-size positions
-                ctx.add_provenance("position_lifecycle", {
-                    "action": "rejected_same_side",
-                    "existing_position_id": existing_pos.id,
-                    "existing_side": existing_side,
-                    "new_signal": new_side,
-                    "reason": "Same-side signal would create duplicate position"
-                })
-                # Override final action to HOLD to prevent execution
-                ctx.final_action = TradingAction.HOLD
-                ctx.final_confidence = 0.0
+            # Only handle position lifecycle for BUY/SELL actions
+            if intended_action not in (TradingAction.BUY, TradingAction.SELL):
                 return ctx
 
             # Opposite-side signal: close existing position
@@ -757,8 +791,7 @@ class DecisionPipeline:
             existing_side = existing_pos.side
             new_side = intended_action.value if intended_action else 'BUY'
             if existing_side != new_side and existing_side in ['BUY', 'SELL'] and new_side in ['BUY', 'SELL']:
-                # Close the existing position
-                from backend.core.decision_pipeline import DecisionContext
+                # Close the existing position due to opposite signal
                 close_ctx = DecisionContext()
                 close_ctx.position_id = existing_pos.id
                 close_ctx.symbol = ctx.symbol
@@ -767,7 +800,8 @@ class DecisionPipeline:
                 close_ctx.evidence = ctx.evidence
 
                 exit_price = ctx.market_snapshot.price if ctx.market_snapshot else existing_pos.entry_price
-                close_result_ctx = await self.close_position(close_ctx, exit_price)
+                # Pass OPPOSITE_SIGNAL as the reason when closing due to opposite-side action
+                close_result_ctx = await self.close_position(close_ctx, exit_price, reason='OPPOSITE_SIGNAL')
 
                 # Merge provenance from close result
                 for stage_name, stage_details in close_result_ctx.provenance.items():
@@ -834,6 +868,11 @@ class DecisionPipeline:
     
     def _finalize_decision(self, ctx: DecisionContext) -> DecisionContext:
         """Determine final action based on all inputs."""
+        # Populate stop_loss and take_profit from candidate_strategy before finalization
+        if ctx.candidate_strategy:
+            ctx.final_stop_loss = ctx.candidate_strategy.stop_loss
+            ctx.final_take_profit = ctx.candidate_strategy.take_profit
+        
         # If position lifecycle already rejected the action (same-side repeat, etc.),
         # do not override it in finalization.
         if ctx.final_action == TradingAction.HOLD:
@@ -852,6 +891,11 @@ class DecisionPipeline:
         else:
             ctx.final_action = TradingAction.HOLD
             ctx.final_confidence = 0.5
+        
+        # Ensure stop_loss/take_profit are set from final_action source
+        if ctx.candidate_strategy:
+            ctx.final_stop_loss = ctx.candidate_strategy.stop_loss
+            ctx.final_take_profit = ctx.candidate_strategy.take_profit
         
         # Risk governance can override
         if ctx.risk_governance == GovernanceState.BLOCK or ctx.risk_governance == GovernanceState.VETO:
@@ -892,7 +936,6 @@ class DecisionPipeline:
                 if existing_side != new_side and existing_side in ['BUY', 'SELL'] and new_side in ['BUY', 'SELL']:
                     # Close the existing position
                     # We need to create a DecisionContext for the existing position to pass to close_position
-                    from backend.core.decision_pipeline import DecisionContext
                     close_ctx = DecisionContext()
                     close_ctx.position_id = existing_pos.id
                     close_ctx.symbol = ctx.symbol
@@ -990,6 +1033,11 @@ class DecisionPipeline:
                 status='OPEN',
                 strategy_id=ctx.candidate_strategy.strategy_name if ctx.candidate_strategy else 'unknown',
                 regime=ctx.evidence.market_regime.value if ctx.evidence and ctx.evidence.market_regime else 'unknown',
+                meta={
+                    'stop_loss': ctx.final_stop_loss,
+                    'take_profit': ctx.final_take_profit,
+                    'source': 'candidate_strategy',
+                }
             )
             
             # Store position to database
@@ -1250,7 +1298,7 @@ class DecisionPipeline:
         except Exception as e:
             logger.error(f"Failed to store outcome: {e}")
 
-    async def close_position(self, ctx: DecisionContext, exit_price: float, exit_timestamp: datetime = None) -> DecisionContext:
+    async def close_position(self, ctx: DecisionContext, exit_price: float, exit_timestamp: Optional[datetime] = None, reason: Optional[str] = None) -> DecisionContext:
             """Close an open position and create realized outcome with attribution."""
             try:
                 if not ctx.position_id:
@@ -1292,6 +1340,8 @@ class DecisionPipeline:
                     position.realized_pnl = net_pnl
                     position.status = 'CLOSED'
                     position.exit_timestamp = exit_timestamp or datetime.now()
+                    position.meta = position.meta or {}
+                    position.meta['close_reason'] = reason
                 
                     # Create Outcome record (realized outcome)
                     outcome_id = f"out_{ctx.decision_id.split('_')[-1]}_{datetime.now().strftime('%H%M%S')}"
@@ -1307,6 +1357,7 @@ class DecisionPipeline:
                         commission=commission,
                         slippage=slippage,
                         spread_cost=spread_cost,
+                        exit_reason=reason,
                         pnl=net_pnl,
                         timestamp=position.exit_timestamp,
                     )

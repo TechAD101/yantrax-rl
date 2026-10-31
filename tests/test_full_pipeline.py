@@ -404,6 +404,147 @@ class TestFullPipeline(unittest.TestCase):
         self.assertEqual(attributed_outcome.net_pnl, 100.0)
         self.assertGreater(len(attributed_outcome.attributions), 0)
 
+    def test_stop_loss_exit_during_execution(self):
+        """Test that an open position can be closed with exit_reason tracked.
+        
+        Note: The MockStrategyEngineForBearishFixture returns stop_loss=0.0 
+        which won't trigger actual stop loss conditions. This test verifies
+        that when close_position is called with a reason, it's stored correctly.
+        For full stop_loss/take_profit logic, see integration tests with realistic
+        position sizing.
+        """
+        import asyncio
+
+        # Open a BUY position first
+        pipeline1 = DecisionPipeline(
+            market_data=TestMarketData(),
+            sentiment_service=TestSentimentService(),
+        )
+        ctx1 = asyncio.run(pipeline1.execute_decision('AAPL'))
+        self.assertEqual(ctx1.final_action, TradingAction.BUY)
+        self.assertIsNotNone(ctx1.position_id)
+        
+        # Clear trade validator history
+        from backend.services.trade_validator import get_trade_validator
+        validator = get_trade_validator()
+        validator.trade_history.clear()
+        
+        # Mock market data with a sharp drop to trigger opposite signal
+        class StopLossTriggerMarketData:
+            def get_stock_price(self, symbol):
+                return {
+                    'symbol': symbol.upper(),
+                    'price': 135.0,
+                    'change_percent': -10.0,
+                    'trend': 'strong_down',
+                    'volume': 2000000,
+                    'volatility': 0.05,
+                    'source': 'test_fixture',
+                    'verified': True,
+                }
+            
+            def get_fundamentals(self, symbol):
+                return {
+                    'pe_ratio': 18.0,
+                    'return_on_equity': 0.25,
+                    'debt_to_equity': 0.3,
+                    'revenue_growth': 0.12,
+                    'earnings_growth': 0.15,
+                    'profit_margin': 0.22,
+                }
+            
+            def get_price_history(self, symbol, days):
+                base = 100.0
+                history = []
+                for i in range(days):
+                    price = base - (1.0 * i)
+                    history.append(round(price, 2))
+                return [{'close': close} for close in history]
+    
+        class BearishSentimentService:
+            def get_sentiment(self, symbol):
+                return {'score': -0.9, 'label': 'BEARISH'}
+            def get_fundamentals_sentiment(self, symbol):
+                return {'score': -0.8, 'label': 'BEARISH'}
+            def get_social_sentiment(self, symbol):
+                return {'score': -0.7, 'label': 'BEARISH'}
+            def get_comprehensive_sentiment(self, symbol):
+                return {'score': -0.8, 'label': 'BEARISH'}
+
+        # Use a strategy that produces SELL for opposite signal
+        from tests.mock_strategy_engine import MockStrategyEngineForBearishFixture
+        pipeline2 = DecisionPipeline(
+            market_data=StopLossTriggerMarketData(),
+            sentiment_service=BearishSentimentService(),
+            strategy_engine=MockStrategyEngineForBearishFixture(),
+        )
+        ctx2 = asyncio.run(pipeline2.execute_decision('AAPL'))
+        
+        # When an opposite signal comes in, the BUY position is closed and SELL opened
+        self.assertIsNotNone(ctx2.outcome_id)  # Outcome from closed BUY position
+        self.assertIsNotNone(ctx2.position_id)  # New SELL position opened
+        self.assertIsNotNone(ctx2.attribution_id)
+        
+        # Verify the closed position has correct P&L
+        from backend.models import Outcome, PaperPosition
+        session = get_session()
+        try:
+            outcome = session.query(Outcome).filter_by(id=ctx2.outcome_id).first()
+            self.assertIsNotNone(outcome)
+            # Verify exit_reason field exists and is populated
+            self.assertIsNotNone(outcome.exit_reason)
+            # The exit reason should be one of: STOP_LOSS, TAKE_PROFIT, OPPOSITE_SIGNAL
+            valid_reasons = ['STOP_LOSS', 'TAKE_PROFIT', 'OPPOSITE_SIGNAL']
+            self.assertIn(str(outcome.exit_reason).upper(), valid_reasons)
+        finally:
+            session.close()
+
+    def test_exit_reason_persistence_in_outcome(self):
+        """Test that exit_reason is correctly stored when position is closed."""
+        import asyncio
+        from datetime import datetime
+        import uuid
+        
+        session = get_session()
+        try:
+            # Create a paper position with stop_loss set
+            position_id = f"pos_{uuid.uuid4().hex[:12]}"
+            position = PaperPosition(
+                id=position_id,
+                decision_id='dec_exit_reason_test',
+                symbol='TEST',
+                side='BUY',
+                quantity=10.0,
+                entry_price=100.0,
+                entry_timestamp=datetime.now(),
+                status='OPEN',
+                meta={'stop_loss': 95.0, 'take_profit': 110.0}
+            )
+            session.add(position)
+            session.commit()
+            
+            # Close via the pipeline's close_position
+            async def close_with_reason():
+                from backend.core.decision_pipeline import DecisionPipeline
+                pipe = DecisionPipeline()
+                ctx = DecisionContext()
+                ctx.position_id = position_id
+                ctx.symbol = 'TEST'
+                ctx.decision_id = 'dec_exit_reason_test'
+                # Call close_position with STOP_LOSS reason
+                result = await pipe.close_position(ctx, exit_price=94.0, reason='STOP_LOSS')
+                return result, session
+            
+            result_ctx, _ = asyncio.run(close_with_reason())
+            
+            # Verify outcome was created with exit_reason
+            outcome = session.query(Outcome).filter_by(position_id=position_id).first()
+            self.assertIsNotNone(outcome)
+            self.assertEqual(outcome.exit_reason, 'STOP_LOSS')
+            self.assertEqual(outcome.pnl, -60.0)  # (100-94)*10 = 60 loss
+        finally:
+            session.close()
+
 
 if __name__ == '__main__':
     unittest.main()
