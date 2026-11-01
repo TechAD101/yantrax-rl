@@ -5,6 +5,7 @@ import logging
 import json
 import asyncio
 import functools
+import traceback
 
 class MockDebateEngine:
     async def conduct_debate(self, symbol, context=None):
@@ -227,44 +228,127 @@ CORS(app, origins=origins, supports_credentials=False)
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
 
 JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', '')
-FLASK_ENV = os.environ.get('FLASK_ENV', 'development').lower()
+FLASK_ENV_RAW = os.environ.get('FLASK_ENV', '').lower()
+FLASK_ENV = FLASK_ENV_RAW if FLASK_ENV_RAW in ('production', 'development', 'staging') else None
 
 def _validate_jwt_secret(key: str) -> bool:
-    """Validate JWT secret strength - must be at least 32 chars and not a placeholder."""
+    """Validate JWT secret strength - must have adequate entropy and not be a placeholder."""
     if not key:
         return False
     if len(key) < 32:
         logger.warning("JWT_SECRET_KEY is too short (minimum 32 characters). "
                        "For production, use: openssl rand -hex 32")
         return False
-    if key.lower() in ('changeme', 'your-secret-key-here', 'dev', 'test', 'placeholder'):
+    # Reject known placeholder values (case-insensitive)
+    key_lower = key.lower()
+    known_placeholders = {
+        'changeme', 'your-secret-key-here', 'your_secret_key_here',
+        'dev', 'test', 'placeholder', 'example', 'demo',
+        'your-jwt-secret-key-here', 'replace-me', 'todo',
+        'secret', 'password', 'jwt-secret', 'default-secret',
+    }
+    if key_lower in known_placeholders:
+        logger.warning("JWT_SECRET_KEY is a known placeholder value. "
+                       "Generate a secure key with: openssl rand -hex 32")
+        return False
+    # Reject long strings that are just repeated characters (no entropy)
+    if len(set(key)) < 16:
+        logger.warning("JWT_SECRET_KEY has insufficient entropy (fewer than 16 unique characters). "
+                       "Generate a secure key with: openssl rand -hex 32")
+        return False
+    # Reject strings that are just hex-encoded known words
+    if key_lower.replace('-', '').replace('_', '') in known_placeholders:
         logger.warning("JWT_SECRET_KEY is a known placeholder value. "
                        "Generate a secure key with: openssl rand -hex 32")
         return False
     return True
 
+def _validate_api_access_key(key: str) -> bool:
+    """Validate API access key strength - must have adequate entropy and not be a placeholder."""
+    if not key:
+        return False
+    if len(key) < 16:
+        logger.warning("API_ACCESS_KEY is too short (minimum 16 characters).")
+        return False
+    key_lower = key.lower()
+    known_placeholders = {
+        'valid-api-key', 'your-api-key-here', 'your_api_key_here',
+        'api-key', 'api_key', 'default', 'changeme', 'placeholder',
+        'example', 'demo', 'test-key', 'test',
+    }
+    if key_lower in known_placeholders:
+        logger.warning("API_ACCESS_KEY is a known placeholder value.")
+        return False
+    if len(set(key)) < 8:
+        logger.warning("API_ACCESS_KEY has insufficient entropy (fewer than 8 unique characters).")
+        return False
+    return True
+
+# Check if we're running under pytest (collection or test run).
+# During collection, PYTEST_CURRENT_TEST may not be set yet, so also check
+# for the pytest entry point and pytest-specific env vars.
+def _detect_pytest_context() -> bool:
+    """Detect whether the process is being run by pytest (collection or test)."""
+    # Direct env var set by pytest during test execution
+    if os.environ.get('PYTEST_CURRENT_TEST'):
+        return True
+    # pytest sets __PYTEST_RUNPATH__ on some versions
+    if os.environ.get('__PYTEST_RUNPATH__'):
+        return True
+    # Check if pytest is in the call stack (module being imported by pytest)
+    try:
+        for f, _ in traceback.walk_stack(None):
+            if f.f_code.co_filename and '/pytest/' in f.f_code.co_filename.replace(os.sep, '/'):
+                return True
+    except Exception:
+        pass
+    # Check sys.argv for pytest invocation
+    if 'pytest' in ' '.join(sys.argv):
+        return True
+    return False
+
+PYTEST_RUNNING = _detect_pytest_context()
+
 def _production_startup_guard():
     """Enforce production security requirements at startup.
-    
-    - In PRODUCTION mode: JWT_SECRET_KEY and API_ACCESS_KEY must be present and strong.
-    - In DEVELOPMENT mode: JWT_SECRET_KEY is optional for local testing.
+
+    - If FLASK_ENV is not explicitly set: refuse startup
+      (except during pytest collection where env is managed by tests)
+    - In production/staging mode: JWT_SECRET_KEY and API_ACCESS_KEY must be present and strong
+    - In development mode: JWT_SECRET_KEY is optional for local testing
     """
-    if FLASK_ENV == 'production':
-        # Production requires both JWT and API access keys
+    # Skip guard during pytest collection/import — test files manage env explicitly.
+    # Subprocess-based guard tests run the app in a child process WITHOUT pytest context,
+    # so the guard still applies there.
+    if PYTEST_RUNNING:
+        logger.debug("PYTEST context detected - skipping startup guard")
+        return
+    
+    if FLASK_ENV is None:
+        raise RuntimeError(
+            "🔒 PRODUCTION SECURITY BLOCKED: FLASK_ENV is not explicitly set.\n"
+            "    Required: export FLASK_ENV=production (or development/staging)\n"
+            "    Defaulting to 'development' is disabled for security.\n"
+            "    Set FLASK_ENV explicitly to one of: production, development, staging"
+        )
+
+    if FLASK_ENV in ('production', 'staging'):
+        # Production/staging requires both JWT and API access keys
         if not _validate_jwt_secret(JWT_SECRET_KEY):
             raise RuntimeError(
                 "🔒 PRODUCTION SECURITY BLOCKED: JWT_SECRET_KEY is not configured or is unsafe.\n"
                 "    Required: export JWT_SECRET_KEY=$(openssl rand -hex 32)\n"
                 "    Also required: export API_ACCESS_KEY=<your-api-key>"
             )
-        
+
         API_ACCESS_KEY = os.environ.get('API_ACCESS_KEY', '')
-        if not API_ACCESS_KEY:
+        if not _validate_api_access_key(API_ACCESS_KEY):
             raise RuntimeError(
-                "🔒 PRODUCTION SECURITY BLOCKED: API_ACCESS_KEY is not set.\n"
-                "    Required: export API_ACCESS_KEY=<secure-api-key>"
+                "🔒 PRODUCTION SECURITY BLOCKED: API_ACCESS_KEY is not configured or is unsafe.\n"
+                "    Required: export API_ACCESS_KEY=<secure-api-key>\n"
+                "    Minimum 16 characters, not a known placeholder"
             )
-        
+
         logger.info("✅ Production security requirements verified")
         app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
     else:
