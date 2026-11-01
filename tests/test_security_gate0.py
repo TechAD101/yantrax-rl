@@ -9,6 +9,9 @@ import sys
 import subprocess
 import pytest
 
+# Use repo root derived from this file's location
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 class TestEnvFileTracking:
     """Verify sensitive env files are not tracked in git."""
@@ -56,6 +59,7 @@ class TestCorsConfiguration:
         """When CORS_ORIGINS is not set, no wildcard should be used."""
         env = os.environ.copy()
         env['CORS_ORIGINS'] = ''
+        env['FLASK_ENV'] = 'development'
         env['JWT_SECRET_KEY'] = ''
         
         result = subprocess.run(
@@ -63,6 +67,7 @@ class TestCorsConfiguration:
 import os, sys
 sys.path.insert(0, "backend")
 os.environ["CORS_ORIGINS"] = ""
+os.environ["FLASK_ENV"] = "development"
 os.environ["JWT_SECRET_KEY"] = ""
 from main import app
 client = app.test_client()
@@ -85,10 +90,9 @@ print(f"CORS_VALID={orig}")
 '''],
             capture_output=True,
             text=True,
-            cwd='/home/ubuntu/yantrax-rl',
+            cwd=_REPO_ROOT,
             env=env
         )
-        
         output = result.stdout + result.stderr
         # When CORS_ORIGINS is empty, no Access-Control-Allow-Origin should be sent
         assert 'CORS_EVIL=NOT_SET' in output, f"Expected NOT_SET, got: {output}"
@@ -98,6 +102,7 @@ print(f"CORS_VALID={orig}")
         """When CORS_ORIGINS is set, only allowed origins get header."""
         env = os.environ.copy()
         env['CORS_ORIGINS'] = 'https://yantrax-rl.vercel.app'
+        env['FLASK_ENV'] = 'development'
         env['JWT_SECRET_KEY'] = ''
         
         result = subprocess.run(
@@ -105,6 +110,7 @@ print(f"CORS_VALID={orig}")
 import os, sys
 sys.path.insert(0, "backend")
 os.environ["CORS_ORIGINS"] = "https://yantrax-rl.vercel.app"
+os.environ["FLASK_ENV"] = "development"
 os.environ["JWT_SECRET_KEY"] = ""
 from main import app
 client = app.test_client()
@@ -127,7 +133,7 @@ print(f"CORS_EVIL={orig}")
 '''],
             capture_output=True,
             text=True,
-            cwd='/home/ubuntu/yantrax-rl',
+            cwd=_REPO_ROOT,
             env=env
         )
         
@@ -163,7 +169,7 @@ print(f"POST_NO_JWT={resp.status_code}")
 '''],
             capture_output=True,
             text=True,
-            cwd='/home/ubuntu/yantrax-rl',
+            cwd=_REPO_ROOT,
             env=env
         )
         
@@ -201,7 +207,7 @@ print(f"GET_HEALTH={resp.status_code}")
 '''],
             capture_output=True,
             text=True,
-            cwd='/home/ubuntu/yantrax-rl',
+            cwd=_REPO_ROOT,
             env=env
         )
         
@@ -252,7 +258,7 @@ if resp.status_code == 200:
 '''],
             capture_output=True,
             text=True,
-            cwd='/home/ubuntu/yantrax-rl',
+            cwd=_REPO_ROOT,
             env=env
         )
         

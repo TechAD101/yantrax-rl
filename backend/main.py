@@ -284,52 +284,29 @@ def _validate_api_access_key(key: str) -> bool:
         return False
     return True
 
-# Check if we're running under pytest (collection or test run).
-# During collection, PYTEST_CURRENT_TEST may not be set yet, so also check
-# for the pytest entry point and pytest-specific env vars.
-def _detect_pytest_context() -> bool:
-    """Detect whether the process is being run by pytest (collection or test)."""
-    # Direct env var set by pytest during test execution
-    if os.environ.get('PYTEST_CURRENT_TEST'):
-        return True
-    # pytest sets __PYTEST_RUNPATH__ on some versions
-    if os.environ.get('__PYTEST_RUNPATH__'):
-        return True
-    # Check if pytest is in the call stack (module being imported by pytest)
-    try:
-        for f, _ in traceback.walk_stack(None):
-            if f.f_code.co_filename and '/pytest/' in f.f_code.co_filename.replace(os.sep, '/'):
-                return True
-    except Exception:
-        pass
-    # Check sys.argv for pytest invocation
-    if 'pytest' in ' '.join(sys.argv):
-        return True
-    return False
-
-PYTEST_RUNNING = _detect_pytest_context()
+# Production startup guard uses explicit configuration, not pytest detection.
+# Tests that need to bypass the guard must set SKIP_STARTUP_GUARD=1 in their environment.
+# This makes the bypass mechanism explicit and auditable.
 
 def _production_startup_guard():
     """Enforce production security requirements at startup.
-
-    - If FLASK_ENV is not explicitly set: refuse startup
-      (except during pytest collection where env is managed by tests)
+    
+    - FLASK_ENV must be explicitly set (production, development, or staging)
     - In production/staging mode: JWT_SECRET_KEY and API_ACCESS_KEY must be present and strong
     - In development mode: JWT_SECRET_KEY is optional for local testing
+    - Can be explicitly skipped with SKIP_STARTUP_GUARD=1 (for tests only)
     """
-    # Skip guard during pytest collection/import — test files manage env explicitly.
-    # Subprocess-based guard tests run the app in a child process WITHOUT pytest context,
-    # so the guard still applies there.
-    if PYTEST_RUNNING:
-        logger.debug("PYTEST context detected - skipping startup guard")
+    # Explicit skip flag (for tests that need direct app import without guard)
+    if os.environ.get('SKIP_STARTUP_GUARD') == '1':
+        logger.debug("SKIP_STARTUP_GUARD=1 set - skipping startup guard")
         return
     
     if FLASK_ENV is None:
         raise RuntimeError(
             "🔒 PRODUCTION SECURITY BLOCKED: FLASK_ENV is not explicitly set.\n"
             "    Required: export FLASK_ENV=production (or development/staging)\n"
-            "    Defaulting to 'development' is disabled for security.\n"
-            "    Set FLASK_ENV explicitly to one of: production, development, staging"
+            "    Setting FLASK_ENV=development explicitly is required for testing.\n"
+            "    Defaulting to 'development' is disabled for security."
         )
 
     if FLASK_ENV in ('production', 'staging'):
