@@ -221,19 +221,73 @@ else:
                    "Set CORS_ORIGINS to a comma-separated list of trusted origins (e.g., https://yantrax-rl.vercel.app,http://localhost:3000).")
 CORS(app, origins=origins, supports_credentials=False)
 
-# JWT Authentication (optional in dev, required in production)
+# ==================== PRODUCTION STARTUP GUARD ====================
+# JWT Authentication: Required for production, optional for development
 # Use JWT_SECRET_KEY from env; if missing, mutating endpoints remain unguarded with a warning.
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
-app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', '')
+
+JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', '')
+FLASK_ENV = os.environ.get('FLASK_ENV', 'development').lower()
+
+def _validate_jwt_secret(key: str) -> bool:
+    """Validate JWT secret strength - must be at least 32 chars and not a placeholder."""
+    if not key:
+        return False
+    if len(key) < 32:
+        logger.warning("JWT_SECRET_KEY is too short (minimum 32 characters). "
+                       "For production, use: openssl rand -hex 32")
+        return False
+    if key.lower() in ('changeme', 'your-secret-key-here', 'dev', 'test', 'placeholder'):
+        logger.warning("JWT_SECRET_KEY is a known placeholder value. "
+                       "Generate a secure key with: openssl rand -hex 32")
+        return False
+    return True
+
+def _production_startup_guard():
+    """Enforce production security requirements at startup.
+    
+    - In PRODUCTION mode: JWT_SECRET_KEY and API_ACCESS_KEY must be present and strong.
+    - In DEVELOPMENT mode: JWT_SECRET_KEY is optional for local testing.
+    """
+    if FLASK_ENV == 'production':
+        # Production requires both JWT and API access keys
+        if not _validate_jwt_secret(JWT_SECRET_KEY):
+            raise RuntimeError(
+                "🔒 PRODUCTION SECURITY BLOCKED: JWT_SECRET_KEY is not configured or is unsafe.\n"
+                "    Required: export JWT_SECRET_KEY=$(openssl rand -hex 32)\n"
+                "    Also required: export API_ACCESS_KEY=<your-api-key>"
+            )
+        
+        API_ACCESS_KEY = os.environ.get('API_ACCESS_KEY', '')
+        if not API_ACCESS_KEY:
+            raise RuntimeError(
+                "🔒 PRODUCTION SECURITY BLOCKED: API_ACCESS_KEY is not set.\n"
+                "    Required: export API_ACCESS_KEY=<secure-api-key>"
+            )
+        
+        logger.info("✅ Production security requirements verified")
+        app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
+    else:
+        # Development mode: warn but don't block, allow any non-empty key
+        if not JWT_SECRET_KEY:
+            logger.warning("JWT_SECRET_KEY not set — mutating API endpoints are unguarded.")
+            logger.warning("For production, set JWT_SECRET_KEY: export JWT_SECRET_KEY=$(openssl rand -hex 32)")
+        app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
+
+_production_startup_guard()
 app.config['JWT_TOKEN_LOCATION'] = ['headers']
 app.config['JWT_HEADER_NAME'] = 'Authorization'
 app.config['JWT_HEADER_TYPE'] = 'Bearer'
-if app.config['JWT_SECRET_KEY']:
+
+# Initialize JWT Manager if a JWT_SECRET_KEY is provided (dev allows short keys)
+# Note: In production, the key must be validated by _production_startup_guard
+JWT_CONFIGURED = bool(JWT_SECRET_KEY)
+if JWT_CONFIGURED:
     jwt = JWTManager(app)
     logger.info("JWT authentication enabled")
 else:
     jwt = None
-    logger.warning("JWT_SECRET_KEY not set — mutating API endpoints are unguarded. Set JWT_SECRET_KEY to enable auth.")
+    logger.warning("JWT authentication disabled (development mode, no JWT_SECRET_KEY set)")
 
 # Helper: require JWT if secret is configured (works for sync and async)
 def require_jwt_if_enabled(fn):
