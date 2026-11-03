@@ -105,6 +105,19 @@ class PerplexityIntelligenceService:
         self._cache: Dict[str, Any] = {}
         self._cache_timestamps: Dict[str, datetime] = {}
         self._last_api_call: Optional[datetime] = None
+        self._client: Optional[httpx.AsyncClient] = None
+
+    def _get_client(self, timeout: float = 30.0) -> httpx.AsyncClient:
+        """Get or create a persistent async client."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=timeout)
+        return self._client
+
+    async def close(self):
+        """Close the underlying HTTP client."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
         
         if not self.api_key:
             logger.warning(
@@ -175,16 +188,16 @@ class PerplexityIntelligenceService:
         }
         
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(
-                    self.PERPLEXITY_API_URL,
-                    json=payload,
-                    headers=headers
-                )
-                response.raise_for_status()
-                
-                data = response.json()
-                return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            client = self._get_client(timeout)
+            response = await client.post(
+                self.PERPLEXITY_API_URL,
+                json=payload,
+                headers=headers
+            )
+            response.raise_for_status()
+
+            data = response.json()
+            return data.get("choices", [{}])[0].get("message", {}).get("content", "")
                 
         except httpx.TimeoutException:
             logger.error(f"Perplexity API timeout after {timeout}s")
@@ -696,33 +709,33 @@ Be specific with price levels, catalysts, and actionable insights."""
         }
         
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    self.SEARCH_API_URL,
-                    json=payload,
-                    headers=headers
-                )
-                response.raise_for_status()
-                data = response.json()
-                
-                # Process and standardize results
-                results = []
-                for item in data.get("results", []):
-                    results.append({
-                        "title": item.get("title", ""),
-                        "url": item.get("url", ""),
-                        "snippet": item.get("snippet", "")[:500],  # Truncate for efficiency
-                        "date": item.get("date"),
-                        "source": self._extract_domain(item.get("url", ""))
-                    })
-                
-                return {
-                    "query": query,
-                    "results": results,
-                    "count": len(results),
-                    "timestamp": datetime.now().isoformat(),
-                    "trusted_sources": trusted_sources_only
-                }
+            client = self._get_client(30.0)
+            response = await client.post(
+                self.SEARCH_API_URL,
+                json=payload,
+                headers=headers
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            # Process and standardize results
+            results = []
+            for item in data.get("results", []):
+                results.append({
+                    "title": item.get("title", ""),
+                    "url": item.get("url", ""),
+                    "snippet": item.get("snippet", "")[:500],  # Truncate for efficiency
+                    "date": item.get("date"),
+                    "source": self._extract_domain(item.get("url", ""))
+                })
+
+            return {
+                "query": query,
+                "results": results,
+                "count": len(results),
+                "timestamp": datetime.now().isoformat(),
+                "trusted_sources": trusted_sources_only
+            }
                 
         except httpx.HTTPStatusError as e:
             logger.error(f"Search API error: {e.response.status_code}")
