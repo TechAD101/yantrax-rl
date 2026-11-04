@@ -18,14 +18,17 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _REPO_ROOT)
 
 def _clean_env(**overrides):
-    """Build a clean subprocess env without PYTEST_CURRENT_TEST.
+    """Build a clean subprocess env without pytest context that could bypass security.
     
     Subprocess tests must NOT inherit PYTEST_CURRENT_TEST from the parent pytest
     process, otherwise the startup guard skips and tests pass when they shouldn't.
+    Also removes SKIP_STARTUP_GUARD and other security-weakening variables.
     """
     env = os.environ.copy()
     env.pop('PYTEST_CURRENT_TEST', None)
     env.pop('__PYTEST_RUNPATH__', None)
+    env.pop('SKIP_STARTUP_GUARD', None)  # Never let tests inherit bypass flag
+    env.pop('FLASK_ENV', None)  # Force explicit setting in each test
     env.update(overrides)
     return env
 
@@ -331,11 +334,11 @@ except Exception as e:
         assert 'STARTUP_BLOCKED' in output or 'PRODUCTION SECURITY BLOCKED' in output, \
             f"Production should reject short JWT secret. Got: {output}"
 
-    def test_production_fails_with_low_entropy_jwt_secret(self):
-        """Production mode must reject JWT secrets with low entropy."""
+    def test_production_fails_with_no_digit_jwt_secret(self):
+        """Production mode must reject JWT secrets with no digit characters."""
         env = _clean_env()
         env['FLASK_ENV'] = 'production'
-        # Repeating 'a' has low entropy (only 1 unique char)
+        # All alphabetic, no digits - fails character class composition check
         env['JWT_SECRET_KEY'] = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
         env['API_ACCESS_KEY'] = 'secure-api-key-123456'
         env['CORS_ORIGINS'] = ''
@@ -352,7 +355,7 @@ try:
     from main import app
     print("STARTUP_SUCCESS")
 except RuntimeError as e:
-    if "PRODUCTION SECURITY BLOCKED" in str(e) or "entropy" in str(e).lower():
+    if "PRODUCTION SECURITY BLOCKED" in str(e) or "JWT_SECRET_KEY" in str(e):
         print("STARTUP_BLOCKED")
     else:
         print(f"OTHER_ERROR: {e}")
@@ -367,7 +370,45 @@ except Exception as e:
         
         output = result.stdout + result.stderr
         assert 'STARTUP_BLOCKED' in output or 'PRODUCTION SECURITY BLOCKED' in output, \
-            f"Production should reject low-entropy JWT secret. Got: {output}"
+            f"Production should reject all-alphabetic JWT secret. Got: {output}"
+
+    def test_production_fails_with_no_alpha_jwt_secret(self):
+        """Production mode must reject JWT secrets with no letter characters (all-numeric)."""
+        env = _clean_env()
+        env['FLASK_ENV'] = 'production'
+        # All numeric, no letters - fails character class composition check
+        env['JWT_SECRET_KEY'] = '1234567890123456789012345678901234567890123456789012345678901234'
+        env['API_ACCESS_KEY'] = 'secure-api-key-123456'
+        env['CORS_ORIGINS'] = ''
+        
+        result = subprocess.run(
+            [sys.executable, '-c', '''
+import os
+import sys
+sys.path.insert(0, 'backend')
+os.environ['FLASK_ENV'] = 'production'
+os.environ['JWT_SECRET_KEY'] = '1234567890123456789012345678901234567890123456789012345678901234'
+os.environ['API_ACCESS_KEY'] = 'secure-api-key-123456'
+try:
+    from main import app
+    print("STARTUP_SUCCESS")
+except RuntimeError as e:
+    if "PRODUCTION SECURITY BLOCKED" in str(e) or "JWT_SECRET_KEY" in str(e):
+        print("STARTUP_BLOCKED")
+    else:
+        print(f"OTHER_ERROR: {e}")
+except Exception as e:
+    print(f"ERROR: {type(e).__name__}: {e}")
+'''],
+            capture_output=True,
+            text=True,
+            cwd=_REPO_ROOT,
+            env=env
+        )
+        
+        output = result.stdout + result.stderr
+        assert 'STARTUP_BLOCKED' in output or 'PRODUCTION SECURITY BLOCKED' in output, \
+            f"Production should reject all-numeric JWT secret. Got: {output}"
 
     def test_production_fails_with_weak_api_access_key(self):
         """Production mode must reject weak/placeholder API_ACCESS_KEY values."""
@@ -405,6 +446,44 @@ except Exception as e:
         output = result.stdout + result.stderr
         assert 'STARTUP_BLOCKED' in output or 'PRODUCTION SECURITY BLOCKED' in output, \
             f"Production should reject weak API_ACCESS_KEY 'valid-api-key'. Got: {output}"
+
+    def test_production_fails_with_no_alpha_api_access_key(self):
+        """Production mode must reject API_ACCESS_KEY with no letter characters (all-numeric)."""
+        env = _clean_env()
+        env['FLASK_ENV'] = 'production'
+        env['JWT_SECRET_KEY'] = 'a-very-secure-production-key-32-characters-min'
+        # All numeric, no letters - fails character class composition check
+        env['API_ACCESS_KEY'] = '1234567890123456'
+        env['CORS_ORIGINS'] = ''
+        
+        result = subprocess.run(
+            [sys.executable, '-c', '''
+import os
+import sys
+sys.path.insert(0, 'backend')
+os.environ['FLASK_ENV'] = 'production'
+os.environ['JWT_SECRET_KEY'] = 'a-very-secure-production-key-32-characters-min'
+os.environ['API_ACCESS_KEY'] = '1234567890123456'
+try:
+    from main import app
+    print("STARTUP_SUCCESS")
+except RuntimeError as e:
+    if "PRODUCTION SECURITY BLOCKED" in str(e) or "API_ACCESS_KEY" in str(e):
+        print("STARTUP_BLOCKED")
+    else:
+        print(f"OTHER_ERROR: {e}")
+except Exception as e:
+    print(f"ERROR: {type(e).__name__}: {e}")
+'''],
+            capture_output=True,
+            text=True,
+            cwd=_REPO_ROOT,
+            env=env
+        )
+        
+        output = result.stdout + result.stderr
+        assert 'STARTUP_BLOCKED' in output or 'PRODUCTION SECURITY BLOCKED' in output, \
+            f"Production should reject all-numeric API_ACCESS_KEY. Got: {output}"
 
     def test_production_fails_with_short_api_access_key(self):
         """Production mode must reject short API_ACCESS_KEY (< 16 chars)."""
@@ -508,6 +587,121 @@ except Exception as e:
         output = result.stdout + result.stderr
         assert 'STARTUP_SUCCESS' in output, \
             f"Production should allow startup with valid secrets. Got: {output}"
+
+    def test_skip_startup_guard_rejected_in_production(self):
+        """SKIP_STARTUP_GUARD=1 must be rejected in production mode (fail-closed)."""
+        env = _clean_env()
+        env['FLASK_ENV'] = 'production'
+        env['SKIP_STARTUP_GUARD'] = '1'  # This must be rejected
+        env['JWT_SECRET_KEY'] = 'a-very-secure-production-key-32-characters-min'
+        env['API_ACCESS_KEY'] = 'secure-api-key-12345678'
+        env['CORS_ORIGINS'] = ''
+        
+        result = subprocess.run(
+            [sys.executable, '-c', '''
+import os
+import sys
+sys.path.insert(0, 'backend')
+os.environ['FLASK_ENV'] = 'production'
+os.environ['SKIP_STARTUP_GUARD'] = '1'
+os.environ['JWT_SECRET_KEY'] = 'a-very-secure-production-key-32-characters-min'
+os.environ['API_ACCESS_KEY'] = 'secure-api-key-12345678'
+try:
+    from main import app
+    print("STARTUP_SUCCESS")
+except RuntimeError as e:
+    if "SKIP_STARTUP_GUARD" in str(e) or "not allowed" in str(e).lower():
+        print("STARTUP_BLOCKED")
+    else:
+        print(f"OTHER_ERROR: {e}")
+except Exception as e:
+    print(f"ERROR: {type(e).__name__}: {e}")
+'''],
+            capture_output=True,
+            text=True,
+            cwd=_REPO_ROOT,
+            env=env
+        )
+        
+        output = result.stdout + result.stderr
+        assert 'STARTUP_BLOCKED' in output, \
+            f"Production must reject SKIP_STARTUP_GUARD=1. Got: {output}"
+
+    def test_skip_startup_guard_rejected_in_staging(self):
+        """SKIP_STARTUP_GUARD=1 must be rejected in staging mode (fail-closed)."""
+        env = _clean_env()
+        env['FLASK_ENV'] = 'staging'
+        env['SKIP_STARTUP_GUARD'] = '1'  # This must be rejected
+        env['JWT_SECRET_KEY'] = 'a-very-secure-production-key-32-characters-min'
+        env['API_ACCESS_KEY'] = 'secure-api-key-12345678'
+        env['CORS_ORIGINS'] = ''
+        
+        result = subprocess.run(
+            [sys.executable, '-c', '''
+import os
+import sys
+sys.path.insert(0, 'backend')
+os.environ['FLASK_ENV'] = 'staging'
+os.environ['SKIP_STARTUP_GUARD'] = '1'
+os.environ['JWT_SECRET_KEY'] = 'a-very-secure-production-key-32-characters-min'
+os.environ['API_ACCESS_KEY'] = 'secure-api-key-12345678'
+try:
+    from main import app
+    print("STARTUP_SUCCESS")
+except RuntimeError as e:
+    if "SKIP_STARTUP_GUARD" in str(e) or "not allowed" in str(e).lower():
+        print("STARTUP_BLOCKED")
+    else:
+        print(f"OTHER_ERROR: {e}")
+except Exception as e:
+    print(f"ERROR: {type(e).__name__}: {e}")
+'''],
+            capture_output=True,
+            text=True,
+            cwd=_REPO_ROOT,
+            env=env
+        )
+        
+        output = result.stdout + result.stderr
+        assert 'STARTUP_BLOCKED' in output, \
+            f"Staging must reject SKIP_STARTUP_GUARD=1. Got: {output}"
+
+    def test_skip_startup_guard_ignored_in_development(self):
+        """SKIP_STARTUP_GUARD=1 is ignored (not a bypass) in development mode."""
+        env = _clean_env()
+        env['FLASK_ENV'] = 'development'
+        env['SKIP_STARTUP_GUARD'] = '1'  # Should be ignored in dev
+        env['CORS_ORIGINS'] = ''
+        
+        result = subprocess.run(
+            [sys.executable, '-c', '''
+import os
+import sys
+sys.path.insert(0, 'backend')
+os.environ['FLASK_ENV'] = 'development'
+os.environ['SKIP_STARTUP_GUARD'] = '1'
+# JWT_SECRET_KEY is optional in development
+try:
+    from main import app
+    print("STARTUP_SUCCESS")
+except RuntimeError as e:
+    if "SKIP_STARTUP_GUARD" in str(e) or "PRODUCTION SECURITY BLOCKED" in str(e):
+        print("STARTUP_BLOCKED")
+    else:
+        print(f"RUNTIME_ERROR: {e}")
+except Exception as e:
+    print(f"ERROR: {type(e).__name__}: {e}")
+'''],
+            capture_output=True,
+            text=True,
+            cwd=_REPO_ROOT,
+            env=env
+        )
+        
+        output = result.stdout + result.stderr
+        # In development, SKIP_STARTUP_GUARD should be ignored and startup should succeed
+        assert 'STARTUP_SUCCESS' in output, \
+            f"Development should allow startup, ignoring SKIP_STARTUP_GUARD. Got: {output}"
 
 
 class TestFallbackPathIsolation:

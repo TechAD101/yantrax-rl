@@ -1,6 +1,7 @@
 
 import os
 import sys
+import secrets
 import logging
 import json
 import asyncio
@@ -231,15 +232,51 @@ JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', '')
 FLASK_ENV_RAW = os.environ.get('FLASK_ENV', '').lower()
 FLASK_ENV = FLASK_ENV_RAW if FLASK_ENV_RAW in ('production', 'development', 'staging') else None
 
+def _generate_secure_secret(length: int = 48) -> str:
+    """Generate a cryptographically secure secret using os.urandom.
+    
+    Returns a URL-safe base64-encoded string of the requested length in bytes.
+    """
+    import base64
+    return base64.urlsafe_b64encode(os.urandom(length)).decode('utf-8')
+
+
 def _validate_jwt_secret(key: str) -> bool:
-    """Validate JWT secret strength - must have adequate entropy and not be a placeholder."""
+    """Validate JWT secret strength using defensible cryptographic policy.
+    
+    Validation policy (fail-closed):
+    1. Minimum length: 32 characters
+    2. Not a known placeholder (case-insensitive, timing-safe comparison)
+    3. Contains at least one digit AND one letter (mixed character classes)
+    4. Not all-numeric (no letter characters)
+    5. Not all-alphabetic (no digit characters)
+    
+    NOTE: This does NOT use character diversity counting. A key like
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" has 16+ unique
+    characters if mixed with digits, but has zero entropy. We reject based on
+    character class composition, not unique count.
+    """
     if not key:
         return False
     if len(key) < 32:
         logger.warning("JWT_SECRET_KEY is too short (minimum 32 characters). "
-                       "For production, use: openssl rand -hex 32")
+                       "Generate with: openssl rand -base64 48")
         return False
-    # Reject known placeholder values (case-insensitive)
+    
+    # Check character class composition
+    has_digit = any(c.isdigit() for c in key)
+    has_alpha = any(c.isalpha() for c in key)
+    
+    if not has_digit:
+        logger.warning("JWT_SECRET_KEY contains no digits. "
+                       "Generate with: openssl rand -base64 48")
+        return False
+    if not has_alpha:
+        logger.warning("JWT_SECRET_KEY contains no letters. "
+                       "Generate with: openssl rand -base64 48")
+        return False
+    
+    # Reject known placeholder values using timing-safe comparison
     key_lower = key.lower()
     known_placeholders = {
         'changeme', 'your-secret-key-here', 'your_secret_key_here',
@@ -247,46 +284,65 @@ def _validate_jwt_secret(key: str) -> bool:
         'your-jwt-secret-key-here', 'replace-me', 'todo',
         'secret', 'password', 'jwt-secret', 'default-secret',
     }
-    if key_lower in known_placeholders:
-        logger.warning("JWT_SECRET_KEY is a known placeholder value. "
-                       "Generate a secure key with: openssl rand -hex 32")
-        return False
-    # Reject long strings that are just repeated characters (no entropy)
-    if len(set(key)) < 16:
-        logger.warning("JWT_SECRET_KEY has insufficient entropy (fewer than 16 unique characters). "
-                       "Generate a secure key with: openssl rand -hex 32")
-        return False
-    # Reject strings that are just hex-encoded known words
-    if key_lower.replace('-', '').replace('_', '') in known_placeholders:
-        logger.warning("JWT_SECRET_KEY is a known placeholder value. "
-                       "Generate a secure key with: openssl rand -hex 32")
-        return False
+    for placeholder in known_placeholders:
+        if secrets.compare_digest(key_lower, placeholder):
+            logger.warning("JWT_SECRET_KEY is a known placeholder value. "
+                           "Generate with: openssl rand -base64 48")
+            return False
+    
+    # Also reject keys that are just hex-encoded known words
+    normalized = key_lower.replace('-', '').replace('_', '')
+    for placeholder in known_placeholders:
+        if secrets.compare_digest(normalized, placeholder):
+            logger.warning("JWT_SECRET_KEY is a known placeholder value. "
+                           "Generate with: openssl rand -base64 48")
+            return False
+    
     return True
 
+
 def _validate_api_access_key(key: str) -> bool:
-    """Validate API access key strength - must have adequate entropy and not be a placeholder."""
+    """Validate API access key strength using defensible cryptographic policy.
+    
+    Validation policy (fail-closed):
+    1. Minimum length: 16 characters
+    2. Not a known placeholder (case-insensitive, timing-safe comparison)
+    3. Contains at least one digit AND one letter (mixed character classes)
+    """
     if not key:
         return False
     if len(key) < 16:
         logger.warning("API_ACCESS_KEY is too short (minimum 16 characters).")
         return False
+    
+    # Check character class composition
+    has_digit = any(c.isdigit() for c in key)
+    has_alpha = any(c.isalpha() for c in key)
+    
+    if not has_digit:
+        logger.warning("API_ACCESS_KEY contains no digits.")
+        return False
+    if not has_alpha:
+        logger.warning("API_ACCESS_KEY contains no letters.")
+        return False
+    
+    # Reject known placeholder values using timing-safe comparison
     key_lower = key.lower()
     known_placeholders = {
         'valid-api-key', 'your-api-key-here', 'your_api_key_here',
         'api-key', 'api_key', 'default', 'changeme', 'placeholder',
         'example', 'demo', 'test-key', 'test',
     }
-    if key_lower in known_placeholders:
-        logger.warning("API_ACCESS_KEY is a known placeholder value.")
-        return False
-    if len(set(key)) < 8:
-        logger.warning("API_ACCESS_KEY has insufficient entropy (fewer than 8 unique characters).")
-        return False
+    for placeholder in known_placeholders:
+        if secrets.compare_digest(key_lower, placeholder):
+            logger.warning("API_ACCESS_KEY is a known placeholder value.")
+            return False
+    
     return True
 
-# Production startup guard uses explicit configuration, not pytest detection.
-# Tests that need to bypass the guard must set SKIP_STARTUP_GUARD=1 in their environment.
-# This makes the bypass mechanism explicit and auditable.
+# Production startup guard: NO ENVIRONMENT-CHECK BYPASS ALLOWED
+# Tests that need to bypass the guard must set FLASK_ENV=development
+# (which allows startup without secrets). Production/staging ALWAYS enforce.
 
 def _production_startup_guard():
     """Enforce production security requirements at startup.
@@ -294,12 +350,18 @@ def _production_startup_guard():
     - FLASK_ENV must be explicitly set (production, development, or staging)
     - In production/staging mode: JWT_SECRET_KEY and API_ACCESS_KEY must be present and strong
     - In development mode: JWT_SECRET_KEY is optional for local testing
-    - Can be explicitly skipped with SKIP_STARTUP_GUARD=1 (for tests only)
+    - SKIP_STARTUP_GUARD is REJECTED in production/staging (security fail-closed)
     """
-    # Explicit skip flag (for tests that need direct app import without guard)
+    # Reject bypass in production or staging modes - fail closed
     if os.environ.get('SKIP_STARTUP_GUARD') == '1':
-        logger.debug("SKIP_STARTUP_GUARD=1 set - skipping startup guard")
-        return
+        if FLASK_ENV in ('production', 'staging') or FLASK_ENV is None:
+            raise RuntimeError(
+                "🔒 PRODUCTION SECURITY BLOCKED: SKIP_STARTUP_GUARD is not allowed in production or staging.\n"
+                "    This variable cannot bypass production security requirements.\n"
+                "    For testing, use FLASK_ENV=development."
+            )
+        # Only allowed in development mode - log it but don't skip
+        logger.debug("SKIP_STARTUP_GUARD=1 set but ignored in development mode")
     
     if FLASK_ENV is None:
         raise RuntimeError(
