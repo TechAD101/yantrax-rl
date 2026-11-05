@@ -45,8 +45,8 @@ class SyntheticMarketProvider:
             trend = 'bearish'
         elif self._scenario == 'mean_reversion_bounce':
             # Recent dip with strong bounce - ideal for genuine BUY
-            price = 80.0
-            change_pct = 3.2
+            price = 58.0
+            change_pct = 1.5
             trend = 'bullish'
         else:
             price = self._base_price
@@ -79,17 +79,17 @@ class SyntheticMarketProvider:
                 price = history[-1]['close'] - 2.5
                 history.append({'close': round(price, 2)})
         elif self._scenario == 'mean_reversion_bounce':
-            # 35 days of decline from 100 to 60
+            # 35 days decline from 100 to ~70
             for i in range(35):
-                price = 100.0 - (1.0 * i) * 0.025  # Gradual decline
+                price = 100.0 - (0.857 * i) * 0.1  # Slow decline
                 history.append({'close': round(price, 2)})
-            # 10 days sharp drop to 55
+            # 10 days sharp drop to ~55 (oversold)
             for i in range(10):
-                price = history[-1]['close'] - 0.5
+                price = history[-1]['close'] - 1.5
                 history.append({'close': round(price, 2)})
-            # 15 days strong bounce to 80
-            for i in range(15):
-                price = history[-1]['close'] + 1.7
+            # 5 days choppy recovery to ~58
+            for i in range(5):
+                price = history[-1]['close'] + 0.3 + (i % 2) * 0.5
                 history.append({'close': round(price, 2)})
         else:
             # Default flat price
