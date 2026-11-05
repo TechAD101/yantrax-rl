@@ -1174,10 +1174,13 @@ def run_cycle():
             from backend.services.synthetic_market_provider import SyntheticMarketProvider
             provider = SyntheticMarketProvider()
             logger.info(f'Synthetic market provider enabled for {symbol}')
+            sentiment_svc = provider  # Synthetic provider also serves as sentiment service
         else:
             provider = get_canonical_market_provider()
+            from backend.services.market_sentiment_service import get_sentiment_service
+            sentiment_svc = get_sentiment_service()
 
-        pipeline = DecisionPipeline(market_data=provider)
+        pipeline = DecisionPipeline(market_data=provider, sentiment_service=sentiment_svc)
         ctx = run_canonical_decision_sync(symbol, pipeline=pipeline)
 
         final_action = ctx.final_action.value if ctx.final_action else 'HOLD'
@@ -1239,7 +1242,15 @@ def god_cycle():
         else:
             provider = get_canonical_market_provider()
 
-        pipeline = DecisionPipeline(market_data=provider)
+        # For synthetic provider, also pass it as sentiment_service since it implements
+        # get_comprehensive_sentiment. For real providers, get_sentiment_service() is used.
+        if synthetic:
+            sentiment_svc = provider
+        else:
+            from backend.services.market_sentiment_service import get_sentiment_service
+            sentiment_svc = get_sentiment_service()
+
+        pipeline = DecisionPipeline(market_data=provider, sentiment_service=sentiment_svc)
         ctx = run_canonical_decision_sync(symbol, pipeline=pipeline)
     except Exception as e:
         logger.error(f"God cycle pipeline failed for {symbol}: {e}")

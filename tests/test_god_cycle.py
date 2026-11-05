@@ -78,7 +78,8 @@ class GodCycleTest(unittest.TestCase):
             "Synthetic data must be marked as verified")
         self.assertIsInstance(data['market_data']['price'], float)
         # Price should be deterministic (not random)
-        self.assertEqual(data['market_data']['price'], 70.0)
+        # bullish_mean_reversion scenario: 60-day decline from 100 to 41, then bounce
+        self.assertEqual(data['market_data']['price'], 41.0)
 
     def test_route_uses_canonical_pipeline(self):
         """The route must construct a DecisionPipeline with the canonical provider."""
@@ -126,7 +127,7 @@ class IntegrationTest(unittest.TestCase):
         self.assertTrue(ctx.market_snapshot.verified)
         self.assertIsInstance(ctx.market_snapshot.price, float)
         # Price should be deterministic
-        self.assertEqual(ctx.market_snapshot.price, 70.0)
+        self.assertEqual(ctx.market_snapshot.price, 41.0)  # bullish_mean_reversion scenario
 
         # Verify provenance chain exists
         self.assertIn('market_snapshot', ctx.provenance)
@@ -156,7 +157,7 @@ class IntegrationTest(unittest.TestCase):
         # Market data must show synthetic source and verified
         self.assertEqual(data['market_data']['source'], 'synthetic_test_fixture')
         self.assertTrue(data['market_data']['verified'])
-        self.assertEqual(data['market_data']['price'], 70.0)
+        self.assertEqual(data['market_data']['price'], 41.0)  # bullish_mean_reversion scenario
 
     def test_god_cycle_and_run_cycle_consistency(self):
         """Both endpoints should produce consistent results with synthetic data."""

@@ -34,19 +34,21 @@ class SyntheticMarketProvider:
         symbol = symbol.upper()
 
         if self._scenario == 'bullish_mean_reversion':
-            # Price is at oversold level, primed for bounce
-            price = 70.0
-            change_pct = 0.8
-            trend = 'neutral'
+            # Mean-reversion bounce: 60 days decline RSI=0 (oversold), trend=bullish
+            # This triggers: RSI<30=oversold, sentiment=0.68>0.6, fundamental=0.80>0.6
+            # Result: bullish_count(1) > bearish_count(0) → BUY signal
+            price = 41.0
+            change_pct = 3.0
+            trend = 'bullish'  # BULL_MARKET regime: bullish trend + greed > 0.6
         elif self._scenario == 'bearish_decline':
             # Price is collapsing
             price = 50.0
             change_pct = -2.5
             trend = 'bearish'
         elif self._scenario == 'mean_reversion_bounce':
-            # Recent dip with strong bounce - ideal for genuine BUY
-            price = 58.0
-            change_pct = 1.5
+            # Sharp decline with recovery and pullback
+            price = 80.0
+            change_pct = 2.0
             trend = 'bullish'
         else:
             price = self._base_price
@@ -70,26 +72,23 @@ class SyntheticMarketProvider:
         history = []
 
         if self._scenario == 'bullish_mean_reversion':
-            # 50 days of gentle decline from 100 to ~70
-            for i in range(50):
-                price = 100.0 - (0.1 * i)
-                history.append({'close': round(price, 2)})
-            # 10 days of sharp decline to ~45
-            for i in range(10):
-                price = history[-1]['close'] - 2.5
+            # Mean-reversion bounce: 60 days steady decline from 100 to 40
+            # All losses in last 14 periods → RSI < 30 (oversold)
+            for i in range(60):
+                price = 100.0 - (i * 1.0)  # 40 at end
                 history.append({'close': round(price, 2)})
         elif self._scenario == 'mean_reversion_bounce':
-            # 35 days decline from 100 to ~70
-            for i in range(35):
-                price = 100.0 - (0.857 * i) * 0.1  # Slow decline
+            # 40 days decline from 100 to ~60
+            for i in range(40):
+                price = 100.0 - (1.0 * i)
                 history.append({'close': round(price, 2)})
-            # 10 days sharp drop to ~55 (oversold)
-            for i in range(10):
-                price = history[-1]['close'] - 1.5
+            # 15 days recovery to ~85
+            for i in range(15):
+                price = history[-1]['close'] + 1.7
                 history.append({'close': round(price, 2)})
-            # 5 days choppy recovery to ~58
+            # 5 days slight pullback to ~80
             for i in range(5):
-                price = history[-1]['close'] + 0.3 + (i % 2) * 0.5
+                price = history[-1]['close'] - 1.0
                 history.append({'close': round(price, 2)})
         else:
             # Default flat price
@@ -130,6 +129,57 @@ class SyntheticMarketProvider:
     def get_recent_audit_logs(self, limit: int = 10) -> List[Dict[str, Any]]:
         """Get synthetic audit logs."""
         return [{'source': 'synthetic', 'type': 'test_fixture', 'verified': True}]
+    
+    def get_comprehensive_sentiment(self, symbol: str) -> Dict[str, Any]:
+        """Get comprehensive sentiment data matching the market scenario.
+        
+        This method allows SyntheticMarketProvider to serve as both
+        market data provider AND sentiment service for the canonical pipeline.
+        """
+        symbol = symbol.upper()
+        
+        # Scenario-specific sentiment that aligns with market regime for genuine BUY signal
+        if self._scenario == 'bullish_mean_reversion':
+            fear_greed_index = 0.70  # GREED territory - triggers BULL_MARKET regime
+            composite_sentiment = 0.68  # Slightly below 0.7 to keep recommendation valid
+        elif self._scenario == 'mean_reversion_bounce':
+            fear_greed_index = 0.65  # GREED territory - triggers BULL_MARKET regime
+            composite_sentiment = 0.68
+        elif self._scenario == 'bearish_decline':
+            fear_greed_index = 0.25  # FEAR territory - triggers BEAR_MARKET regime
+            composite_sentiment = 0.28
+        else:
+            fear_greed_index = 0.50
+            composite_sentiment = 0.55
+        
+        # Recommendation derived from composite_sentiment
+        if composite_sentiment >= 0.65:
+            recommendation = 'BUY'
+        elif composite_sentiment <= 0.35:
+            recommendation = 'SELL'
+        else:
+            recommendation = 'HOLD'
+        
+        return {
+            'symbol': symbol,
+            'composite_sentiment': composite_sentiment,
+            'recommendation': recommendation,
+            'confidence': 0.75,
+            'components': {
+                'fear_greed': {
+                    'fear_greed_index': fear_greed_index,
+                },
+                'options_flow': {
+                    'flow_score': composite_sentiment,
+                    'signal': 'NET_LONG' if composite_sentiment > 0.5 else 'NET_SHORT',
+                },
+                'social_sentiment': {
+                    'overall_sentiment': composite_sentiment,
+                    'signal': 'BULLISH' if composite_sentiment > 0.5 else 'BEARISH',
+                },
+            },
+            'source': self._source,
+        }
 
 
 def get_synthetic_market_provider(scenario: str = 'bullish_mean_reversion') -> SyntheticMarketProvider:

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from enum import Enum
 import hashlib
 import logging
+from backend.core.decision_context import TradingAction
 from .debate_engine import DebateEngine
 from .agent_manager import AgentManager
 from .ghost_layer import GhostLayer
@@ -93,10 +94,30 @@ class AutonomousCEO:
             arg.get('confidence', 0.5) for arg in debate_result.get('arguments', [])
         ) / len(debate_result.get('arguments', [])) if debate_result.get('arguments') else 0.5
         ghost_nudge = self.ghost_layer.observe(context, debate_result['consensus_score'], avg_confidence)
+        ghost_action_recommendation = None
         if ghost_nudge:
             reasoning += f" | {ghost_nudge['origin']}: {ghost_nudge['whisper']} [{ghost_nudge['influence_level']}]"
-            if ghost_nudge['influence_level'] == 'VETO_RECOMMENDED':
-                final_confidence *= 0.5 # Severe confidence penalty on Ghost Veto
+            # Ghost's influence levels:
+            # - VETO: Governance-level veto (risk/governance should block)
+            # - DISSENT: Advisory dissent, should be recorded but not override
+            # - DIVINE_DOUBT: High consensus with high confidence = potential trap
+            # - CAUTION_NUDGE: Extreme volatility advisory
+            # - WISDOM_DROP: Random insight
+            if ghost_nudge['influence_level'] in ('VETO', 'VETO_RECOMMENDED'):
+                # Ghost's VETO is advisory - record it and reduce confidence significantly
+                # CEO retains final authority but should heed strong Ghost warnings
+                ghost_action_recommendation = TradingAction.HOLD
+                final_confidence *= 0.3  # Severe penalty - Ghost veto overrides confidence
+                if ctx.voting_result and ctx.voting_result.winning_signal != TradingAction.HOLD:
+                    reasoning += f" | Ghost VETO noted: overriding agent consensus HOLD recommendation"
+            elif ghost_nudge['influence_level'] == 'DISSENT':
+                # Advisory dissent - reduce confidence but allow decision
+                final_confidence *= 0.6
+                reasoning += f" | Ghost DISSENT recorded: advisory caution applied"
+            elif ghost_nudge['influence_level'] == 'DIVINE_DOUBT':
+                # High consensus trap detection - moderate penalty
+                final_confidence *= 0.5
+                reasoning += f" | Divine Doubt: consensus trap detected, vigilance advised"
         
         # 5. Philosophical Guidance (The Soul Layer)
         soul_guidance = self.philosophy.get_guidance(context)

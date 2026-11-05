@@ -11,6 +11,7 @@ from datetime import datetime
 from enum import Enum
 import json
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ class AttributionMethod(Enum):
 @dataclass
 class AttributionResult:
     """Single attribution component result."""
+    id: str  # Primary identifier for this attribution
     component: AttributionComponent
     value: float  # P&L contribution in base currency
     percentage: float  # Percentage of total P&L
@@ -215,6 +217,7 @@ class AttributionEngine:
         # Add residual if significant
         if abs(outcome.residual_pnl) > 0.01 * abs(outcome.net_pnl):
             outcome.attributions.append(AttributionResult(
+                    id=f"attr_{uuid.uuid4().hex[:8]}",
                 component=AttributionComponent.RESIDUAL,
                 value=outcome.residual_pnl,
                 percentage=(outcome.residual_pnl / outcome.net_pnl * 100) if outcome.net_pnl != 0 else 0,
@@ -242,6 +245,7 @@ class AttributionEngine:
         market_beta_pnl = price_change * outcome.filled_size * direction_mult
         
         outcome.attributions.append(AttributionResult(
+                id=f"attr_{uuid.uuid4().hex[:8]}",
             component=AttributionComponent.MARKET_BETA,
             value=market_beta_pnl,
             percentage=(market_beta_pnl / net_pnl * 100) if net_pnl != 0 else 0,
@@ -259,6 +263,7 @@ class AttributionEngine:
         strategy_alpha = net_pnl - market_beta_pnl - execution_costs
         
         outcome.attributions.append(AttributionResult(
+                id=f"attr_{uuid.uuid4().hex[:8]}",
             component=AttributionComponent.STRATEGY_ALPHA,
             value=strategy_alpha,
             percentage=(strategy_alpha / net_pnl * 100) if net_pnl != 0 else 0,
@@ -296,6 +301,7 @@ class AttributionEngine:
         regime_pnl = strategy_alpha * 0.3 * regime_confidence  # Heuristic allocation
         
         outcome.attributions.append(AttributionResult(
+                id=f"attr_{uuid.uuid4().hex[:8]}",
             component=AttributionComponent.REGIME_TIMING,
             value=regime_pnl,
             percentage=(regime_pnl / net_pnl * 100) if net_pnl != 0 else 0,
@@ -313,6 +319,7 @@ class AttributionEngine:
         tech_pnl = strategy_alpha * 0.25 * tech_confidence
         
         outcome.attributions.append(AttributionResult(
+                id=f"attr_{uuid.uuid4().hex[:8]}",
             component=AttributionComponent.TECHNICAL_SIGNAL,
             value=tech_pnl,
             percentage=(tech_pnl / net_pnl * 100) if net_pnl != 0 else 0,
@@ -326,6 +333,7 @@ class AttributionEngine:
         fund_pnl = strategy_alpha * 0.25 * fund_confidence
         
         outcome.attributions.append(AttributionResult(
+                id=f"attr_{uuid.uuid4().hex[:8]}",
             component=AttributionComponent.FUNDAMENTAL_SIGNAL,
             value=fund_pnl,
             percentage=(fund_pnl / net_pnl * 100) if net_pnl != 0 else 0,
@@ -339,6 +347,7 @@ class AttributionEngine:
         sent_pnl = strategy_alpha * 0.2 * sent_confidence
         
         outcome.attributions.append(AttributionResult(
+                id=f"attr_{uuid.uuid4().hex[:8]}",
             component=AttributionComponent.SENTIMENT_SIGNAL,
             value=sent_pnl,
             percentage=(sent_pnl / net_pnl * 100) if net_pnl != 0 else 0,
@@ -352,6 +361,7 @@ class AttributionEngine:
         agent_pnl = strategy_alpha * 0.15 * consensus
         
         outcome.attributions.append(AttributionResult(
+                id=f"attr_{uuid.uuid4().hex[:8]}",
             component=AttributionComponent.AGENT_CONSENSUS,
             value=agent_pnl,
             percentage=(agent_pnl / net_pnl * 100) if net_pnl != 0 else 0,
@@ -367,6 +377,7 @@ class AttributionEngine:
         
         if ceo_pnl != 0:
             outcome.attributions.append(AttributionResult(
+                    id=f"attr_{uuid.uuid4().hex[:8]}",
                 component=AttributionComponent.CEO_INTERVENTION,
                 value=ceo_pnl,
                 percentage=(ceo_pnl / net_pnl * 100) if net_pnl != 0 else 0,
@@ -385,6 +396,7 @@ class AttributionEngine:
         
         if total_exec_cost > 0:
             outcome.attributions.append(AttributionResult(
+                    id=f"attr_{uuid.uuid4().hex[:8]}",
                 component=AttributionComponent.EXECUTION_COST,
                 value=-total_exec_cost,  # Negative impact
                 percentage=(-total_exec_cost / net_pnl * 100) if net_pnl != 0 else 0,
@@ -402,6 +414,7 @@ class AttributionEngine:
             # Trade was modified by risk gates - estimate impact
             risk_impact = net_pnl * 0.1 * (1 if outcome.risk_governance == 'APPROVE' else -0.5)
             outcome.attributions.append(AttributionResult(
+                    id=f"attr_{uuid.uuid4().hex[:8]}",
                 component=AttributionComponent.RISK_GATES,
                 value=risk_impact,
                 percentage=(risk_impact / net_pnl * 100) if net_pnl != 0 else 0,
