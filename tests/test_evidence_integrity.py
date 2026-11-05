@@ -14,7 +14,7 @@ from datetime import datetime
 from unittest.mock import patch
 
 os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
-os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
+os.environ['DATABASE_URL'] = 'sqlite:///./test_yantrax.db'
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 from backend.db import reset_engine, get_engine  # noqa: E402

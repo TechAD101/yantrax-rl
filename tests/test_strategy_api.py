@@ -3,7 +3,7 @@ os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
 import sys
 import pytest
 
-os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
+os.environ['DATABASE_URL'] = 'sqlite:///./test_yantrax.db'
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 from db import init_db

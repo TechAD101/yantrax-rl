@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 
 os.environ['SECRET_KEY'] = 'test-secret-key-for-ci'
-os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
+os.environ['DATABASE_URL'] = 'sqlite:///./test_yantrax.db'
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 from main import app  # noqa: E402

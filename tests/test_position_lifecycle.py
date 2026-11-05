@@ -72,7 +72,7 @@ class TestPositionLifecycle(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
+        os.environ['DATABASE_URL'] = 'sqlite:///./test_yantrax.db'
         from backend.db import reset_engine
         from backend.models import Base
         reset_engine()
