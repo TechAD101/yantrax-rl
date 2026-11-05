@@ -1158,14 +1158,39 @@ def run_cycle():
     Delegates to the canonical god-cycle pipeline so the same decision path
     is exercised whether the UI calls /run-cycle or /god-cycle.
     Returns 200 on success, 202 if no-op, or 500 on internal error.
+
+    Accepts JSON body with 'symbol', 'synthetic' (bool) and other params.
     """
     try:
         payload = request.get_json(silent=True) or {}
         symbol = payload.get('symbol', 'AAPL').upper()
-        logger.info('Received /run-cycle request for %s', symbol)
+        synthetic = payload.get('synthetic', False)
+        logger.info('Received /run-cycle request for %s (synthetic=%s)', symbol, synthetic)
 
-        # Delegate to the canonical god-cycle endpoint logic
-        return god_cycle()
+        from backend.services.canonical_market_provider import get_canonical_market_provider
+        from backend.core.decision_pipeline import DecisionPipeline, run_canonical_decision_sync
+
+        if synthetic:
+            from backend.services.synthetic_market_provider import SyntheticMarketProvider
+            provider = SyntheticMarketProvider()
+            logger.info(f'Synthetic market provider enabled for {symbol}')
+        else:
+            provider = get_canonical_market_provider()
+
+        pipeline = DecisionPipeline(market_data=provider)
+        ctx = run_canonical_decision_sync(symbol, pipeline=pipeline)
+
+        final_action = ctx.final_action.value if ctx.final_action else 'HOLD'
+        return jsonify({
+            'status': 'success',
+            'symbol': symbol,
+            'signal': final_action,
+            'confidence': ctx.final_confidence,
+            'decision_id': ctx.decision_id,
+            'data_source': 'synthetic' if synthetic else 'canonical',
+            'timestamp': datetime.now().isoformat()
+        }), 200
+
     except Exception as e:
         logger.exception('run-cycle failed')
         return jsonify({'status': 'error', 'message': str(e), 'timestamp': datetime.now().isoformat()}), 500
@@ -1195,13 +1220,25 @@ def god_cycle():
     -> 24-agent voting -> debate -> CEO -> risk -> sizing -> paper execution ->
     outcome/attribution/learning. No synthetic fallback: when real market data
     or the pipeline is unavailable, returns an explicit error state.
+
+    Query parameter `synthetic=true` forces the deterministic synthetic provider
+    path so that the real pipeline can be exercised without yfinance.
     """
     symbol = request.args.get('symbol', 'AAPL').upper()
+    synthetic = request.args.get('synthetic', 'false').lower() == 'true'
 
     try:
         from backend.services.canonical_market_provider import get_canonical_market_provider
         from backend.core.decision_pipeline import DecisionPipeline, run_canonical_decision_sync
-        provider = get_canonical_market_provider()
+
+        # Use synthetic provider when requested (for testing/CI without yfinance)
+        if synthetic:
+            from backend.services.synthetic_market_provider import SyntheticMarketProvider
+            provider = SyntheticMarketProvider()
+            logger.info(f'Synthetic market provider enabled for {symbol}')
+        else:
+            provider = get_canonical_market_provider()
+
         pipeline = DecisionPipeline(market_data=provider)
         ctx = run_canonical_decision_sync(symbol, pipeline=pipeline)
     except Exception as e:
