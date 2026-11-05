@@ -23,7 +23,7 @@ class SyntheticMarketProvider:
 
         Args:
             scenario: One of 'bullish_mean_reversion', 'bearish_decline',
-                      'neutral_flat', 'strong_bullish'
+                      'neutral_flat', 'mean_reversion_bounce'
         """
         self._scenario = scenario
         self._base_price = 150.0
@@ -43,10 +43,10 @@ class SyntheticMarketProvider:
             price = 50.0
             change_pct = -2.5
             trend = 'bearish'
-        elif self._scenario == 'strong_bullish':
-            # Strong uptrend with bullish indicators
-            price = 165.0
-            change_pct = 2.3
+        elif self._scenario == 'mean_reversion_bounce':
+            # Recent dip with strong bounce - ideal for genuine BUY
+            price = 80.0
+            change_pct = 3.2
             trend = 'bullish'
         else:
             price = self._base_price
@@ -57,8 +57,8 @@ class SyntheticMarketProvider:
             'symbol': symbol,
             'price': price,
             'change_percent': change_pct,
-            'volume': 1000000,
-            'volatility': 0.02,
+            'volume': 15000000,  # High volume for conviction
+            'volatility': 0.03,
             'trend': trend,
             'price_history': self.get_price_history(symbol, days=60),
             'source': self._source,
@@ -78,10 +78,18 @@ class SyntheticMarketProvider:
             for i in range(10):
                 price = history[-1]['close'] - 2.5
                 history.append({'close': round(price, 2)})
-        elif self._scenario == 'strong_bullish':
-            # Strong uptrend: gradual rise from 140 to 165 over 60 days
-            for i in range(60):
-                price = 140.0 + (0.417 * i)  # ~140 to ~165 over 60 days
+        elif self._scenario == 'mean_reversion_bounce':
+            # 35 days of decline from 100 to 60
+            for i in range(35):
+                price = 100.0 - (1.0 * i) * 0.025  # Gradual decline
+                history.append({'close': round(price, 2)})
+            # 10 days sharp drop to 55
+            for i in range(10):
+                price = history[-1]['close'] - 0.5
+                history.append({'close': round(price, 2)})
+            # 15 days strong bounce to 80
+            for i in range(15):
+                price = history[-1]['close'] + 1.7
                 history.append({'close': round(price, 2)})
         else:
             # Default flat price
