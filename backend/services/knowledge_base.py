@@ -5,25 +5,46 @@ Powered by ChromaDB for semantic retrieval of investment lore and institutional 
 
 import os
 import logging
-import chromadb
-from chromadb.config import Settings
 from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
+
+# Graceful fallback if chromadb is unavailable (e.g., dependency conflicts)
+try:
+    import chromadb
+    from chromadb.config import Settings
+    _HAS_CHROMADB = True
+except ImportError:
+    _HAS_CHROMADB = False
+    logger.warning("ChromaDB not available - knowledge base will use fallback storage")
+
 
 class KnowledgeBase:
     """Institutional Knowledge Base using ChromaDB"""
     
     def __init__(self, persist_dir: str = "chroma_db"):
         self.persist_dir = persist_dir
-        self.client = chromadb.PersistentClient(path=self.persist_dir)
-        self.collection = self.client.get_or_create_collection(name="institutional_wisdom")
+        self.client = None
+        self.collection = None
         
-        # Seed if empty
-        if self.collection.count() == 0:
-            self._seed_wisdom()
+        if not _HAS_CHROMADB:
+            logger.warning("ChromaDB not available - knowledge base disabled")
+            return
             
-        logger.info(f"🧠 Knowledge Base active. Items: {self.collection.count()}")
+        try:
+            self.client = chromadb.PersistentClient(
+                path=self.persist_dir,
+                settings=Settings(anonymized_telemetry=False)
+            )
+            self.collection = self.client.get_or_create_collection(name="institutional_wisdom")
+            
+            # Seed if empty
+            if self.collection.count() == 0:
+                self._seed_wisdom()
+                
+            logger.info(f"🧠 Knowledge Base active. Items: {self.collection.count()}")
+        except Exception as e:
+            logger.error(f"KnowledgeBase initialization failed: {e}")
 
     def _seed_wisdom(self):
         """Seed the KB with foundational investment lore"""
@@ -80,6 +101,8 @@ class KnowledgeBase:
 
     def query_wisdom(self, query: str, n_results: int = 2) -> List[Dict[str, Any]]:
         """Find relevant wisdom for a given market scenario"""
+        if self.collection is None:
+            return []
         try:
             results = self.collection.query(
                 query_texts=[query],

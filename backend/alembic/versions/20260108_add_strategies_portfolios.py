@@ -1,7 +1,7 @@
 """add strategies, profiles and portfolio tables
 
 Revision ID: 20260108_add_strategies_portfolios
-Revises: 
+Revises: 0001_create_journal_entries
 Create Date: 2026-01-08 00:00:00.000000
 """
 from alembic import op
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '20260108_add_strategies_portfolios'
-down_revision = None
+down_revision = '0001_create_journal_entries'
 branch_labels = None
 depends_on = None
 
@@ -59,20 +59,8 @@ def upgrade():
         sa.Column('created_at', sa.DateTime, nullable=False, server_default=sa.func.now())
     )
 
-    op.create_table(
-        'journal_entries',
-        sa.Column('id', sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column('timestamp', sa.DateTime, nullable=False, server_default=sa.func.now()),
-        sa.Column('action', sa.String(32), nullable=False),
-        sa.Column('reward', sa.Float, nullable=True),
-        sa.Column('balance', sa.Float, nullable=True),
-        sa.Column('notes', sa.Text, nullable=True),
-        sa.Column('confidence', sa.Float, nullable=True)
-    )
-
 
 def downgrade():
-    op.drop_table('journal_entries')
     op.drop_table('portfolio_positions')
     op.drop_table('portfolios')
     op.drop_table('strategies')

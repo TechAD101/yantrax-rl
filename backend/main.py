@@ -1159,21 +1159,22 @@ def run_cycle():
     is exercised whether the UI calls /run-cycle or /god-cycle.
     Returns 200 on success, 202 if no-op, or 500 on internal error.
 
-    Accepts JSON body with 'symbol', 'synthetic' (bool) and other params.
+    Accepts JSON body with 'symbol', 'synthetic' (bool), and 'scenario' (str) params.
     """
     try:
         payload = request.get_json(silent=True) or {}
         symbol = payload.get('symbol', 'AAPL').upper()
         synthetic = payload.get('synthetic', False)
-        logger.info('Received /run-cycle request for %s (synthetic=%s)', symbol, synthetic)
+        scenario = payload.get('scenario', 'bullish_mean_reversion')
+        logger.info('Received /run-cycle request for %s (synthetic=%s, scenario=%s)', symbol, synthetic, scenario)
 
         from backend.services.canonical_market_provider import get_canonical_market_provider
         from backend.core.decision_pipeline import DecisionPipeline, run_canonical_decision_sync
 
         if synthetic:
             from backend.services.synthetic_market_provider import SyntheticMarketProvider
-            provider = SyntheticMarketProvider()
-            logger.info(f'Synthetic market provider enabled for {symbol}')
+            provider = SyntheticMarketProvider(scenario=scenario)
+            logger.info(f'Synthetic market provider enabled for {symbol} with scenario={scenario}')
             sentiment_svc = provider  # Synthetic provider also serves as sentiment service
         else:
             provider = get_canonical_market_provider()
@@ -1191,6 +1192,7 @@ def run_cycle():
             'confidence': ctx.final_confidence,
             'decision_id': ctx.decision_id,
             'data_source': 'synthetic' if synthetic else 'canonical',
+            'scenario': scenario if synthetic else None,
             'timestamp': datetime.now().isoformat()
         }), 200
 
@@ -1229,6 +1231,7 @@ def god_cycle():
     """
     symbol = request.args.get('symbol', 'AAPL').upper()
     synthetic = request.args.get('synthetic', 'false').lower() == 'true'
+    scenario = request.args.get('scenario', 'bullish_mean_reversion')
 
     try:
         from backend.services.canonical_market_provider import get_canonical_market_provider
@@ -1237,8 +1240,8 @@ def god_cycle():
         # Use synthetic provider when requested (for testing/CI without yfinance)
         if synthetic:
             from backend.services.synthetic_market_provider import SyntheticMarketProvider
-            provider = SyntheticMarketProvider()
-            logger.info(f'Synthetic market provider enabled for {symbol}')
+            provider = SyntheticMarketProvider(scenario=scenario)
+            logger.info(f'Synthetic market provider enabled for {symbol} with scenario={scenario}')
         else:
             provider = get_canonical_market_provider()
 

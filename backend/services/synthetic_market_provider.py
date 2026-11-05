@@ -41,7 +41,8 @@ class SyntheticMarketProvider:
             change_pct = 3.0
             trend = 'bullish'  # BULL_MARKET regime: bullish trend + greed > 0.6
         elif self._scenario == 'bearish_decline':
-            # Price is collapsing
+            # Bearish decline scenario for closing positions
+            # Price is collapsing with bearish technical signals
             price = 50.0
             change_pct = -2.5
             trend = 'bearish'
@@ -77,6 +78,14 @@ class SyntheticMarketProvider:
             for i in range(60):
                 price = 100.0 - (i * 1.0)  # 40 at end
                 history.append({'close': round(price, 2)})
+        elif self._scenario == 'bearish_decline':
+            # Bearish decline: price falling with bearish EMA crossover
+            # Start from 100, decline steadily to 50
+            # EMA9 will stay below EMA21 (bearish crossover)
+            # RSI will show overbought initially, then neutral/bearish
+            for i in range(60):
+                price = 100.0 - (i * 0.83)  # ~50 at end
+                history.append({'close': round(price, 2)})
         elif self._scenario == 'mean_reversion_bounce':
             # 40 days decline from 100 to ~60
             for i in range(40):
@@ -99,6 +108,16 @@ class SyntheticMarketProvider:
     
     def get_fundamentals(self, symbol: str) -> Dict[str, Any]:
         """Get synthetic fundamentals."""
+        if self._scenario == 'bearish_decline':
+            # Bearish fundamentals for bearish scenario
+            return {
+                'pe_ratio': 8.0,  # Low P/E = distressed
+                'return_on_equity': 0.05,  # Low ROE
+                'debt_to_equity': 0.8,  # High debt
+                'revenue_growth': -0.15,  # Negative growth
+                'earnings_growth': -0.20,  # Negative earnings growth
+                'profit_margin': 0.05,  # Low margin
+            }
         return {
             'pe_ratio': 18.0,
             'return_on_equity': 0.25,
@@ -138,7 +157,7 @@ class SyntheticMarketProvider:
         """
         symbol = symbol.upper()
         
-        # Scenario-specific sentiment that aligns with market regime for genuine BUY signal
+        # Scenario-specific sentiment that aligns with market regime for genuine BUY/SELL signals
         if self._scenario == 'bullish_mean_reversion':
             fear_greed_index = 0.70  # GREED territory - triggers BULL_MARKET regime
             composite_sentiment = 0.68  # Slightly below 0.7 to keep recommendation valid
@@ -146,8 +165,9 @@ class SyntheticMarketProvider:
             fear_greed_index = 0.65  # GREED territory - triggers BULL_MARKET regime
             composite_sentiment = 0.68
         elif self._scenario == 'bearish_decline':
+            # Bearish sentiment for SELL signal
             fear_greed_index = 0.25  # FEAR territory - triggers BEAR_MARKET regime
-            composite_sentiment = 0.28
+            composite_sentiment = 0.28  # Below 0.35 for SELL recommendation
         else:
             fear_greed_index = 0.50
             composite_sentiment = 0.55

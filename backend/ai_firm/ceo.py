@@ -36,6 +36,10 @@ class CEODecision:
     expected_impact: str
     agent_overrides: List[str]
     memory_references: List[str]
+    action: Optional[TradingAction] = None  # The final trading action after ghost governance
+    ghost_nudge: Optional[Dict[str, Any]] = None  # Ghost layer influence record
+    pain_level: int = 0  # Mouna mode pain level
+    market_mood: str = "neutral"  # Current market mood
     
 class AutonomousCEO:
     """Autonomous CEO with memory and decision-making capabilities"""
@@ -108,7 +112,7 @@ class AutonomousCEO:
                 # CEO retains final authority but should heed strong Ghost warnings
                 ghost_action_recommendation = TradingAction.HOLD
                 final_confidence *= 0.3  # Severe penalty - Ghost veto overrides confidence
-                if ctx.voting_result and ctx.voting_result.winning_signal != TradingAction.HOLD:
+                if context.get('voting_result') and context['voting_result'].winning_signal != TradingAction.HOLD:
                     reasoning += f" | Ghost VETO noted: overriding agent consensus HOLD recommendation"
             elif ghost_nudge['influence_level'] == 'DISSENT':
                 # Advisory dissent - reduce confidence but allow decision
@@ -137,6 +141,39 @@ class AutonomousCEO:
         candidate = context.get('candidate_strategy') or {}
         decision_context['strategy_action'] = candidate.get('action')
 
+        # Determine the trading action
+        # Ghost influence is advisory - it affects confidence but doesn't directly veto
+        # A genuine risk or governance veto should come from risk_governor later
+        action = TradingAction.HOLD  # Default
+        
+        # Ghost's VETO_RECOMMENDED is treated as advisory hold for now
+        # Risk governance will make the final call
+        if ghost_nudge and ghost_nudge['influence_level'] == 'VETO':
+            # Ghost VETO - record but don't directly override; let risk govern
+            ghost_action_recommendation = TradingAction.HOLD
+            # Use agent recommendation as fallback if available
+            if context.get('agent_recommendation'):
+                action = TradingAction(context['agent_recommendation'])
+            elif context.get('candidate_strategy') and isinstance(context['candidate_strategy'], dict):
+                action = TradingAction(context['candidate_strategy'].get('action', 'HOLD'))
+        elif ghost_nudge and ghost_nudge['influence_level'] in ('DISSENT', 'DIVINE_DOUBT', 'CAUTION_NUDGE'):
+            # Advisory Ghost influence - use candidate strategy action, NOT agent recommendation
+            # The candidate_strategy action is the strategic decision from the debate winner
+            # Agent recommendation may be stale or from earlier consensus
+            if context.get('candidate_strategy') and isinstance(context['candidate_strategy'], dict):
+                action = TradingAction(context['candidate_strategy'].get('action', 'HOLD'))
+            elif context.get('agent_recommendation'):
+                action = TradingAction(context['agent_recommendation'])
+        elif context.get('candidate_strategy') and isinstance(context['candidate_strategy'], dict):
+            # Prefer candidate_strategy action (strategic decision) over agent_recommendation
+            action = TradingAction(context['candidate_strategy'].get('action', 'HOLD'))
+        elif context.get('agent_recommendation'):
+            action = TradingAction(context['agent_recommendation'])
+        
+        # Override for philosophical veto
+        if final_confidence == 0.0 and 'PHILOSOPHY' in reasoning:
+            action = TradingAction.HOLD
+        
         decision = CEODecision(
             id=str(uuid.uuid4()),
             timestamp=datetime.now(),
@@ -146,7 +183,11 @@ class AutonomousCEO:
             confidence=round(final_confidence, 2),
             expected_impact=self._assess_impact(context, final_confidence),
             agent_overrides=self._determine_overrides(context, final_confidence),
-            memory_references=[m['id'] for m in memory_insights]
+            memory_references=[m['id'] for m in memory_insights],
+            action=action,
+            ghost_nudge=ghost_nudge,
+            pain_level=pain_level,
+            market_mood=self._determine_market_mood()
         )
         
         # Store decision
