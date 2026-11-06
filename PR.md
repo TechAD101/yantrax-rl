@@ -1,7 +1,7 @@
 # PR #139: Phase 1 Remediation - JWT & Ghost Governance Fixes
 
 **Branch:** `phase1-remediation-jwt-prod`  
-**Current SHA:** `718c37a1524b1f34b6cbf2afb5ba10077372a9a4`
+**Current SHA:** `02c4575df175687e5ab5f52374d750f83ba2b35b`
 
 ## Summary
 
@@ -57,6 +57,13 @@ Assertions:
 - Learning only from realized outcome
 - No MockStrategyEngine usage (uses real SyntheticMarketProvider)
 
+Ghost governance tests:
+- `test_buy_without_ghost_intervention` → BUY succeeds
+- `test_ghost_divine_doubt_is_advisory` → advisory nudge, position survives
+- `test_ghost_dissent_is_advisory` → advisory signal, not hard veto
+- `test_ghost_veto_is_recorded` → confidence reduction, not action change
+- `test_risk_governor_veto_survives_ghost` → blocks when truly risky
+
 #### `test_migrations.py` (NEW: 166 lines)
 Migration integrity tests:
 - `test_clean_migration_vs_isolated_db` - Fresh DB migration verification
@@ -65,14 +72,20 @@ Migration integrity tests:
 - `test_no_automatic_stamp_head` - CI failure visibility
 
 #### `test_god_cycle.py` (existing, 9 passing tests)
-Includes deterministic Ghost governance tests:
-- BUY without Ghost challenge → succeeds
-- DIVINE_DOUBT → advisory nudge, position survives
-- DISSSENT → advisory signal, not hard veto
-- Ghost VETO → confidence reduction, not action change
-- Risk Governor veto → blocks when truly risky
+Integration tests for /god-cycle and /run-cycle endpoints with synthetic scenarios.
 
-#### `mock_strategy_engine.py` (NEW: restored for backward compatibility)
+#### `test_full_pipeline.py` (existing, 2 tests updated)
+- `test_full_lifecycle_buy_then_sell`
+- `test_stop_loss_exit_during_execution`
+
+#### `test_learning_loop.py` (existing, 2 tests updated)
+- `test_experience_provenance_recorded`
+- `test_full_trade_updates_measured_state`
+
+#### `test_position_lifecycle.py` (existing, 1 test updated)
+- `test_opposite_signal_closes_then_reopens`
+
+#### `mock_strategy_engine.py` (restored for backward compatibility)
 - Kept for existing tests that need deterministic SELL signals
 - Synthetic provider handles most scenarios natively
 
@@ -92,15 +105,23 @@ tests/test_migrations.py::TestMigrations::test_no_duplicate_journal_entries PASS
 tests/test_migrations.py::TestMigrations::test_migration_chain_correct PASSED
 tests/test_migrations.py::TestMigrations::test_no_automatic_stamp_head PASSED
 
-tests/test_synthetic_full_lifecycle.py::test_lifecycle_opens_buy_position PASSED
-tests/test_synthetic_full_lifecycle.py::test_same_position_persists PASSED
-tests/test_synthetic_full_lifecycle.py::test_position_closes_on_bearish_signal PASSED
-tests/test_synthetic_full_lifecycle.py::test_learning_timing_correct PASSED
-tests/test_synthetic_full_lifecycle.py::test_realized_pnl_verified PASSED
-tests/test_synthetic_full_lifecycle.py::test_outcome_attribution_preserved PASSED
-tests/test_synthetic_full_lifecycle.py::test_learning_from_realized_outcome PASSED
+tests/test_synthetic_full_lifecycle.py::TestSyntheticFullLifecycle::test_full_deterministic_lifecycle_via_god_cycle_api PASSED
+tests/test_synthetic_full_lifecycle.py::TestSyntheticFullLifecycle::test_synthetic_bearish_close_mechanism PASSED
+tests/test_synthetic_full_lifecycle.py::TestGhostGovernance::test_buy_without_ghost_intervention PASSED
+tests/test_synthetic_full_lifecycle.py::TestGhostGovernance::test_ghost_divine_doubt_is_advisory PASSED
+tests/test_synthetic_full_lifecycle.py::TestGhostGovernance::test_ghost_dissent_is_advisory PASSED
+tests/test_synthetic_full_lifecycle.py::TestGhostGovernance::test_ghost_veto_is_recorded PASSED
+tests/test_synthetic_full_lifecycle.py::TestGhostGovernance::test_risk_governor_veto_survives_ghost PASSED
 
-tests/test_god_cycle.py::9 tests PASSED
+tests/test_god_cycle.py::GodCycleTest::test_no_random_decision_generation PASSED
+tests/test_god_cycle.py::GodCycleTest::test_no_real_data_fails_closed_to_abstain PASSED
+tests/test_god_cycle.py::GodCycleTest::test_route_uses_canonical_pipeline PASSED
+tests/test_god_cycle.py::GodCycleTest::test_run_cycle_synthetic PASSED
+tests/test_god_cycle.py::GodCycleTest::test_synthetic_path_returns_success PASSED
+tests/test_god_cycle.py::GodCycleTest::test_synthetic_provides_verified_price PASSED
+tests/test_god_cycle.py::IntegrationTest::test_end_to_end_synthetic_pipeline PASSED
+tests/test_god_cycle.py::IntegrationTest::test_endpoint_integration_with_synthetic PASSED
+tests/test_god_cycle.py::IntegrationTest::test_god_cycle_and_run_cycle_consistency PASSED
 
 Total: 38 passed
 ```
