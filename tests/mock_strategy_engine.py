@@ -1,4 +1,8 @@
-"""Mock strategy engine for test fixtures requiring deterministic SELL signals."""
+"""Mock strategy engine for test fixtures requiring deterministic SELL signals.
+
+Used for testing opposite-direction trading (e.g., closing a BUY position with a SELL signal).
+The synthetic market provider now handles this natively via the 'bearish_decline' scenario.
+"""
 
 from backend.services.institutional_strategy_engine import TradingSignal, MarketRegime
 
@@ -9,6 +13,9 @@ class MockStrategyEngineForBearishFixture:
     Used in tests that need to verify opposite-direction trading
     (e.g., closing a BUY position with a SELL signal) without
     depending on real market data analysis.
+    
+    NOTE: This is a fallback. Prefer using SyntheticMarketProvider with
+    scenario='bearish_decline' for new tests.
     """
 
     min_confidence_threshold = 0.65
@@ -61,7 +68,30 @@ class MockStrategyEngineForBearishFixture:
         return 0.2
 
     def _calculate_sentiment_score(self, sentiment):
-        return -0.8
+        """Calculate sentiment score from nested sentiment structure.
+        
+        Consumes the actual nested sentiment structure returned by get_comprehensive_sentiment().
+        """
+        if not sentiment:
+            return -0.8
+        
+        components = []
+        
+        # Fear & Greed
+        fear_greed = sentiment.get('fear_greed', {}).get('fear_greed_index', 0.5)
+        components.append(fear_greed)
+        
+        # Options Flow
+        options_flow = sentiment.get('options_flow', {}).get('flow_score', 0.5)
+        components.append(options_flow)
+        
+        # Social Sentiment
+        social = sentiment.get('social_sentiment', {}).get('overall_sentiment', 0.5)
+        components.append(social)
+        
+        # Return mean of components (bearish for testing, but calculated properly)
+        import numpy as np
+        return float(np.mean(components)) if components else -0.8
 
     def _calculate_position_size(self, action, confidence, risk_assessment, portfolio_state=None):
         # Return a minimal size for mock testing

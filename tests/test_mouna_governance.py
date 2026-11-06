@@ -52,7 +52,7 @@ class MounaGovernanceTest(unittest.TestCase):
 
     def test_pipeline_fails_closed_under_mouna(self):
         import asyncio
-        os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
+        os.environ['DATABASE_URL'] = 'sqlite:///./test_yantrax.db'
         from backend.db import reset_engine, get_engine
         from backend.models import Base
         reset_engine()

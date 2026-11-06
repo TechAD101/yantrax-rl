@@ -73,3 +73,4 @@ node_modules/
 
 # ChromaDB vector database (runtime data, do NOT commit)
 chroma_db/
+backend/chroma_db/

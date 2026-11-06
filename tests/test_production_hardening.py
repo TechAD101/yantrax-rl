@@ -130,7 +130,10 @@ class TestPortfolioTradeEndpointIsDeprecated:
     
     def test_endpoint_has_deprecation_warning(self):
         """The /api/portfolio/<id>/trade endpoint should be marked as DEPRECATED."""
-        with open('/home/ubuntu/yantrax-rl/backend/main.py', 'r') as f:
+        import os
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        main_py = os.path.join(repo_root, 'backend', 'main.py')
+        with open(main_py, 'r') as f:
             content = f.read()
         
         assert 'DEPRECATED' in content, "Endpoint should be marked DEPRECATED"

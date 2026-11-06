@@ -1050,7 +1050,7 @@ class DecisionPipeline:
                 meta={
                     'stop_loss': ctx.final_stop_loss,
                     'take_profit': ctx.final_take_profit,
-                    'source': 'candidate_strategy',
+                    'source': ctx.market_snapshot.source,
                 }
             )
             
@@ -1135,6 +1135,7 @@ class DecisionPipeline:
                         event_type="confidence_update",
                         target_type="agent",
                         target_id=agent_name,
+                        attribution_id=outcome.attributions[0].id if outcome.attributions else None,
                         old_value=str(confidence),
                         new_value=str(new_confidence),
                         metadata={
@@ -1158,6 +1159,7 @@ class DecisionPipeline:
                         event_type="vote_recorded",
                         target_type="agent",
                         target_id=agent_name,
+                        attribution_id=outcome.attributions[0].id if outcome.attributions else None,
                         old_value=None,
                         new_value=None,
                         metadata={
@@ -1179,6 +1181,7 @@ class DecisionPipeline:
                 event_type="strategy_metric_update",
                 target_type="strategy",
                 target_id=outcome.strategy_name,
+                        attribution_id=outcome.attributions[0].id if outcome.attributions else None,
                 old_value=str(outcome.strategy_confidence),
                 new_value=str(min(0.99, outcome.strategy_confidence * pnl_factor)),
                 metadata={
@@ -1197,6 +1200,7 @@ class DecisionPipeline:
             event_type="knowledge_update",
             target_type="market_regime",
             target_id=outcome.market_regime_at_decision,
+                        attribution_id=outcome.attributions[0].id if outcome.attributions else None,
             old_value=None,
             new_value=None,
             metadata={
@@ -1268,6 +1272,7 @@ class DecisionPipeline:
                         event_type=le.event_type,
                         target_type=le.target_type,
                         target_id=le.target_id,
+                        attribution_id=le.attribution_id,
                         old_value=le.old_value,
                         new_value=le.new_value,
                         event_metadata=le.metadata,
@@ -1373,6 +1378,7 @@ class DecisionPipeline:
                         spread_cost=spread_cost,
                         exit_reason=reason,
                         pnl=net_pnl,
+                        risk_governance=ctx.risk_governance.value if ctx.risk_governance else 'APPROVE',
                         timestamp=position.exit_timestamp,
                     )
                     session.add(outcome)
@@ -1447,6 +1453,7 @@ class DecisionPipeline:
                             event_type=le.event_type,
                             target_type=le.target_type,
                             target_id=le.target_id,
+                            attribution_id=le.attribution_id,
                             old_value=le.old_value,
                             new_value=le.new_value,
                             event_metadata=le.metadata,

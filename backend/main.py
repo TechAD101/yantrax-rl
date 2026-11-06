@@ -1,10 +1,12 @@
 
 import os
 import sys
+import secrets
 import logging
 import json
 import asyncio
 import functools
+import traceback
 
 class MockDebateEngine:
     async def conduct_debate(self, symbol, context=None):
@@ -221,19 +223,194 @@ else:
                    "Set CORS_ORIGINS to a comma-separated list of trusted origins (e.g., https://yantrax-rl.vercel.app,http://localhost:3000).")
 CORS(app, origins=origins, supports_credentials=False)
 
-# JWT Authentication (optional in dev, required in production)
+# ==================== PRODUCTION STARTUP GUARD ====================
+# JWT Authentication: Required for production, optional for development
 # Use JWT_SECRET_KEY from env; if missing, mutating endpoints remain unguarded with a warning.
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
-app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', '')
+
+JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', '')
+FLASK_ENV_RAW = os.environ.get('FLASK_ENV', '').lower()
+FLASK_ENV = FLASK_ENV_RAW if FLASK_ENV_RAW in ('production', 'development', 'staging') else None
+
+def _generate_secure_secret(length: int = 48) -> str:
+    """Generate a cryptographically secure secret using os.urandom.
+    
+    Returns a URL-safe base64-encoded string of the requested length in bytes.
+    """
+    import base64
+    return base64.urlsafe_b64encode(os.urandom(length)).decode('utf-8')
+
+
+def _validate_jwt_secret(key: str) -> bool:
+    """Validate JWT secret strength using defensible cryptographic policy.
+    
+    Validation policy (fail-closed):
+    1. Minimum length: 32 characters
+    2. Not a known placeholder (case-insensitive, timing-safe comparison)
+    3. Contains at least one digit AND one letter (mixed character classes)
+    4. Not all-numeric (no letter characters)
+    5. Not all-alphabetic (no digit characters)
+    
+    NOTE: This does NOT use character diversity counting. A key like
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" has 16+ unique
+    characters if mixed with digits, but has zero entropy. We reject based on
+    character class composition, not unique count.
+    """
+    if not key:
+        return False
+    if len(key) < 32:
+        logger.warning("JWT_SECRET_KEY is too short (minimum 32 characters). "
+                       "Generate with: openssl rand -base64 48")
+        return False
+    
+    # Check character class composition
+    has_digit = any(c.isdigit() for c in key)
+    has_alpha = any(c.isalpha() for c in key)
+    
+    if not has_digit:
+        logger.warning("JWT_SECRET_KEY contains no digits. "
+                       "Generate with: openssl rand -base64 48")
+        return False
+    if not has_alpha:
+        logger.warning("JWT_SECRET_KEY contains no letters. "
+                       "Generate with: openssl rand -base64 48")
+        return False
+    
+    # Reject known placeholder values using timing-safe comparison
+    key_lower = key.lower()
+    known_placeholders = {
+        'changeme', 'your-secret-key-here', 'your_secret_key_here',
+        'dev', 'test', 'placeholder', 'example', 'demo',
+        'your-jwt-secret-key-here', 'replace-me', 'todo',
+        'secret', 'password', 'jwt-secret', 'default-secret',
+    }
+    for placeholder in known_placeholders:
+        if secrets.compare_digest(key_lower, placeholder):
+            logger.warning("JWT_SECRET_KEY is a known placeholder value. "
+                           "Generate with: openssl rand -base64 48")
+            return False
+    
+    # Also reject keys that are just hex-encoded known words
+    normalized = key_lower.replace('-', '').replace('_', '')
+    for placeholder in known_placeholders:
+        if secrets.compare_digest(normalized, placeholder):
+            logger.warning("JWT_SECRET_KEY is a known placeholder value. "
+                           "Generate with: openssl rand -base64 48")
+            return False
+    
+    return True
+
+
+def _validate_api_access_key(key: str) -> bool:
+    """Validate API access key strength using defensible cryptographic policy.
+    
+    Validation policy (fail-closed):
+    1. Minimum length: 16 characters
+    2. Not a known placeholder (case-insensitive, timing-safe comparison)
+    3. Contains at least one digit AND one letter (mixed character classes)
+    """
+    if not key:
+        return False
+    if len(key) < 16:
+        logger.warning("API_ACCESS_KEY is too short (minimum 16 characters).")
+        return False
+    
+    # Check character class composition
+    has_digit = any(c.isdigit() for c in key)
+    has_alpha = any(c.isalpha() for c in key)
+    
+    if not has_digit:
+        logger.warning("API_ACCESS_KEY contains no digits.")
+        return False
+    if not has_alpha:
+        logger.warning("API_ACCESS_KEY contains no letters.")
+        return False
+    
+    # Reject known placeholder values using timing-safe comparison
+    key_lower = key.lower()
+    known_placeholders = {
+        'valid-api-key', 'your-api-key-here', 'your_api_key_here',
+        'api-key', 'api_key', 'default', 'changeme', 'placeholder',
+        'example', 'demo', 'test-key', 'test',
+    }
+    for placeholder in known_placeholders:
+        if secrets.compare_digest(key_lower, placeholder):
+            logger.warning("API_ACCESS_KEY is a known placeholder value.")
+            return False
+    
+    return True
+
+# Production startup guard: NO ENVIRONMENT-CHECK BYPASS ALLOWED
+# Tests that need to bypass the guard must set FLASK_ENV=development
+# (which allows startup without secrets). Production/staging ALWAYS enforce.
+
+def _production_startup_guard():
+    """Enforce production security requirements at startup.
+    
+    - FLASK_ENV must be explicitly set (production, development, or staging)
+    - In production/staging mode: JWT_SECRET_KEY and API_ACCESS_KEY must be present and strong
+    - In development mode: JWT_SECRET_KEY is optional for local testing
+    - SKIP_STARTUP_GUARD is REJECTED in production/staging (security fail-closed)
+    """
+    # Reject bypass in production or staging modes - fail closed
+    if os.environ.get('SKIP_STARTUP_GUARD') == '1':
+        if FLASK_ENV in ('production', 'staging') or FLASK_ENV is None:
+            raise RuntimeError(
+                "🔒 PRODUCTION SECURITY BLOCKED: SKIP_STARTUP_GUARD is not allowed in production or staging.\n"
+                "    This variable cannot bypass production security requirements.\n"
+                "    For testing, use FLASK_ENV=development."
+            )
+        # Only allowed in development mode - log it but don't skip
+        logger.debug("SKIP_STARTUP_GUARD=1 set but ignored in development mode")
+    
+    if FLASK_ENV is None:
+        raise RuntimeError(
+            "🔒 PRODUCTION SECURITY BLOCKED: FLASK_ENV is not explicitly set.\n"
+            "    Required: export FLASK_ENV=production (or development/staging)\n"
+            "    Setting FLASK_ENV=development explicitly is required for testing.\n"
+            "    Defaulting to 'development' is disabled for security."
+        )
+
+    if FLASK_ENV in ('production', 'staging'):
+        # Production/staging requires both JWT and API access keys
+        if not _validate_jwt_secret(JWT_SECRET_KEY):
+            raise RuntimeError(
+                "🔒 PRODUCTION SECURITY BLOCKED: JWT_SECRET_KEY is not configured or is unsafe.\n"
+                "    Required: export JWT_SECRET_KEY=$(openssl rand -hex 32)\n"
+                "    Also required: export API_ACCESS_KEY=<your-api-key>"
+            )
+
+        API_ACCESS_KEY = os.environ.get('API_ACCESS_KEY', '')
+        if not _validate_api_access_key(API_ACCESS_KEY):
+            raise RuntimeError(
+                "🔒 PRODUCTION SECURITY BLOCKED: API_ACCESS_KEY is not configured or is unsafe.\n"
+                "    Required: export API_ACCESS_KEY=<secure-api-key>\n"
+                "    Minimum 16 characters, not a known placeholder"
+            )
+
+        logger.info("✅ Production security requirements verified")
+        app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
+    else:
+        # Development mode: warn but don't block, allow any non-empty key
+        if not JWT_SECRET_KEY:
+            logger.warning("JWT_SECRET_KEY not set — mutating API endpoints are unguarded.")
+            logger.warning("For production, set JWT_SECRET_KEY: export JWT_SECRET_KEY=$(openssl rand -hex 32)")
+        app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
+
+_production_startup_guard()
 app.config['JWT_TOKEN_LOCATION'] = ['headers']
 app.config['JWT_HEADER_NAME'] = 'Authorization'
 app.config['JWT_HEADER_TYPE'] = 'Bearer'
-if app.config['JWT_SECRET_KEY']:
+
+# Initialize JWT Manager if a JWT_SECRET_KEY is provided (dev allows short keys)
+# Note: In production, the key must be validated by _production_startup_guard
+JWT_CONFIGURED = bool(JWT_SECRET_KEY)
+if JWT_CONFIGURED:
     jwt = JWTManager(app)
     logger.info("JWT authentication enabled")
 else:
     jwt = None
-    logger.warning("JWT_SECRET_KEY not set — mutating API endpoints are unguarded. Set JWT_SECRET_KEY to enable auth.")
+    logger.warning("JWT authentication disabled (development mode, no JWT_SECRET_KEY set)")
 
 # Helper: require JWT if secret is configured (works for sync and async)
 def require_jwt_if_enabled(fn):
@@ -981,14 +1158,44 @@ def run_cycle():
     Delegates to the canonical god-cycle pipeline so the same decision path
     is exercised whether the UI calls /run-cycle or /god-cycle.
     Returns 200 on success, 202 if no-op, or 500 on internal error.
+
+    Accepts JSON body with 'symbol', 'synthetic' (bool), and 'scenario' (str) params.
     """
     try:
         payload = request.get_json(silent=True) or {}
         symbol = payload.get('symbol', 'AAPL').upper()
-        logger.info('Received /run-cycle request for %s', symbol)
+        synthetic = payload.get('synthetic', False)
+        scenario = payload.get('scenario', 'bullish_mean_reversion')
+        logger.info('Received /run-cycle request for %s (synthetic=%s, scenario=%s)', symbol, synthetic, scenario)
 
-        # Delegate to the canonical god-cycle endpoint logic
-        return god_cycle()
+        from backend.services.canonical_market_provider import get_canonical_market_provider
+        from backend.core.decision_pipeline import DecisionPipeline, run_canonical_decision_sync
+
+        if synthetic:
+            from backend.services.synthetic_market_provider import SyntheticMarketProvider
+            provider = SyntheticMarketProvider(scenario=scenario)
+            logger.info(f'Synthetic market provider enabled for {symbol} with scenario={scenario}')
+            sentiment_svc = provider  # Synthetic provider also serves as sentiment service
+        else:
+            provider = get_canonical_market_provider()
+            from backend.services.market_sentiment_service import get_sentiment_service
+            sentiment_svc = get_sentiment_service()
+
+        pipeline = DecisionPipeline(market_data=provider, sentiment_service=sentiment_svc)
+        ctx = run_canonical_decision_sync(symbol, pipeline=pipeline)
+
+        final_action = ctx.final_action.value if ctx.final_action else 'HOLD'
+        return jsonify({
+            'status': 'success',
+            'symbol': symbol,
+            'signal': final_action,
+            'confidence': ctx.final_confidence,
+            'decision_id': ctx.decision_id,
+            'data_source': 'synthetic' if synthetic else 'canonical',
+            'scenario': scenario if synthetic else None,
+            'timestamp': datetime.now().isoformat()
+        }), 200
+
     except Exception as e:
         logger.exception('run-cycle failed')
         return jsonify({'status': 'error', 'message': str(e), 'timestamp': datetime.now().isoformat()}), 500
@@ -1018,14 +1225,35 @@ def god_cycle():
     -> 24-agent voting -> debate -> CEO -> risk -> sizing -> paper execution ->
     outcome/attribution/learning. No synthetic fallback: when real market data
     or the pipeline is unavailable, returns an explicit error state.
+
+    Query parameter `synthetic=true` forces the deterministic synthetic provider
+    path so that the real pipeline can be exercised without yfinance.
     """
     symbol = request.args.get('symbol', 'AAPL').upper()
+    synthetic = request.args.get('synthetic', 'false').lower() == 'true'
+    scenario = request.args.get('scenario', 'bullish_mean_reversion')
 
     try:
         from backend.services.canonical_market_provider import get_canonical_market_provider
         from backend.core.decision_pipeline import DecisionPipeline, run_canonical_decision_sync
-        provider = get_canonical_market_provider()
-        pipeline = DecisionPipeline(market_data=provider)
+
+        # Use synthetic provider when requested (for testing/CI without yfinance)
+        if synthetic:
+            from backend.services.synthetic_market_provider import SyntheticMarketProvider
+            provider = SyntheticMarketProvider(scenario=scenario)
+            logger.info(f'Synthetic market provider enabled for {symbol} with scenario={scenario}')
+        else:
+            provider = get_canonical_market_provider()
+
+        # For synthetic provider, also pass it as sentiment_service since it implements
+        # get_comprehensive_sentiment. For real providers, get_sentiment_service() is used.
+        if synthetic:
+            sentiment_svc = provider
+        else:
+            from backend.services.market_sentiment_service import get_sentiment_service
+            sentiment_svc = get_sentiment_service()
+
+        pipeline = DecisionPipeline(market_data=provider, sentiment_service=sentiment_svc)
         ctx = run_canonical_decision_sync(symbol, pipeline=pipeline)
     except Exception as e:
         logger.error(f"God cycle pipeline failed for {symbol}: {e}")

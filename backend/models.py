@@ -422,6 +422,7 @@ class Outcome(Base):
     spread_cost = Column(Float, nullable=True, default=0.0)
     exit_reason = Column(String(64), nullable=True)  # stop_loss, take_profit, opposite_signal, manual
     pnl = Column(Float, nullable=False)  # Realized P&L
+    risk_governance = Column(String(32), nullable=True)  # APPROVE, VETO, DISSENT, DIVERSE_DOUBT
     timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)  # close timestamp
 
     # Relationship to position
@@ -454,6 +455,7 @@ class Outcome(Base):
             'spread_cost': self.spread_cost,
             'exit_reason': self.exit_reason,
             'pnl': self.pnl,
+            'risk_governance': self.risk_governance,
             'timestamp': self.timestamp.isoformat() if self.timestamp else None,
         }
 
@@ -499,10 +501,19 @@ class LearningEvent(Base):
     old_value = Column(String(256), nullable=True)  # stored as string for flexibility
     new_value = Column(String(256), nullable=True)  # stored as string for flexibility
     event_metadata = Column(JSON, nullable=True)  # additional metadata (renamed from metadata to avoid SQLAlchemy reserved name)
+    attribution_id = Column(String(64), nullable=True, index=True)  # Link to primary attribution
     timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     # Relationship to outcome
     outcome = relationship('Outcome')
+
+    @property
+    def attribution_ids(self):
+        # Return attribution_id if set, otherwise try to derive from event_metadata
+        if self.attribution_id:
+            return [self.attribution_id]
+        metadata = self.event_metadata or {}
+        return metadata.get('attribution_ids', [])
 
     def to_dict(self) -> Dict[str, Any]:
         return {

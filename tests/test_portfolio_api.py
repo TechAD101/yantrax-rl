@@ -5,7 +5,7 @@ import sys
 import pytest
 
 # Ensure test DB is in-memory
-os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
+os.environ['DATABASE_URL'] = 'sqlite:///./test_yantrax.db'
 
 # Make backend package importable like other tests
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))

@@ -1,6 +1,6 @@
 # CI-only / optional extras
 prometheus-client==0.20.0
-yfinance==0.2.36
+# yfinance removed for Phase 1 - real market data integration in Phase 2
 matplotlib==3.8.3
 pytz==2024.1
-fyers-apiv3==1.0.6
+fyers-apiv3>=3.0.0

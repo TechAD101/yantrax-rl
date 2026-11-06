@@ -556,6 +556,7 @@ class LearningEvent:
     event_type: str
     target_type: str
     target_id: str
+    attribution_id: Optional[str] = None
     old_value: Optional[str] = None
     new_value: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)

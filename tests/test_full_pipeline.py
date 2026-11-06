@@ -6,11 +6,15 @@ from datetime import datetime
 # Setup path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# CRITICAL: Set DATABASE_URL BEFORE importing models/db
+# Use file-based SQLite for tests to avoid multiple :memory: databases
+os.environ['DATABASE_URL'] = 'sqlite:///./test_yantrax.db'
+
 from backend.core.decision_pipeline import DecisionPipeline
 from backend.core.decision_context import DecisionContext, TradingAction, GovernanceState
 from backend.attribution.attribution_engine import AttributionEngine
 from backend.models import Outcome, Attribution, LearningEvent, JournalEntry, PaperPosition, Order
-from backend.db import init_db, get_session
+from backend.db import init_db, get_session, reset_engine
 from backend.service_registry import registry
 
 
@@ -163,7 +167,6 @@ class TestFullPipeline(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
         from backend.db import reset_engine, get_engine
         from backend.models import Base
         reset_engine()

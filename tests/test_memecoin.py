@@ -4,7 +4,7 @@ import sys
 import pytest
 
 # Use in-memory DB for safe tests
-os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
+os.environ['DATABASE_URL'] = 'sqlite:///./test_yantrax.db'
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from backend.db import init_db, get_session
